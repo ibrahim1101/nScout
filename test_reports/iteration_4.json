@@ -1,0 +1,19 @@
+{
+  "summary": "Focused regression for PyInstaller launcher import fix. Verified mandatory check: `python -c \"import launcher\"` from /app/backend returns exit 0 with no ImportError. Confirmed launcher.py now has top-level `import uvicorn` (line 20) and `import fastapi` (line 21), eagerly imported so PyInstaller's import tracer picks them up for the bundle. uvicorn is accessible as a module attribute of launcher after import. Backend /api/ reachable through preview ingress (HTTP 200).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "launcher.py line 20-21: `import uvicorn` and `import fastapi` are at module top-level with `# noqa: F401`, which is exactly what PyInstaller needs for static import tracing. Fix is correct.",
+    "Note (carried from iteration_3): server.py reads MONGO_URL at import time; if bundled .env.example lacks it, launcher dies with opaque KeyError. Consider wrapping `from server import app` in try/except in launcher.main() for a friendlier message."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (mandatory import check passed)", "frontend": "N/A (not requested)"},
+  "test_credentials": "N/A",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Mandatory PyInstaller launcher import check: `cd /app/backend && python -c 'import launcher'` must exit 0. Verified in iteration_4. Full regression suites remain at /app/backend/tests/{backend_test.py,test_v2_features.py,test_v3_features.py} — 33/33 passed in iteration_3.",
+  "rca of the issue": "Prior nScout.exe runtime ImportError was due to uvicorn being imported inside main() (dynamic/lazy), which PyInstaller's static analyzer did not pick up for bundling. Fix: hoist `import uvicorn` (and fastapi) to module top-level with noqa:F401 so PyInstaller includes them. Verified importable; no ImportError."
+}
