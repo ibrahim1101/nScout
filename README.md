@@ -41,8 +41,13 @@ docker run --rm -p 8001:8001 ghcr.io/<your-org>/nscout:latest
 
 ```bash
 ./build.sh         # macOS / Linux
-.\build.ps1        # Windows
+.\build.ps1        # Windows (PowerShell)
+.\build.bat        # Windows (double-click, no execution-policy hassles)
 ```
+
+> **Windows PowerShell tip** — if you see "is not digitally signed" the first
+> time, run `.\build.bat` instead, or launch once with
+> `powershell -ExecutionPolicy Bypass -File .\build.ps1`.
 
 Produces `dist/nScout/` — a self-contained folder (~370 MB) that your
 colleagues can unzip and double-click. See [BUNDLE_README.md](./BUNDLE_README.md)

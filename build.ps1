@@ -3,6 +3,12 @@
 #
 # Usage (from an elevated PowerShell):
 #   .\build.ps1
+#
+# If PowerShell blocks the script with "...is not digitally signed...", use ONE of:
+#   powershell -ExecutionPolicy Bypass -File .\build.ps1        # one-shot
+#   Unblock-File .\build.ps1; .\build.ps1                       # unblock once
+#   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned         # allow local scripts
+# Or just double-click build.bat which handles this automatically.
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path -Parent $PSCommandPath)
 
