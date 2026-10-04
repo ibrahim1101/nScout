@@ -1,0 +1,31 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - nscout-mongo:/data/db
+
+  nscout:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      DB_NAME: nscout
+      CORS_ORIGINS: "*"
+      EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY:-}
+    ports:
+      - "8001:8001"
+    # Packet capture requires raw/network-admin capabilities on Linux.
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    # On native Linux, uncomment this for visibility into host network traffic:
+    # network_mode: host
+    # If network_mode: host is enabled, remove the ports mapping above.
+
+volumes:
+  nscout-mongo:
