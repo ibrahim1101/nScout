@@ -1,9 +1,11 @@
 # ---------- Stage 1: build React UI ----------
 FROM node:20-alpine AS ui
 WORKDIR /ui
-COPY frontend/package.json frontend/yarn.lock ./
-RUN yarn install --frozen-lockfile
+# Copy the whole frontend so this works whether or not yarn.lock is committed.
 COPY frontend/ ./
+# Use --frozen-lockfile when a lockfile exists for reproducible builds,
+# otherwise fall back to a plain install so the image still builds.
+RUN if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else yarn install; fi
 # Same-origin build so the single container serves both UI and API
 ENV REACT_APP_BACKEND_URL=""
 RUN yarn build

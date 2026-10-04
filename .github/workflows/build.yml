@@ -25,8 +25,9 @@ jobs:
         working-directory: frontend
         env:
           REACT_APP_BACKEND_URL: ""
+        shell: bash
         run: |
-          yarn install --frozen-lockfile
+          if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else yarn install; fi
           yarn build
       - name: PyInstaller
         run: pyinstaller --noconfirm --clean nscout.spec
@@ -56,10 +57,11 @@ jobs:
       - run: |
           python -m pip install --upgrade pip pyinstaller
           python -m pip install -r backend/requirements.txt
-      - working-directory: frontend
+      - name: Build React UI
+        working-directory: frontend
         env: { REACT_APP_BACKEND_URL: "" }
         run: |
-          yarn install --frozen-lockfile
+          if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else yarn install; fi
           yarn build
       - run: pyinstaller --noconfirm --clean nscout.spec
       - run: cp BUNDLE_README.md dist/nScout/README.md
@@ -87,12 +89,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Lowercase repo owner
+        id: owner
+        run: echo "name=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
       - name: Determine tag
         id: tag
         run: |
           REF="${GITHUB_REF##*/}"
-          echo "image=ghcr.io/${{ github.repository_owner }}/nscout:${REF}" >> $GITHUB_OUTPUT
-          echo "latest=ghcr.io/${{ github.repository_owner }}/nscout:latest" >> $GITHUB_OUTPUT
+          echo "image=ghcr.io/${{ steps.owner.outputs.name }}/nscout:${REF}" >> $GITHUB_OUTPUT
+          echo "latest=ghcr.io/${{ steps.owner.outputs.name }}/nscout:latest" >> $GITHUB_OUTPUT
       - name: Build & push
         uses: docker/build-push-action@v5
         with:

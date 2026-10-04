@@ -16,6 +16,11 @@ node_modules/
 !.yarn/releases
 !.yarn/versions
 
+# Lockfiles must be committed so Actions / Docker builds are reproducible.
+!yarn.lock
+!package-lock.json
+!pnpm-lock.yaml
+
 # Testing
 /coverage
 

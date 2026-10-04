@@ -14,7 +14,11 @@ python3 -m pip install --quiet -r backend/requirements.txt
 
 echo "==> Building React UI"
 pushd frontend >/dev/null
-yarn install --frozen-lockfile
+if [ -f yarn.lock ]; then
+    yarn install --frozen-lockfile
+else
+    yarn install
+fi
 REACT_APP_BACKEND_URL="" yarn build
 popd >/dev/null
 

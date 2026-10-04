@@ -18,7 +18,11 @@ python -m pip install -r backend\requirements.txt
 
 Write-Host "==> Building React UI"
 Push-Location frontend
-yarn install --frozen-lockfile
+if (Test-Path yarn.lock) {
+    yarn install --frozen-lockfile
+} else {
+    yarn install
+}
 $env:REACT_APP_BACKEND_URL = ""
 yarn build
 Pop-Location
