@@ -1,0 +1,193 @@
+{
+  "app_identity": {
+    "name": "EtherLens AI",
+    "tagline": "Next-Generation Intelligent Network Traffic Analysis & Packet Decryption Platform",
+    "context_type": "DASHBOARD",
+    "emotional_archetype": "ARCHETYPE_2_THE_PERFORMANCE_PRO",
+    "theme_mode": "Clean SaaS Light (Default) + Tactical Dark Mode toggle"
+  },
+  "typography": {
+    "headline_font": "Plus Jakarta Sans, sans-serif",
+    "body_font": "Inter, sans-serif",
+    "mono_font": "JetBrains Mono, Fira Code, monospace",
+    "font_imports": [
+      "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+    ],
+    "hierarchy": {
+      "h1": "text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight",
+      "h2": "text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight",
+      "h3": "text-lg sm:text-xl font-semibold tracking-tight",
+      "h4": "text-base font-semibold",
+      "body": "text-sm text-slate-700 dark:text-slate-300 leading-relaxed",
+      "code_hex": "font-mono text-xs sm:text-sm tracking-wide leading-tight",
+      "badge_label": "text-xs font-semibold uppercase tracking-wider"
+    }
+  },
+  "colors": {
+    "palette_mode": "Tactical Precision Light / Dark Neutral",
+    "light": {
+      "bg_app": "#F8FAFC",
+      "bg_surface": "#FFFFFF",
+      "bg_subtle": "#F1F5F9",
+      "border": "#E2E8F0",
+      "text_primary": "#0F172A",
+      "text_muted": "#64748B",
+      "accent_primary": "#2563EB",
+      "accent_hover": "#1D4ED8",
+      "success": "#16A34A",
+      "warning": "#D97706",
+      "danger": "#DC2626",
+      "info_purple": "#7C3AED",
+      "protocol_tcp": "#2563EB",
+      "protocol_udp": "#059669",
+      "protocol_dns": "#D97706",
+      "protocol_http": "#7C3AED",
+      "protocol_icmp": "#DC2626"
+    },
+    "dark": {
+      "bg_app": "#090D16",
+      "bg_surface": "#111827",
+      "bg_subtle": "#1F2937",
+      "border": "#374151",
+      "text_primary": "#F9FAFB",
+      "text_muted": "#9CA3AF",
+      "accent_primary": "#3B82F6",
+      "accent_hover": "#60A5FA",
+      "success": "#22C55E",
+      "warning": "#F59E0B",
+      "danger": "#EF4444",
+      "info_purple": "#8B5CF6",
+      "protocol_tcp": "#60A5FA",
+      "protocol_udp": "#34D399",
+      "protocol_dns": "#FBBF24",
+      "protocol_http": "#A78BFA",
+      "protocol_icmp": "#F87171"
+    },
+    "forbidden_colors": [
+      "#1B93A4",
+      "#7351B7"
+    ]
+  },
+  "layout_and_spacing": {
+    "grid_system": "MODE B: High Density Dashboard Grid",
+    "gap": "gap-4 md:gap-6",
+    "containers": "px-4 sm:px-6 lg:px-8 py-6 max-w-[1700px] mx-auto",
+    "card_padding": "p-4 sm:p-5",
+    "rules": [
+      "No full-screen dark gradients without crisp sub-borders.",
+      "Containers with borders must maintain inner padding (minimum p-4) to prevent collision.",
+      "Dropdowns, popovers, and sticky sub-headers MUST have explicit semi-opaque or solid backgrounds with backdrop blur (e.g., bg-white/95 dark:bg-slate-900/95 backdrop-blur-md). NEVER pure transparent backgrounds."
+    ]
+  },
+  "components_structure": {
+    "header_nav": {
+      "path": "/app/frontend/src/components/HeaderNav.jsx",
+      "features": [
+        "Interface selector dropdown (eth0, wlan0, lo, All Interfaces)",
+        "Live Capture Start/Stop/Pause toggle button with animated pulsing pulse dot",
+        "PCAP File Upload dropzone button",
+        "Display Filter Input bar with BPF & keyword auto-complete (e.g., 'ip.addr == 192.168.1.1 and tcp.port == 80')",
+        "Light/Dark Mode Theme Switcher button",
+        "System Status badges (Packets/sec, Mbps, Dropped %)"
+      ]
+    },
+    "packet_analyzer_view": {
+      "path": "/app/frontend/src/components/PacketAnalyzerView.jsx",
+      "layout": "3-Pane Vertical Resizable / Split Layout (Wireshark-Pro Style)",
+      "panes": [
+        {
+          "name": "Pane 1: Real-time Packet Virtual Table",
+          "details": "Displays Packet No., Time, Source IP, Source Port, Dest IP, Dest Port, Protocol, Length, Info Summary, Threat Tag. Supports click to inspect, colored row badges per protocol."
+        },
+        {
+          "name": "Pane 2: Packet Layered Protocol Tree",
+          "details": "Expandable tree structure breakdown: Frame -> Ethernet II -> IPv4/IPv6 -> TCP/UDP/ICMP/QUIC -> Application Data (HTTP, TLS, DNS, MQTT)."
+        },
+        {
+          "name": "Pane 3: Dual Hex & ASCII Dump View",
+          "details": "Monospace hex bytes alignment (16 bytes per line) with offset counter and corresponding ASCII string panel on right, with hover byte sync highlight."
+        }
+      ]
+    },
+    "analytics_dashboard": {
+      "path": "/app/frontend/src/components/AnalyticsDashboard.jsx",
+      "widgets": [
+        "Real-time Bandwidth Line/Area Chart (Bits/sec and Packets/sec over time using Recharts)",
+        "Protocol Distribution Donut Chart (TCP vs UDP vs ICMP vs DNS vs HTTP/TLS)",
+        "Top Talkers / Active Flows Table with bandwidth consumption bars",
+        "Network Latency & Jitter Sparklines"
+      ]
+    },
+    "topology_map": {
+      "path": "/app/frontend/src/components/TopologyMap.jsx",
+      "features": [
+        "Interactive SVG/Canvas Force-Directed Host Node Graph",
+        "Visualizes Gateway, Local Hosts, External IPs, Servers with real-time particle packet flow animation on edges",
+        "Node click opens host detail modal (Host OS estimate, Open ports, Traffic volume, Associated threats)"
+      ]
+    },
+    "threat_ai_feed": {
+      "path": "/app/frontend/src/components/ThreatAIFeed.jsx",
+      "features": [
+        "Real-time anomaly detector feed (Port Scans, SYN Floods, DNS Tunneling, Suspicious TLS SNI, Unencrypted Password Transmits)",
+        "AI Explanation Drawer / Modal: 'Explain This Packet in Plain English' powered by backend anomaly classifier",
+        "Severity filter pills (Critical, High, Medium, Info)"
+      ]
+    }
+  },
+  "motion_and_effects": {
+    "libraries": [
+      "framer-motion",
+      "lucide-react"
+    ],
+    "micro_interactions": [
+      "Packet stream hover highlight with smooth text color contrast",
+      "Live pulsing dot indicator for active packet sniffing (emerald glowing ring animation)",
+      "Expandable protocol tree chevron rotation transition (0.15s ease-out)",
+      "Chart sync crosshair cursor"
+    ],
+    "accessibility": "Respect prefers-reduced-motion, disable complex edge animations when requested by OS settings."
+  },
+  "testing_attributes": {
+    "rule": "Every interactive button, input, tab, table row, filter, and modal container MUST have data-testid in kebab-case format.",
+    "examples": [
+      "data-testid=\"live-capture-start-btn\"",
+      "data-testid=\"live-capture-stop-btn\"",
+      "data-testid=\"pcap-file-upload-input\"",
+      "data-testid=\"display-filter-input\"",
+      "data-testid=\"packet-row-1024\"",
+      "data-testid=\"protocol-tree-item-ip\"",
+      "data-testid=\"hex-dump-panel\"",
+      "data-testid=\"ai-explain-packet-btn\"",
+      "data-testid=\"theme-toggle-btn\"",
+      "data-testid=\"topology-node-host-192-168-1-105\""
+    ]
+  },
+  "media_and_icons": {
+    "icon_library": "lucide-react",
+    "curated_image_assets": [
+      {
+        "category": "Dashboard Preview Backgrounds & Hero Textures",
+        "url": "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDB8MHwxfHNlYXJjaHwxfHxuZXR3b3JrJTIwc2VjdXJpdHklMjBjeWJlciUyMGRhc2hib2FyZCUyMHNlcnZlciUyMHJhY2t8ZW58MHx8fHwxNzkxMTIyMDA1fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Server rack network cables for empty state wallpaper or login panel",
+        "usage": "Use in PCAP upload empty states or landing backdrop"
+      },
+      {
+        "category": "Data Center Graphic",
+        "url": "https://images.unsplash.com/photo-1639066648921-82d4500abf1a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDB8MHwxfHNlYXJjaHwzfHxuZXR3b3JrJTIwc2VjdXJpdHklMjBjeWJlciUyMGRhc2hib2FyZCUyMHNlcnZlciUyMHJhY2t8ZW58MHx8fHwxNzkxMTIyMDA1fDA&ixlib=rb-4.1.0&q=85",
+        "description": "High tech server array",
+        "usage": "Hero banner for offline PCAP drop zone"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Build a complete, responsive, real-time packet monitoring SaaS tool called EtherLens AI.",
+    "Ensure all components use React .jsx format, matching existing Shadcn primitives in src/components/ui/.",
+    "Support full live packet capture streaming mode with simulated socket fallback + real backend REST/WebSocket endpoints.",
+    "Provide accurate Wireshark-like packet dissector visualization (Frame, Ethernet, IPv4/IPv6, TCP/UDP/ICMP/DNS/HTTP/TLS) with hex dump pane.",
+    "Provide plain-English AI Packet Explanations with risk score and anomaly flags.",
+    "Include a dynamic Topology Map and Flow Conversation Graph.",
+    "Ensure both Light theme and Dark theme look impeccably crisp, highly legible with proper APCA high contrast text.",
+    "Attach data-testid attributes to all interactive elements."
+  ]
+}
