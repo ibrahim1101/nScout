@@ -1,0 +1,43 @@
+{
+  "summary": "Backend-only testing of EtherLens AI v3 features. Added /app/backend/tests/test_v3_features.py (7 tests) covering: (a) PyInstaller launcher smoke — import, _pick_port, _bundle_dir, _ensure_env; (b) Capture sessions CRUD lifecycle — POST /sessions/save returns 400 on empty, save/list/load/delete happy path, delete-twice-404, load-missing-404, confirmed Mongo _id does not leak in list response; (c) Overlap-aware TCP reassembly on /api/flow/stream — crafted a 5-segment pcap with retransmits + overlaps (raw sum 55 bytes, unique range 40 bytes), uploaded via /api/pcap/upload, verified a_to_b.bytes==40 and reconstructed payload contains A*10, B*15, trailing CCCCC (only non-overlapping tail of seg3), D*10 in seq order. All 7 new tests passed; full suite 33/33 passed (15 v1 + 11 v2 + 7 v3).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/sessions/{sid}/load", "issue": "Rebuilds packets from stored hex via Ether(raw) and skips parse failures silently. In our round-trip the retained packet_count matched source exactly, but a count of dropped packets is not surfaced to the caller."},
+      {"endpoint": "/api/sessions/save", "issue": "No pagination/size cap. A long capture (10k+ packets with hex) will push a single large document into Mongo (BSON 16MB limit). Should warn or chunk."},
+      {"endpoint": "/api/sessions/{sid}/load", "issue": "load_session() iterates and awaits nothing per packet; for very large sessions it blocks the event loop. Consider offloading to run_in_executor."},
+      {"endpoint": "/api/flow/stream", "issue": "Overlap-aware reassembly is correct for simple retransmits/partial overlaps, but still does NOT handle TCP seq wraparound across 2^32. Acceptable for simulated/short captures."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_v3_features.py",
+    "/app/test_reports/pytest/pytest_v3.xml",
+    "/app/test_reports/pytest/pytest_all.xml"
+  ],
+  "action_items": [
+    "Optional: surface dropped-packet count in /api/sessions/{sid}/load response (parsed vs stored).",
+    "Optional: enforce a size cap in /api/sessions/save (e.g. error > 10k packets or > 10MB serialized) to stay under Mongo's 16MB BSON limit.",
+    "Optional: add auth/shared-secret to /api/sessions endpoints before shipping the desktop bundle — any local client on the box can list/delete captures."
+  ],
+  "critical_code_review_comments": [
+    "sessions.py:save_session stores full hex payload per packet inside a single Mongo document; this will hit the 16MB BSON cap at ~10-20k mid-size packets. Prefer GridFS or one-doc-per-packet with a session-id index.",
+    "sessions.py:load_session calls session.ingest in a tight sync loop inside an async def. For 5k+ packets this blocks the FastAPI event loop; wrap in asyncio.to_thread or paginate.",
+    "sessions.py:load_session appends saved threats verbatim (comment acknowledges stale packet_ids). UI 'jump to packet' from a replayed threat will 404. Either rewrite ids on ingest or drop packet_ids on replay.",
+    "launcher.py: _pick_port tries 8001, 8002, 8080, 0 but doesn't verify the port is still free when uvicorn.run() binds (TOCTOU). Low impact for desktop single-user, but worth a comment.",
+    "launcher.py: imports server.app AFTER _ensure_env, which is correct — but server.py reads MONGO_URL at import time with os.environ['MONGO_URL']; if the bundled .env.example lacks MONGO_URL the import raises KeyError and the launcher dies with an opaque traceback. Catch & print a friendly message.",
+    "analysis.py:_assemble: overlap-aware algorithm works for simulated test case (verified: 5 segs, 55 raw bytes → 40 unique bytes). However, seq wraparound at 2^32 is not handled — a long-lived flow will produce garbled payload at wrap boundary.",
+    "server.py: /api/sessions/{sid}/load calls session.stop() + clear() then re-ingests. There is no lock preventing a concurrent /api/capture/start during the re-ingest loop, which would interleave live + replay packets.",
+    "server.py: no auth on /api/sessions/* — same comment as webhooks from iteration_2 still applies."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_v3_features.py"
+  ],
+  "success_rate": {"backend": "100% (7/7 new, 33/33 total)", "frontend": "N/A (not requested)"},
+  "test_credentials": "N/A — no auth in this backend.",
+  "seed_data_creation": "Each test seeds its own capture via /api/capture/start?interface=simulated and creates a session row named TEST_sess_<ts>; the lifecycle test deletes it before exiting.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Test suites: /app/backend/tests/backend_test.py (v1, 15 tests), test_v2_features.py (v2, 11 tests), test_v3_features.py (v3, 7 tests). pytest.ini pins -n 2 --dist loadscope. Known operational quirk: editing any file under /app/backend triggers uvicorn --reload and the preview ingress returns 502 for ~60s. If a run fails with ReadTimeout/502, run `sudo supervisorctl restart backend && sleep 8` and re-run. Overlap test uses tempfile for wrpcap (scapy's wrpcap closes BytesIO, which breaks io.BytesIO.getvalue()).",
+  "rca of the issue": "Two false-negative failures in the first run were caused by: (1) backend hot-reload triggered by writing test_v3_features.py — preview URL returned 502 for ~60s until supervisorctl restart; (2) scapy.wrpcap(BytesIO) closes the stream, so the subsequent buf.getvalue() raised 'I/O operation on closed file'. Fixed by writing to a tempfile.NamedTemporaryFile instead. After restart + fix, all 7 v3 tests passed (4.93s) and full regression 33/33 passed (76.53s)."
+}

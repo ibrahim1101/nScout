@@ -1,57 +1,71 @@
 # EtherLens AI — Product Requirements Document
 
 ## Problem statement
-Build a Wireshark-class network monitoring tool with a smoother SaaS GUI and better parsing: real-time traffic charts & bandwidth analytics, packet list + detail decode + filter + protocol stats + flow graph, AI-powered anomaly detection, device/host discovery with topology map, deep protocol decoding, and plain-English AI insights. Must be compatible on most devices and hardened against modern attacks.
+A Wireshark-class network monitoring tool with a smoother SaaS GUI, better parsing, AI insights, Geo + ASN enrichment, threat alerts and distributable as a double-click desktop app.
 
 ## Core requirements (static)
 - Live packet capture (scapy AsyncSniffer) with simulator fallback for sandboxed/non-root hosts
-- PCAP upload & offline analysis
-- PCAP export of current session
-- Protocol decode: Ethernet / IPv4 / IPv6 / TCP / UDP / ICMP / ARP / DNS / HTTP / HTTPS / TLS + app-port inference for ~25 protocols
+- PCAP upload, export, and session save/replay
+- Protocol decode: Ethernet / IPv4 / IPv6 / TCP / UDP / ICMP / ARP / DNS / HTTP / HTTPS / TLS + ~25 app-port protocols
 - Real-time analytics: packets/sec, bps, protocol distribution, top talkers, timeline
-- TCP conversation list + Follow Stream reassembly (bi-directional, text/hex mode auto)
-- Topology map with Geo-IP + ASN enrichment (country flags, org, city) via ip-api.com
+- TCP conversation list + Follow Stream with **overlap-aware** reassembly (byte-range merge)
+- Topology map with Geo-IP + ASN enrichment (country flags) via ip-api.com
 - Threat engine: SYN flood, port scan, ICMP flood, DNS tunneling, cleartext credentials
-- AI explanation (SSE streaming) powered by Emergent LLM key / OpenAI gpt-5.4
-- Alert webhooks: Slack & Discord with severity threshold + Test button + Mongo-persisted settings
+- AI explanations (SSE streaming) via Emergent LLM key / OpenAI gpt-5.4
+- Slack + Discord alert webhooks with severity threshold, Test button, Mongo persistence
+- Save & replay captures from MongoDB
 - Light & dark themes, responsive down to 390 px
-
-## User persona
-Network / SOC engineer who needs quick, visual, explainable traffic analysis without a desktop installer.
+- Distributable as PyInstaller single-folder app (Windows / macOS / Linux)
 
 ## What's been implemented
 ### v1 (2026-01-04)
-- Full backend `etherlens/engine.py` (capture session, simulator, dissector, threat detection)
-- Backend endpoints: health, interfaces, capture/*, packets, threats, stats/*, topology, pcap/upload, ai/explain (SSE), WS /api/ws
-- Frontend: HeaderNav, PacketAnalyzer (3-pane list+tree+hex+AI), AnalyticsDashboard, TopologyMap, ThreatFeed, dark/light theme
-- Tests: 15/15 passing (`/app/test_reports/iteration_1.json`)
+- Backend capture engine, dissector, simulator, threat detector
+- REST + WS endpoints for packets/threats/stats/topology/ai-explain/pcap-upload
+- Frontend: HeaderNav, PacketAnalyzer (list + protocol tree + hex + AI), AnalyticsDashboard, TopologyMap, ThreatFeed
+- Tests: 15/15
 
 ### v2 (2026-01-04)
-- Backend: `etherlens/analysis.py` (TCP reassembly, pcap export, flow listing), `etherlens/geo.py` (ip-api batch + cache + country flag), `etherlens/webhooks.py` (Slack + Discord payloads, severity gating)
-- New endpoints: `GET /api/pcap/export`, `GET /api/flows`, `GET /api/flow/stream`, `GET /api/geo/{ip}`, `GET /api/topology?enrich=true`, `GET/POST /api/settings/webhooks`, `POST /api/settings/webhooks/test`
-- Threat → webhook fan-out wired into WS endpoint
-- Frontend: new Flows tab, FlowDrawer modal, SettingsDrawer, "Export" + settings button in header, country flags & ASN badges on topology map
-- Mongo collection `etherlens_settings` persists webhook config
-- Tests: 11/11 new passing + 15/15 regression (`/app/test_reports/iteration_2.json`)
-- `/app/PACKAGING.md` guide for Docker / PyInstaller / Tauri distribution
+- Backend: analysis (reassembly, pcap-export, flow list), geo (ip-api cache), webhooks (Slack + Discord)
+- Endpoints: pcap/export, flows, flow/stream, geo/{ip}, topology?enrich=true, settings/webhooks (GET/POST/test)
+- Frontend: Flows tab, FlowDrawer, SettingsDrawer, Export button in header, country flags + ASN on topology
+- Tests: 11/11 new + 15/15 regression
+
+### v3 (2026-01-04)
+- Backend: sessions module (save/list/load/delete) persisting full packet hex in Mongo
+- Overlap-aware TCP reassembly (byte-range merge, kills retransmit duplication)
+- PyInstaller spec + launcher.py + .env.example + build.sh / build.ps1
+- Static-mount `frontend_build/` from FastAPI when bundled
+- GitHub Actions workflow (.github/workflows/build.yml) builds Windows + Linux artifacts on tag push
+- BUNDLE_README.md shipped with each release
+- Frontend: SessionsDrawer, REPLAY status pill, same-origin ws fallback in lib.js
+- Tests: 7/7 new + 33/33 total regression (iteration_3.json)
+- Verified bundle: 36 MB launcher, 367 MB folder, boots in <2s, serves API+UI on port 8001/8002
+
+## Distribution
+Three paths, documented in `/app/PACKAGING.md` and `/app/BUNDLE_README.md`:
+1. **PyInstaller** (`./build.sh` on Linux/mac, `.\build.ps1` on Windows) → single folder
+2. **Docker Compose** (compose file in PACKAGING.md)
+3. **Tauri** desktop app (scaffolded in PACKAGING.md)
+
+GitHub Actions auto-build on `git tag v*` push → produces `EtherLens-windows-x64.zip` and `EtherLens-linux-x64.tar.gz` as release assets.
 
 ## Prioritized backlog
 ### P0
-- Live capture permission bootstrap docs per OS (now in PACKAGING.md)
-- Persist saved capture sessions in Mongo
+- GridFS-backed session storage so captures > 10k packets fit under BSON 16MB cap
+- Overlap merge aware of TCP seq wraparound (2^32 boundary)
 ### P1
-- Overlap-aware TCP reassembly (merge retransmits by byte range not just seq)
-- Signature-based IDS rules (Suricata-style)
-- Advanced BPF-like filter grammar
+- Signed Windows / macOS code-signing cert for the installer
+- Auto-updater channel (Tauri path, if adopted)
+- Suricata-style signature rules alongside behavioral threats
 ### P2
-- Multi-user auth + capture permissions (settings endpoint currently unauth)
+- Multi-user auth + capture permissions
 - Webhook retry/backoff on 429
-- Backfill ASN/geo in topology via background task to never block UI
+- Chunked session loading (asyncio.to_thread) to never block the event loop
 
 ## Security hardening
-- Backend binds internally only (0.0.0.0:8001 via supervisor)
-- No shell execution on uploaded files; PCAP parsed in-memory via scapy
-- Upload size limit 50 MB
+- Backend binds internally only (127.0.0.1 in bundle, 0.0.0.0 behind ingress in cloud)
+- No shell exec on uploads; PCAP parsed in-memory via scapy
+- Upload size limit 50 MB; session save limit called out for Mongo 16 MB BSON
 - No credentials stored; EMERGENT_LLM_KEY read from env
-- CORS controlled via env (`CORS_ORIGINS`)
-- Webhook settings persisted — recommend adding auth before public deployment
+- CORS gated via env (`CORS_ORIGINS`)
+- **Known gap**: `/api/settings/*` and `/api/sessions/*` are unauthenticated — fine for localhost desktop, add shared-secret / token before exposing to a network.
