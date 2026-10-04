@@ -26,10 +26,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger("nscout")
 
 # ---------- Mongo ----------
-mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
+# Portable desktop builds must be able to start even when MongoDB is not installed.
+mongo_url = os.environ.get("MONGO_URL", "mongodb://127.0.0.1:27017")
+db_name = os.environ.get("DB_NAME", "nscout")
+client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=1500, connectTimeoutMS=1500)
+db = client[db_name]
 settings_col = db.etherlens_settings
+mongo_available = False
 
 # ---------- Core state ----------
 session = CaptureSession()
@@ -51,7 +54,7 @@ class ExplainRequest(BaseModel):
 class WebhookSettings(BaseModel):
     slack_url: str = ""
     discord_url: str = ""
-    min_severity: str = "high"  # critical|high|medium|low
+    min_severity: str = "high"
 
 
 class WebhookTestRequest(BaseModel):
@@ -68,17 +71,23 @@ _SEV_RANK = {"low": 1, "medium": 2, "high": 3, "critical": 4}
 
 
 async def _load_settings():
-    doc = await settings_col.find_one({"_id": "webhooks"})
-    if doc:
-        _webhook_cache.update({
-            "slack_url": doc.get("slack_url", ""),
-            "discord_url": doc.get("discord_url", ""),
-            "min_severity": doc.get("min_severity", "high"),
-        })
+    global mongo_available
+    try:
+        await client.admin.command("ping")
+        mongo_available = True
+        doc = await settings_col.find_one({"_id": "webhooks"})
+        if doc:
+            _webhook_cache.update({
+                "slack_url": doc.get("slack_url", ""),
+                "discord_url": doc.get("discord_url", ""),
+                "min_severity": doc.get("min_severity", "high"),
+            })
+    except Exception as exc:
+        mongo_available = False
+        logger.warning("MongoDB unavailable; saved sessions/settings persistence disabled: %s", exc)
 
 
 async def _threat_hook(threat: dict):
-    """Called by engine when a threat is detected."""
     min_rank = _SEV_RANK.get(_webhook_cache.get("min_severity", "high"), 3)
     rank = _SEV_RANK.get(threat.get("severity", "low"), 1)
     if rank < min_rank:
@@ -91,14 +100,14 @@ async def _threat_hook(threat: dict):
 # ---------- Health ----------
 @api.get("/")
 async def root():
-    return {"name": "nScout", "status": "ok"}
+    return {"name": "nScout", "status": "ok", "mongo": mongo_available}
 
 
 @api.get("/interfaces")
 async def interfaces():
     out = [{"name": "simulated", "label": "Simulated Traffic (always available)", "capturable": True, "live": False}]
     try:
-        import psutil  # type: ignore
+        import psutil
         for name, _ in psutil.net_if_addrs().items():
             out.append({"name": name, "label": name, "capturable": True, "live": True})
     except Exception:
@@ -203,11 +212,8 @@ async def export_pcap():
     data = analysis.export_pcap(pkts)
     if not data:
         raise HTTPException(status_code=500, detail="Failed to build pcap")
-    return Response(
-        content=data,
-        media_type="application/vnd.tcpdump.pcap",
-        headers={"Content-Disposition": f'attachment; filename="etherlens-{int(pkts[-1]["timestamp"])}.pcap"'},
-    )
+    return Response(content=data, media_type="application/vnd.tcpdump.pcap",
+                    headers={"Content-Disposition": f'attachment; filename="etherlens-{int(pkts[-1]["timestamp"])}.pcap"'})
 
 
 # ---------- Flow / stream follow ----------
@@ -218,9 +224,7 @@ async def flows(limit: int = 50):
 
 @api.get("/flow/stream")
 async def flow_stream(a_ip: str, a_port: int, b_ip: str, b_port: int):
-    """Reassemble TCP stream between A↔B."""
-    out = analysis.reassemble_stream(list(session.packets), (a_ip, b_ip, a_port, b_port))
-    return out
+    return analysis.reassemble_stream(list(session.packets), (a_ip, b_ip, a_port, b_port))
 
 
 # ---------- Geo lookup ----------
@@ -239,26 +243,29 @@ async def get_webhook_settings():
 async def save_webhook_settings(body: WebhookSettings):
     doc = body.model_dump()
     doc["_id"] = "webhooks"
-    await settings_col.replace_one({"_id": "webhooks"}, doc, upsert=True)
+    if mongo_available:
+        await settings_col.replace_one({"_id": "webhooks"}, doc, upsert=True)
     _webhook_cache.update(body.model_dump())
-    return {"status": "saved", "settings": _webhook_cache}
+    return {"status": "saved" if mongo_available else "saved_in_memory", "settings": _webhook_cache}
 
 
 @api.post("/settings/webhooks/test")
 async def test_webhook(body: WebhookTestRequest):
-    sample = {
-        "severity": "high", "type": "Test Alert",
-        "title": "nScout test notification",
-        "description": "This is a test alert from nScout. If you see this, your webhook is working.",
-        "src": "127.0.0.1", "dst": "127.0.0.1",
-    }
-    result = await webhooks.send(body.url, sample)
-    return result
+    sample = {"severity": "high", "type": "Test Alert", "title": "nScout test notification",
+              "description": "This is a test alert from nScout. If you see this, your webhook is working.",
+              "src": "127.0.0.1", "dst": "127.0.0.1"}
+    return await webhooks.send(body.url, sample)
 
 
-# ---------- Capture replay (save / list / load / delete) ----------
+# ---------- Capture replay ----------
+def _require_mongo():
+    if not mongo_available:
+        raise HTTPException(status_code=503, detail="MongoDB is unavailable; saved sessions are disabled")
+
+
 @api.post("/sessions/save")
 async def sessions_save(body: SaveSessionRequest):
+    _require_mongo()
     try:
         meta = await save_session(db, session, body.name)
     except ValueError as e:
@@ -268,11 +275,14 @@ async def sessions_save(body: SaveSessionRequest):
 
 @api.get("/sessions")
 async def sessions_list():
-    return {"sessions": await list_sessions(db)}
+    if not mongo_available:
+        return {"sessions": [], "mongo_available": False}
+    return {"sessions": await list_sessions(db), "mongo_available": True}
 
 
 @api.post("/sessions/{sid}/load")
 async def sessions_load(sid: str):
+    _require_mongo()
     try:
         meta = await load_session(db, session, sid)
     except KeyError:
@@ -282,33 +292,29 @@ async def sessions_load(sid: str):
 
 @api.delete("/sessions/{sid}")
 async def sessions_delete(sid: str):
+    _require_mongo()
     ok = await delete_session(db, sid)
     if not ok:
         raise HTTPException(status_code=404, detail="session not found")
     return {"status": "deleted"}
 
 
-# ---------- AI explain (SSE streaming) ----------
+# ---------- AI explain ----------
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 
 
 def _build_prompt(pkt: Optional[dict], threat: Optional[dict]) -> str:
     if threat:
-        return (
-            "Explain this network security anomaly in plain English to a junior SOC analyst. "
-            "Give (1) what happened, (2) why it is suspicious, (3) likely attacker goal, "
-            "(4) recommended immediate action. Keep it under 160 words.\n\n"
-            f"Anomaly: {json.dumps(threat, default=str)}"
-        )
+        return ("Explain this network security anomaly in plain English to a junior SOC analyst. "
+                "Give (1) what happened, (2) why it is suspicious, (3) likely attacker goal, "
+                "(4) recommended immediate action. Keep it under 160 words.\n\n"
+                f"Anomaly: {json.dumps(threat, default=str)}")
     if pkt:
         slim = {k: pkt.get(k) for k in ("number", "time_str", "src_ip", "dst_ip", "src_port", "dst_port", "protocol", "length", "info", "flags")}
         slim["layers"] = [{"name": layer["name"], "fields": layer["fields"]} for layer in pkt.get("layers", [])]
-        return (
-            "You are a senior network engineer. In plain English, explain what this packet is doing, "
-            "what each protocol layer means, and whether anything looks unusual. Be concise (<150 words), "
-            "use short bullet points.\n\n"
-            f"Packet: {json.dumps(slim, default=str)[:3500]}"
-        )
+        return ("You are a senior network engineer. In plain English, explain what this packet is doing, "
+                "what each protocol layer means, and whether anything looks unusual. Be concise (<150 words), "
+                "use short bullet points.\n\n" f"Packet: {json.dumps(slim, default=str)[:3500]}")
     return "Say: no packet selected."
 
 
@@ -323,7 +329,6 @@ async def ai_explain(req: ExplainRequest):
                 break
     if not pkt and not threat:
         raise HTTPException(status_code=404, detail="packet or threat not found")
-
     prompt = _build_prompt(pkt, threat)
 
     async def gen():
@@ -332,12 +337,10 @@ async def ai_explain(req: ExplainRequest):
             yield "data: [DONE]\n\n"
             return
         try:
-            from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone  # type: ignore
-            chat = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=f"explain-{req.packet_id or req.threat_id}",
-                system_message="You are nScout, an expert network and security analyst. Be clear, concise, and accurate.",
-            ).with_model("openai", "gpt-5.4")
+            from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+            chat = LlmChat(api_key=EMERGENT_LLM_KEY,
+                           session_id=f"explain-{req.packet_id or req.threat_id}",
+                           system_message="You are nScout, an expert network and security analyst. Be clear, concise, and accurate.").with_model("openai", "gpt-5.4")
             async for ev in chat.stream_message(UserMessage(text=prompt)):
                 if isinstance(ev, TextDelta):
                     yield "data: " + json.dumps({"delta": ev.content}) + "\n\n"
@@ -391,18 +394,13 @@ async def _stats_pulse(ws: WebSocket):
 
 # ---------- Mount & CORS ----------
 app.include_router(api)
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(CORSMiddleware, allow_credentials=True,
+                   allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+                   allow_methods=["*"], allow_headers=["*"])
 
-# When running inside the PyInstaller single-folder bundle, serve the built React UI.
 _UI_DIR = ROOT_DIR / "frontend_build"
 if _UI_DIR.exists():
-    from fastapi.staticfiles import StaticFiles  # type: ignore
+    from fastapi.staticfiles import StaticFiles
     app.mount("/", StaticFiles(directory=str(_UI_DIR), html=True), name="ui")
 
 
