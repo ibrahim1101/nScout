@@ -17,4 +17,3 @@ dpkt==1.9.8
 psutil==5.9.8
 requests==2.31.0
 
-emergentintegrations==0.2.2
