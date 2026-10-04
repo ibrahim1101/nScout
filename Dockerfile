@@ -3,7 +3,8 @@
 # Build the React frontend first.
 FROM node:24-bookworm-slim AS frontend-builder
 WORKDIR /src/frontend
-RUN npm install --global yarn@1.22.22
+# Node 24 images already include Yarn/Corepack tooling; avoid reinstalling Yarn
+# over the existing /usr/local/bin/yarnpkg binary.
 COPY frontend/package.json ./
 COPY frontend/yarn.lock* ./
 RUN if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else yarn install; fi
