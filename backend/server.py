@@ -343,6 +343,11 @@ async def ai_explain(req: ExplainRequest):
                     yield "data: " + json.dumps({"delta": ev.content}) + "\n\n"
                 elif isinstance(ev, StreamDone):
                     break
+        except ModuleNotFoundError as e:
+            if str(getattr(e, "name", "")).startswith("emergentintegrations"):
+                yield "data: " + json.dumps({"delta": "AI integration is not included in the portable build. Core nScout features remain available."}) + "\n\n"
+            else:
+                yield "data: " + json.dumps({"delta": f"AI error: {e}"}) + "\n\n"
         except Exception as e:
             yield "data: " + json.dumps({"delta": f"AI error: {e}"}) + "\n\n"
         yield "data: [DONE]\n\n"
