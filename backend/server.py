@@ -6,15 +6,16 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
+from etherlens import analysis, geo, webhooks
 from etherlens.engine import CaptureSession
 
 ROOT_DIR = Path(__file__).parent
@@ -23,10 +24,11 @@ load_dotenv(ROOT_DIR / ".env")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
 logger = logging.getLogger("etherlens")
 
-# ---------- Mongo (kept, mostly unused for live buffers) ----------
+# ---------- Mongo ----------
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
+settings_col = db.etherlens_settings
 
 # ---------- Core state ----------
 session = CaptureSession()
@@ -45,6 +47,42 @@ class ExplainRequest(BaseModel):
     threat_id: Optional[str] = None
 
 
+class WebhookSettings(BaseModel):
+    slack_url: str = ""
+    discord_url: str = ""
+    min_severity: str = "high"  # critical|high|medium|low
+
+
+class WebhookTestRequest(BaseModel):
+    url: str
+
+
+# ---------- Webhook plumbing ----------
+_webhook_cache = {"slack_url": "", "discord_url": "", "min_severity": "high"}
+_SEV_RANK = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+
+
+async def _load_settings():
+    doc = await settings_col.find_one({"_id": "webhooks"})
+    if doc:
+        _webhook_cache.update({
+            "slack_url": doc.get("slack_url", ""),
+            "discord_url": doc.get("discord_url", ""),
+            "min_severity": doc.get("min_severity", "high"),
+        })
+
+
+async def _threat_hook(threat: dict):
+    """Called by engine when a threat is detected."""
+    min_rank = _SEV_RANK.get(_webhook_cache.get("min_severity", "high"), 3)
+    rank = _SEV_RANK.get(threat.get("severity", "low"), 1)
+    if rank < min_rank:
+        return
+    urls = [u for u in (_webhook_cache.get("slack_url"), _webhook_cache.get("discord_url")) if u]
+    if urls:
+        asyncio.create_task(webhooks.fan_out(urls, threat))
+
+
 # ---------- Health ----------
 @api.get("/")
 async def root():
@@ -53,14 +91,12 @@ async def root():
 
 @api.get("/interfaces")
 async def interfaces():
-    """List available network interfaces. Marks which are capturable."""
     out = [{"name": "simulated", "label": "Simulated Traffic (always available)", "capturable": True, "live": False}]
     try:
         import psutil  # type: ignore
         for name, _ in psutil.net_if_addrs().items():
             out.append({"name": name, "label": name, "capturable": True, "live": True})
     except Exception:
-        # Fallback – read /sys/class/net
         try:
             for iface in sorted(os.listdir("/sys/class/net")):
                 out.append({"name": iface, "label": iface, "capturable": True, "live": True})
@@ -126,8 +162,14 @@ async def top_talkers(limit: int = 10):
 
 
 @api.get("/topology")
-async def topology():
-    return session.topology()
+async def topology(enrich: bool = False):
+    data = session.topology()
+    if enrich:
+        ext_ips = [n["id"] for n in data["nodes"] if n.get("type") != "local"]
+        geo_map = await geo.enrich(ext_ips)
+        for n in data["nodes"]:
+            n["geo"] = geo_map.get(n["id"]) if n["id"] in geo_map else None
+    return data
 
 
 # ---------- PCAP upload ----------
@@ -145,6 +187,68 @@ async def upload_pcap(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid pcap: {e}") from e
     return {"status": "parsed", "packets": n, "stats": session.stats()}
+
+
+# ---------- PCAP export ----------
+@api.get("/pcap/export")
+async def export_pcap():
+    pkts = list(session.packets)
+    if not pkts:
+        raise HTTPException(status_code=404, detail="No packets to export")
+    data = analysis.export_pcap(pkts)
+    if not data:
+        raise HTTPException(status_code=500, detail="Failed to build pcap")
+    return Response(
+        content=data,
+        media_type="application/vnd.tcpdump.pcap",
+        headers={"Content-Disposition": f'attachment; filename="etherlens-{int(pkts[-1]["timestamp"])}.pcap"'},
+    )
+
+
+# ---------- Flow / stream follow ----------
+@api.get("/flows")
+async def flows(limit: int = 50):
+    return {"flows": analysis.list_flows(list(session.packets), limit=limit)}
+
+
+@api.get("/flow/stream")
+async def flow_stream(a_ip: str, a_port: int, b_ip: str, b_port: int):
+    """Reassemble TCP stream between A↔B."""
+    out = analysis.reassemble_stream(list(session.packets), (a_ip, b_ip, a_port, b_port))
+    return out
+
+
+# ---------- Geo lookup ----------
+@api.get("/geo/{ip}")
+async def geo_lookup(ip: str):
+    return await geo.enrich_one(ip)
+
+
+# ---------- Webhook settings ----------
+@api.get("/settings/webhooks")
+async def get_webhook_settings():
+    return _webhook_cache
+
+
+@api.post("/settings/webhooks")
+async def save_webhook_settings(body: WebhookSettings):
+    doc = body.model_dump()
+    doc["_id"] = "webhooks"
+    await settings_col.replace_one({"_id": "webhooks"}, doc, upsert=True)
+    _webhook_cache.update(body.model_dump())
+    return {"status": "saved", "settings": _webhook_cache}
+
+
+@api.post("/settings/webhooks/test")
+async def test_webhook(body: WebhookTestRequest):
+    sample = {
+        "severity": "high", "type": "Test Alert",
+        "title": "EtherLens test notification",
+        "description": "This is a test alert from EtherLens AI. If you see this, your webhook is working.",
+        "src": "127.0.0.1", "dst": "127.0.0.1",
+    }
+    result = await webhooks.send(body.url, sample)
+    return result
 
 
 # ---------- AI explain (SSE streaming) ----------
@@ -217,12 +321,13 @@ async def ws_endpoint(ws: WebSocket):
     q = session.subscribe()
     stats_task = None
     try:
-        # send initial stats
         await ws.send_json({"type": "stats", "data": session.stats()})
         stats_task = asyncio.create_task(_stats_pulse(ws))
         while True:
             msg = await q.get()
             await ws.send_json(msg)
+            if msg.get("type") == "threat":
+                await _threat_hook(msg["data"])
     except WebSocketDisconnect:
         pass
     except Exception as e:
@@ -234,7 +339,6 @@ async def ws_endpoint(ws: WebSocket):
 
 
 async def _stats_pulse(ws: WebSocket):
-    """Push stats every second so dashboards stay fresh."""
     try:
         while True:
             await asyncio.sleep(1.0)
@@ -252,6 +356,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup():
+    await _load_settings()
 
 
 @app.on_event("shutdown")

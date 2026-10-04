@@ -5,11 +5,14 @@ import PacketAnalyzer from "./PacketAnalyzer";
 import AnalyticsDashboard from "./AnalyticsDashboard";
 import TopologyMap from "./TopologyMap";
 import ThreatFeed from "./ThreatFeed";
-import { Activity, Network, ShieldAlert, LayoutDashboard } from "lucide-react";
+import FlowDrawer from "./FlowDrawer";
+import SettingsDrawer from "./SettingsDrawer";
+import { Activity, Network, ShieldAlert, LayoutDashboard, GitBranch } from "lucide-react";
 
 const TABS = [
   { id: "analyzer", label: "Packet Analyzer", icon: Activity },
   { id: "analytics", label: "Analytics", icon: LayoutDashboard },
+  { id: "flows", label: "Flows", icon: GitBranch },
   { id: "topology", label: "Topology", icon: Network },
   { id: "threats", label: "AI Threats", icon: ShieldAlert },
 ];
@@ -27,6 +30,9 @@ export default function Dashboard({ theme, setTheme }) {
   const [timeline, setTimeline] = useState([]);
   const [topTalkers, setTopTalkers] = useState([]);
   const [topology, setTopology] = useState({ nodes: [], edges: [] });
+  const [flows, setFlows] = useState([]);
+  const [activeFlow, setActiveFlow] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const wsRef = useRef(null);
   const bufferRef = useRef([]);
@@ -63,13 +69,14 @@ export default function Dashboard({ theme, setTheme }) {
   useEffect(() => {
     const refresh = async () => {
       try {
-        const [tl, tt, topo, th, pk, st] = await Promise.all([
+        const [tl, tt, topo, th, pk, st, fl] = await Promise.all([
           api.get("/stats/timeline"),
           api.get("/stats/top-talkers?limit=10"),
-          api.get("/topology"),
+          api.get("/topology?enrich=true"),
           api.get("/threats"),
           api.get("/packets?limit=800"),
           api.get("/capture/status"),
+          api.get("/flows?limit=50"),
         ]);
         setTimeline(tl.data.series || []);
         setTopTalkers(tt.data.talkers || []);
@@ -77,6 +84,7 @@ export default function Dashboard({ theme, setTheme }) {
         setThreats(th.data.threats || []);
         setPackets(pk.data.packets || []);
         setStatus(st.data || {});
+        setFlows(fl.data.flows || []);
       } catch (_err) { /* ignore refresh errors */ }
     };
     refresh();
@@ -147,6 +155,7 @@ export default function Dashboard({ theme, setTheme }) {
         setFilter={setFilter}
         protocolFilter={protocolFilter}
         setProtocolFilter={setProtocolFilter}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       {notice && (
@@ -186,10 +195,13 @@ export default function Dashboard({ theme, setTheme }) {
 
       <main className="mx-auto max-w-[1700px] px-4 sm:px-6 lg:px-8 py-4">
         {tab === "analyzer" && (
-          <PacketAnalyzer packets={filtered} selected={selected} setSelected={setSelected} status={status} />
+          <PacketAnalyzer packets={filtered} selected={selected} setSelected={setSelected} status={status} onFollowFlow={(f) => setActiveFlow(f)} />
         )}
         {tab === "analytics" && (
           <AnalyticsDashboard status={status} timeline={timeline} topTalkers={topTalkers} />
+        )}
+        {tab === "flows" && (
+          <FlowsTab flows={flows} onOpen={(f) => setActiveFlow(f)} />
         )}
         {tab === "topology" && (
           <TopologyMap topology={topology} />
@@ -201,6 +213,57 @@ export default function Dashboard({ theme, setTheme }) {
           }} />
         )}
       </main>
+
+      <FlowDrawer open={!!activeFlow} onClose={() => setActiveFlow(null)} flow={activeFlow} />
+      <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+    </div>
+  );
+}
+
+function FlowsTab({ flows, onOpen }) {
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <h3 className="font-display font-bold text-sm">TCP Conversations</h3>
+        <span className="text-xs text-slate-500 dark:text-slate-400 font-mono-code">{flows.length} flows</span>
+      </div>
+      <div className="overflow-auto el-scroll">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+              <th className="px-4 py-2 font-semibold">Endpoint A</th>
+              <th className="px-4 py-2 font-semibold">Endpoint B</th>
+              <th className="px-4 py-2 font-semibold">Protocols</th>
+              <th className="px-4 py-2 font-semibold text-right">Packets</th>
+              <th className="px-4 py-2 font-semibold text-right">Bytes</th>
+              <th className="px-4 py-2"></th>
+            </tr>
+          </thead>
+          <tbody className="font-mono-code">
+            {flows.length === 0 && (
+              <tr><td colSpan={6} className="py-10 text-center text-slate-400">No TCP flows captured yet</td></tr>
+            )}
+            {flows.map((f, i) => (
+              <tr key={i} data-testid={`flow-row-${i}`} className="row-hover border-t border-slate-100 dark:border-slate-800">
+                <td className="px-4 py-2">{f.a_ip}:<span className="text-slate-400">{f.a_port}</span></td>
+                <td className="px-4 py-2">{f.b_ip}:<span className="text-slate-400">{f.b_port}</span></td>
+                <td className="px-4 py-2">
+                  {(f.protocols || []).map((p) => <span key={p} className={`proto-badge proto-${p} mr-1`}>{p}</span>)}
+                </td>
+                <td className="px-4 py-2 text-right">{f.packets.toLocaleString()}</td>
+                <td className="px-4 py-2 text-right">{(f.bytes || 0).toLocaleString()} B</td>
+                <td className="px-4 py-2 text-right">
+                  <button
+                    data-testid={`flow-follow-btn-${i}`}
+                    onClick={() => onOpen(f)}
+                    className="text-xs px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                  >Follow</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -1,12 +1,13 @@
 import { useRef } from "react";
-import { Play, Square, Trash2, Upload, Moon, Sun, Radio, Zap, HardDrive, ShieldAlert, Search } from "lucide-react";
-import { fmtBps } from "./lib";
+import { Play, Square, Trash2, Upload, Moon, Sun, Radio, Zap, HardDrive, ShieldAlert, Search, Download, Settings } from "lucide-react";
+import { fmtBps, API } from "./lib";
 
 const PROTOCOLS = ["", "TCP", "UDP", "HTTPS", "HTTP", "DNS", "ICMP", "ARP", "SSH", "TLS"];
 
 export default function HeaderNav({
   theme, setTheme, interfaces, iface, setIface, status,
   onStart, onStop, onClear, onUpload, filter, setFilter, protocolFilter, setProtocolFilter,
+  onOpenSettings,
 }) {
   const fileRef = useRef(null);
 
@@ -85,6 +86,21 @@ export default function HeaderNav({
               hidden
               onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = ""; }}
             />
+            <a
+              data-testid="pcap-export-btn"
+              href={`${API}/pcap/export`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 text-sm font-semibold shadow-sm transition-colors"
+            >
+              <Download size={14} /> Export
+            </a>
+            <button
+              data-testid="settings-open-btn"
+              onClick={onOpenSettings}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-colors"
+              title="Alert settings"
+            >
+              <Settings size={14} />
+            </button>
           </div>
 
           <div className="flex-1" />

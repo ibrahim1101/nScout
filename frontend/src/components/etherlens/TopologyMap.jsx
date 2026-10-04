@@ -67,25 +67,40 @@ export default function TopologyMap({ topology }) {
             const isGateway = n.id.endsWith(".1");
             const color = isGateway ? "#10b981" : isLocal ? "#2563eb" : "#f97316";
             const r = 10 + Math.min(14, Math.log2((n.bytes || 1) + 1));
+            const flag = n.geo?.flag;
             return (
               <g key={n.id} className="topo-node" data-testid={`topology-node-${n.id.replace(/\./g, "-")}`}
                 onMouseEnter={() => setHovered(n)} onMouseLeave={() => setHovered(null)}>
                 <circle cx={p.x} cy={p.y} r={r + 4} fill={color} opacity={0.18} />
                 <circle cx={p.x} cy={p.y} r={r} fill={color} stroke="white" strokeWidth={2} />
+                {flag && !isLocal && (
+                  <text x={p.x} y={p.y + 4} textAnchor="middle" fontSize={r} className="pointer-events-none">{flag}</text>
+                )}
                 <text x={p.x} y={p.y + r + 14} textAnchor="middle" fontSize="11" fill="currentColor" className="font-mono-code">{n.id}</text>
+                {n.geo?.asname && (
+                  <text x={p.x} y={p.y + r + 26} textAnchor="middle" fontSize="9" fill="#94a3b8" className="font-mono-code">{n.geo.asname.slice(0, 18)}</text>
+                )}
               </g>
             );
           })}
         </svg>
 
         {hovered && (
-          <div className="absolute top-3 right-3 w-60 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg p-3 text-xs font-mono-code">
-            <div className="font-semibold text-sm">{hovered.id}</div>
-            <div className="text-slate-500">{hovered.type === "local" ? "Local host" : "External endpoint"}</div>
+          <div className="absolute top-3 right-3 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg p-3 text-xs font-mono-code">
+            <div className="flex items-center gap-2">
+              <span className="text-xl leading-none">{hovered.geo?.flag || (hovered.type === "local" ? "🏠" : "🌐")}</span>
+              <div>
+                <div className="font-semibold text-sm">{hovered.id}</div>
+                <div className="text-slate-500">{hovered.type === "local" ? "Local host" : (hovered.geo?.country || "External endpoint")}</div>
+              </div>
+            </div>
             <div className="mt-2 space-y-0.5">
               <div>Packets: <span className="font-semibold">{hovered.packets.toLocaleString()}</span></div>
               <div>Bytes: <span className="font-semibold">{fmtBytes(hovered.bytes)}</span></div>
               <div>Ports: {hovered.ports?.length ? hovered.ports.join(", ") : "—"}</div>
+              {hovered.geo?.city && <div>Location: {[hovered.geo.city, hovered.geo.region].filter(Boolean).join(", ")}</div>}
+              {hovered.geo?.asname && <div>ASN: <span className="font-semibold">{hovered.geo.asname}</span></div>}
+              {hovered.geo?.org && <div className="text-slate-500 truncate">Org: {hovered.geo.org}</div>}
             </div>
           </div>
         )}

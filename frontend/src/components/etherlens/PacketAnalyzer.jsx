@@ -2,13 +2,29 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "./lib";
 import { ChevronRight, ChevronDown, Sparkles, Copy } from "lucide-react";
 
-export default function PacketAnalyzer({ packets, selected, setSelected, status }) {
+export default function PacketAnalyzer({ packets, selected, setSelected, status, onFollowFlow }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
       <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col" style={{ height: "calc(100vh - 260px)" }}>
         <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <h3 className="font-display font-bold text-sm">Packet Stream</h3>
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-mono-code">{packets.length} packets</span>
+          <div className="flex items-center gap-2">
+            {selected && ["TCP", "HTTP", "HTTPS", "SSH", "TLS", "FTP", "SMTP"].includes(selected.protocol) && selected.src_port && selected.dst_port && (
+              <button
+                data-testid="follow-flow-btn"
+                onClick={() => {
+                  const [a_ip, a_port, b_ip, b_port] = (selected.src_ip < selected.dst_ip || (selected.src_ip === selected.dst_ip && selected.src_port < selected.dst_port))
+                    ? [selected.src_ip, selected.src_port, selected.dst_ip, selected.dst_port]
+                    : [selected.dst_ip, selected.dst_port, selected.src_ip, selected.src_port];
+                  onFollowFlow && onFollowFlow({ a_ip, a_port, b_ip, b_port, protocols: [selected.protocol], packets: 0 });
+                }}
+                className="text-xs px-2 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+              >
+                Follow flow
+              </button>
+            )}
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-mono-code">{packets.length} packets</span>
+          </div>
         </div>
         <PacketTable packets={packets} selected={selected} onSelect={setSelected} />
       </div>
