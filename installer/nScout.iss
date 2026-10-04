@@ -26,7 +26,9 @@ PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 SetupIconFile=..\frontend\public\favicon.ico
 UninstallDisplayIcon={app}\nScout.exe
-VersionInfoVersion={#MyAppVersion}
+; Windows file-version metadata must be numeric. Keep the human-readable
+; AppVersion above for dev/release labels such as 0.2.0-dev.
+VersionInfoVersion=0.2.0.0
 VersionInfoProductName=nScout
 VersionInfoDescription=nScout Network Monitor
 VersionInfoCompany=nScout
