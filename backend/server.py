@@ -215,6 +215,7 @@ async def ai_explain(req: ExplainRequest):
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
     q = session.subscribe()
+    stats_task = None
     try:
         # send initial stats
         await ws.send_json({"type": "stats", "data": session.stats()})
@@ -228,10 +229,8 @@ async def ws_endpoint(ws: WebSocket):
         logger.warning("ws error: %s", e)
     finally:
         session.unsubscribe(q)
-        try:
+        if stats_task is not None:
             stats_task.cancel()
-        except Exception:
-            pass
 
 
 async def _stats_pulse(ws: WebSocket):
