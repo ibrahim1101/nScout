@@ -23,7 +23,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
-logger = logging.getLogger("etherlens")
+logger = logging.getLogger("nscout")
 
 # ---------- Mongo ----------
 mongo_url = os.environ["MONGO_URL"]
@@ -34,7 +34,7 @@ settings_col = db.etherlens_settings
 # ---------- Core state ----------
 session = CaptureSession()
 
-app = FastAPI(title="EtherLens AI")
+app = FastAPI(title="nScout")
 api = APIRouter(prefix="/api")
 
 
@@ -91,7 +91,7 @@ async def _threat_hook(threat: dict):
 # ---------- Health ----------
 @api.get("/")
 async def root():
-    return {"name": "EtherLens AI", "status": "ok"}
+    return {"name": "nScout", "status": "ok"}
 
 
 @api.get("/interfaces")
@@ -248,8 +248,8 @@ async def save_webhook_settings(body: WebhookSettings):
 async def test_webhook(body: WebhookTestRequest):
     sample = {
         "severity": "high", "type": "Test Alert",
-        "title": "EtherLens test notification",
-        "description": "This is a test alert from EtherLens AI. If you see this, your webhook is working.",
+        "title": "nScout test notification",
+        "description": "This is a test alert from nScout. If you see this, your webhook is working.",
         "src": "127.0.0.1", "dst": "127.0.0.1",
     }
     result = await webhooks.send(body.url, sample)
@@ -336,7 +336,7 @@ async def ai_explain(req: ExplainRequest):
             chat = LlmChat(
                 api_key=EMERGENT_LLM_KEY,
                 session_id=f"explain-{req.packet_id or req.threat_id}",
-                system_message="You are EtherLens AI, an expert network and security analyst. Be clear, concise, and accurate.",
+                system_message="You are nScout, an expert network and security analyst. Be clear, concise, and accurate.",
             ).with_model("openai", "gpt-5.4")
             async for ev in chat.stream_message(UserMessage(text=prompt)):
                 if isinstance(ev, TextDelta):

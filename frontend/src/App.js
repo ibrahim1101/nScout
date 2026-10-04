@@ -3,13 +3,13 @@ import "@/App.css";
 import Dashboard from "@/components/etherlens/Dashboard";
 
 export default function App() {
-  const [theme, setTheme] = useState(() => localStorage.getItem("etherlens-theme") || "light");
+  const [theme, setTheme] = useState(() => localStorage.getItem("nscout-theme") || "light");
 
   useEffect(() => {
     const root = document.documentElement;
     if (theme === "dark") root.classList.add("dark");
     else root.classList.remove("dark");
-    localStorage.setItem("etherlens-theme", theme);
+    localStorage.setItem("nscout-theme", theme);
   }, [theme]);
 
   return (

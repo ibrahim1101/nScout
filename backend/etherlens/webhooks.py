@@ -20,7 +20,7 @@ def _slack_payload(threat: Dict) -> Dict:
     sev = threat.get("severity", "info")
     emoji = SEVERITY_EMOJI.get(sev, "🔔")
     text = (
-        f"{emoji} *EtherLens Alert — {sev.upper()}*\n"
+        f"{emoji} *nScout Alert — {sev.upper()}*\n"
         f"*{threat.get('title', 'Anomaly detected')}*\n"
         f"> {threat.get('description', '')}\n"
         f"`{threat.get('src', '?')}` → `{threat.get('dst', '?')}` · type: `{threat.get('type', '?')}`"
@@ -34,7 +34,7 @@ def _discord_payload(threat: Dict) -> Dict:
     color = {"critical": 0xE11D48, "high": 0xF97316, "medium": 0xF59E0B, "low": 0x0EA5E9}.get(sev, 0x3B82F6)
     return {
         "embeds": [{
-            "title": f"{emoji} EtherLens — {sev.upper()}: {threat.get('title', 'Anomaly')}",
+            "title": f"{emoji} nScout — {sev.upper()}: {threat.get('title', 'Anomaly')}",
             "description": threat.get("description", ""),
             "color": color,
             "fields": [

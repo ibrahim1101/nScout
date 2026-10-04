@@ -1,4 +1,4 @@
-"""EtherLens AI desktop launcher.
+"""nScout desktop launcher.
 
 Starts the FastAPI backend on an available port, serves the bundled React UI
 at the same origin, and automatically opens the user's default browser.
@@ -50,7 +50,7 @@ def _ensure_env():
         load_dotenv(sample)
     # Reasonable defaults so a user can double-click and go
     os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
-    os.environ.setdefault("DB_NAME", "etherlens")
+    os.environ.setdefault("DB_NAME", "nscout")
     os.environ.setdefault("CORS_ORIGINS", "*")
 
 
@@ -60,7 +60,7 @@ def main() -> None:
     url = f"http://127.0.0.1:{port}"
 
     print("=" * 60)
-    print(" EtherLens AI – starting")
+    print(" nScout – starting")
     print(f"  Open in browser: {url}")
     print("  Press Ctrl+C to stop")
     print("=" * 60)

@@ -1,71 +1,82 @@
-# EtherLens AI — Product Requirements Document
+# nScout — Product Requirements Document
 
 ## Problem statement
-A Wireshark-class network monitoring tool with a smoother SaaS GUI, better parsing, AI insights, Geo + ASN enrichment, threat alerts and distributable as a double-click desktop app.
+A Wireshark-class network monitor with a modern SaaS UI, AI insights, Geo + ASN enrichment, Follow-stream reassembly, threat alerts, save-and-replay sessions, PCAP import/export, Slack & Discord alerts. Distributable both as a standalone desktop app (PyInstaller) and a lite Docker web service.
 
 ## Core requirements (static)
-- Live packet capture (scapy AsyncSniffer) with simulator fallback for sandboxed/non-root hosts
+- Live packet capture (scapy AsyncSniffer) with simulator fallback
 - PCAP upload, export, and session save/replay
 - Protocol decode: Ethernet / IPv4 / IPv6 / TCP / UDP / ICMP / ARP / DNS / HTTP / HTTPS / TLS + ~25 app-port protocols
 - Real-time analytics: packets/sec, bps, protocol distribution, top talkers, timeline
-- TCP conversation list + Follow Stream with **overlap-aware** reassembly (byte-range merge)
-- Topology map with Geo-IP + ASN enrichment (country flags) via ip-api.com
+- TCP conversation list + Follow Stream with overlap-aware byte-range reassembly
+- Topology map with Geo-IP + ASN enrichment (ip-api.com, cached)
 - Threat engine: SYN flood, port scan, ICMP flood, DNS tunneling, cleartext credentials
-- AI explanations (SSE streaming) via Emergent LLM key / OpenAI gpt-5.4
+- AI explanations via Emergent LLM / OpenAI gpt-5.4 (SSE streaming)
 - Slack + Discord alert webhooks with severity threshold, Test button, Mongo persistence
-- Save & replay captures from MongoDB
+- Mongo-backed save & replay captures
 - Light & dark themes, responsive down to 390 px
-- Distributable as PyInstaller single-folder app (Windows / macOS / Linux)
+- Two distribution modes:
+  1. PyInstaller single-folder desktop app (Windows / macOS / Linux)
+  2. Docker lite web service — single `docker compose up`
 
 ## What's been implemented
 ### v1 (2026-01-04)
-- Backend capture engine, dissector, simulator, threat detector
+- Capture engine, dissector, simulator, threat detector
 - REST + WS endpoints for packets/threats/stats/topology/ai-explain/pcap-upload
-- Frontend: HeaderNav, PacketAnalyzer (list + protocol tree + hex + AI), AnalyticsDashboard, TopologyMap, ThreatFeed
+- Full dashboard UI (packet analyzer, analytics, topology, threat feed)
 - Tests: 15/15
 
 ### v2 (2026-01-04)
-- Backend: analysis (reassembly, pcap-export, flow list), geo (ip-api cache), webhooks (Slack + Discord)
-- Endpoints: pcap/export, flows, flow/stream, geo/{ip}, topology?enrich=true, settings/webhooks (GET/POST/test)
-- Frontend: Flows tab, FlowDrawer, SettingsDrawer, Export button in header, country flags + ASN on topology
+- analysis / geo / webhooks modules
+- pcap export, flow list, follow stream, geo enrichment, webhook settings + test
+- Frontend: Flows tab, FlowDrawer, SettingsDrawer, country flags & ASN on topology
 - Tests: 11/11 new + 15/15 regression
 
 ### v3 (2026-01-04)
-- Backend: sessions module (save/list/load/delete) persisting full packet hex in Mongo
-- Overlap-aware TCP reassembly (byte-range merge, kills retransmit duplication)
-- PyInstaller spec + launcher.py + .env.example + build.sh / build.ps1
-- Static-mount `frontend_build/` from FastAPI when bundled
-- GitHub Actions workflow (.github/workflows/build.yml) builds Windows + Linux artifacts on tag push
-- BUNDLE_README.md shipped with each release
-- Frontend: SessionsDrawer, REPLAY status pill, same-origin ws fallback in lib.js
-- Tests: 7/7 new + 33/33 total regression (iteration_3.json)
-- Verified bundle: 36 MB launcher, 367 MB folder, boots in <2s, serves API+UI on port 8001/8002
+- Session save/list/load/delete persisted in Mongo
+- Overlap-aware TCP reassembly (byte-range merge)
+- PyInstaller spec + launcher + build.sh / build.ps1 + GitHub Actions
+- Static-mount frontend_build when bundled
+- Verified 36 MB launcher boots in <2s
+- Tests: 7/7 new + 33/33 regression
 
-## Distribution
-Three paths, documented in `/app/PACKAGING.md` and `/app/BUNDLE_README.md`:
-1. **PyInstaller** (`./build.sh` on Linux/mac, `.\build.ps1` on Windows) → single folder
-2. **Docker Compose** (compose file in PACKAGING.md)
-3. **Tauri** desktop app (scaffolded in PACKAGING.md)
+### v4 (2026-01-04) — nScout + Docker
+- Full rebrand EtherLens AI → **nScout** (UI title, FastAPI title, api/, webhook payloads, PyInstaller APP_NAME, build scripts, GitHub Actions artifact names)
+- Browser tab + localStorage theme key updated
+- Dockerfile (multi-stage): node:20-alpine builds React, python:3.11-slim serves it + API on 8001
+- docker-compose.yml (nScout + Mongo 7 with healthcheck + persistent volume)
+- docker-compose.capture.yml overlay for CAP_NET_RAW on Linux hosts
+- .dockerignore excludes node_modules / build / tests / memory
+- GitHub Actions: new `docker` job pushes `ghcr.io/<owner>/nscout:latest` on tag push
+- README.md rewritten with 3-way setup (Docker lite / standalone build / dev)
+- BUNDLE_README.md updated
 
-GitHub Actions auto-build on `git tag v*` push → produces `EtherLens-windows-x64.zip` and `EtherLens-linux-x64.tar.gz` as release assets.
+## Distribution matrix
+| Mode | File | Command | Output |
+|---|---|---|---|
+| **Lite web service** | `docker-compose.yml` | `docker compose up -d` | 1 container (API + UI), port 8001, Mongo sidecar |
+| **Linux live capture** | `+ docker-compose.capture.yml` | `docker compose -f … -f … up` | Host network + NET_RAW |
+| **Standalone desktop** | `nscout.spec` + `build.sh` / `build.ps1` | `./build.sh` | `dist/nScout/` folder, double-click |
+| **CI releases** | `.github/workflows/build.yml` | `git tag v* && git push --tags` | Windows zip, Linux tar.gz, GHCR docker image |
 
 ## Prioritized backlog
 ### P0
-- GridFS-backed session storage so captures > 10k packets fit under BSON 16MB cap
-- Overlap merge aware of TCP seq wraparound (2^32 boundary)
+- GridFS-backed session storage so captures > 10k packets fit under BSON 16 MB cap
+- Multi-arch docker image (linux/arm64 for M-series Macs / Raspberry Pi)
 ### P1
-- Signed Windows / macOS code-signing cert for the installer
-- Auto-updater channel (Tauri path, if adopted)
-- Suricata-style signature rules alongside behavioral threats
+- Code-signing cert for Windows installer
+- Auto-updater channel
+- Suricata-style signature rules alongside behavioural threats
 ### P2
-- Multi-user auth + capture permissions
+- Multi-user auth + capture permissions (settings/sessions currently unauth)
 - Webhook retry/backoff on 429
-- Chunked session loading (asyncio.to_thread) to never block the event loop
+- Chunked session loading to never block event loop
 
 ## Security hardening
-- Backend binds internally only (127.0.0.1 in bundle, 0.0.0.0 behind ingress in cloud)
+- Backend binds internally only (127.0.0.1 in bundle, 0.0.0.0 in Docker)
 - No shell exec on uploads; PCAP parsed in-memory via scapy
-- Upload size limit 50 MB; session save limit called out for Mongo 16 MB BSON
+- Upload size limit 50 MB
+- `tini` as PID 1 in Docker for correct signal handling
 - No credentials stored; EMERGENT_LLM_KEY read from env
 - CORS gated via env (`CORS_ORIGINS`)
-- **Known gap**: `/api/settings/*` and `/api/sessions/*` are unauthenticated — fine for localhost desktop, add shared-secret / token before exposing to a network.
+- **Known gap**: `/api/settings/*` and `/api/sessions/*` are unauthenticated — fine for localhost desktop, add auth before exposing to a network.

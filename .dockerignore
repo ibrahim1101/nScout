@@ -1,0 +1,19 @@
+# Everything the frontend build and Python runtime don't need
+**/node_modules
+**/.yarn-cache
+frontend/build
+dist/
+build/
+.git
+.github
+*.pyc
+__pycache__
+.venv
+.env
+tests/
+test_reports/
+memory/
+PACKAGING.md
+BUNDLE_README.md
+*.md
+!backend/README.md

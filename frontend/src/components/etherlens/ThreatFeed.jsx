@@ -138,7 +138,7 @@ function ThreatExplainer({ threat }) {
       <div className="mb-2 text-xs text-slate-500 font-mono-code">{threat.type}</div>
       <div className="font-display font-semibold">{threat.title}</div>
       <div className="mt-3 text-sm whitespace-pre-wrap leading-relaxed text-slate-800 dark:text-slate-200">
-        {text || (loading ? "Analyzing with EtherLens AI…" : "")}
+        {text || (loading ? "Analyzing with nScout AI…" : "")}
       </div>
     </div>
   );

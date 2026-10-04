@@ -12,7 +12,7 @@ Output:
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
-APP_NAME = "EtherLens"
+APP_NAME = "nScout"
 PROJECT_ROOT = Path(".").resolve()
 BACKEND = PROJECT_ROOT / "backend"
 FRONTEND_BUILD = PROJECT_ROOT / "frontend" / "build"

@@ -1,0 +1,19 @@
+# Overlay that unlocks live packet capture on a Linux host.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.capture.yml up -d
+#
+# This runs the nScout container with CAP_NET_RAW + CAP_NET_ADMIN and shares the
+# host's network stack so scapy can see real interfaces (eth0, wlan0, ...).
+#
+# NOTE: on macOS/Windows Docker runs inside a VM, so --network host only sees
+# the VM's interfaces, not the host OS. Use the PyInstaller bundle on those OSes
+# for native capture.
+
+services:
+  nscout:
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    network_mode: host
+    # when using host networking, "ports:" is ignored - the service listens
+    # directly on the host at :8001

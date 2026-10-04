@@ -23,7 +23,7 @@ export default function HeaderNav({
               </div>
             </div>
             <div>
-              <div className="font-display text-base font-bold tracking-tight leading-none">EtherLens AI</div>
+              <div className="font-display text-base font-bold tracking-tight leading-none">nScout</div>
               <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono-code tracking-wide">PACKET TELEMETRY</div>
             </div>
           </div>
