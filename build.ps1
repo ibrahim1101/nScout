@@ -16,19 +16,38 @@ Write-Host "==> Installing Python build deps"
 python -m pip install --upgrade pip pyinstaller
 python -m pip install -r backend\requirements.txt
 
+Write-Host "==> Ensuring Yarn 1.22.22 is installed"
+if (-not (Get-Command yarn -ErrorAction SilentlyContinue)) {
+    npm install --global yarn@1.22.22
+}
+
 Write-Host "==> Building React UI"
 Push-Location frontend
-if (Test-Path yarn.lock) {
-    yarn install --frozen-lockfile
-} else {
-    yarn install
-}
+yarn install --non-interactive
 $env:REACT_APP_BACKEND_URL = ""
+$env:DISABLE_EMERGENT_OVERLAY = "true"
 yarn build
+if (-not (Test-Path build\index.html)) {
+    throw "React build did not produce frontend\build\index.html"
+}
 Pop-Location
+
+Write-Host "==> Verifying backend launcher imports"
+$env:MONGO_URL = "mongodb://localhost:27017"
+$env:DB_NAME = "nscout"
+python -c "import sys; sys.path.insert(0, 'backend'); import launcher; print('launcher import: OK')"
 
 Write-Host "==> Running PyInstaller"
 pyinstaller --noconfirm --clean nscout.spec
+if (-not (Test-Path dist\nScout\nScout.exe)) {
+    throw "PyInstaller did not produce dist\nScout\nScout.exe"
+}
+if (-not (Test-Path dist\nScout\frontend_build\index.html)) {
+    throw "React UI was not bundled into dist\nScout\frontend_build"
+}
+if (-not (Test-Path dist\nScout\.env.example)) {
+    throw ".env.example was not bundled"
+}
 
 Write-Host "==> Done"
 Write-Host "    Bundle:  dist\nScout\"

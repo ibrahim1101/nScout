@@ -94,3 +94,7 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+
+# Track safe environment templates (never commit real .env files).
+!.env.example
+!backend/.env.example

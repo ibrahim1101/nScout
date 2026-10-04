@@ -35,11 +35,9 @@ hiddenimports = [
     "uvicorn.protocols.http.h11_impl",
     "uvicorn.protocols.websockets",
     "uvicorn.protocols.websockets.auto",
-    "uvicorn.protocols.websockets.wsproto_impl",
     "uvicorn.lifespan",
     "uvicorn.lifespan.on",
     "uvicorn.lifespan.off",
-    "uvicorn.workers",
     "uvicorn.config",
     "uvicorn.main",
     "uvicorn.server",
@@ -48,16 +46,19 @@ hiddenimports = [
     "emergentintegrations.llm",
     "emergentintegrations.llm.chat",
     # fastapi / starlette dynamic bits
-    "email_validator",
     "anyio",
     "sniffio",
     "h11",
-    "httptools",
+    "websockets",
+    "websockets.legacy",
 ]
 
 # Ship the compiled React UI inside the bundle so the backend can serve it.
-if FRONTEND_BUILD.exists():
-    datas.append((str(FRONTEND_BUILD), "frontend_build"))
+if not (FRONTEND_BUILD / "index.html").exists():
+    raise SystemExit(
+        f"React build not found at {FRONTEND_BUILD}. Run the frontend build before PyInstaller."
+    )
+datas.append((str(FRONTEND_BUILD), "frontend_build"))
 
 # Bundle the .env template so users can edit it next to the exe.
 env_file = BACKEND / ".env.example"
@@ -67,7 +68,7 @@ if env_file.exists():
 # Collect scapy, emergentintegrations and friends completely – they do a lot of
 # dynamic imports that PyInstaller otherwise misses.
 for mod in ("scapy", "emergentintegrations", "motor", "pydantic", "uvicorn",
-            "fastapi", "starlette", "pymongo"):
+            "fastapi", "starlette", "pymongo", "websockets"):
     try:
         d, b, h = collect_all(mod)
         datas += d
@@ -78,6 +79,7 @@ for mod in ("scapy", "emergentintegrations", "motor", "pydantic", "uvicorn",
 
 hiddenimports += collect_submodules("scapy.layers")
 hiddenimports += collect_submodules("uvicorn")
+hiddenimports += collect_submodules("websockets")
 
 block_cipher = None
 
