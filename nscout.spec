@@ -41,10 +41,6 @@ hiddenimports = [
     "uvicorn.config",
     "uvicorn.main",
     "uvicorn.server",
-    # emergentintegrations is loaded lazily inside the AI explain endpoint
-    "emergentintegrations",
-    "emergentintegrations.llm",
-    "emergentintegrations.llm.chat",
     # fastapi / starlette dynamic bits
     "anyio",
     "sniffio",
@@ -67,7 +63,7 @@ if env_file.exists():
 
 # Collect scapy, emergentintegrations and friends completely – they do a lot of
 # dynamic imports that PyInstaller otherwise misses.
-for mod in ("scapy", "emergentintegrations", "motor", "pydantic", "uvicorn",
+for mod in ("scapy", "motor", "pydantic", "uvicorn",
             "fastapi", "starlette", "pymongo", "websockets"):
     try:
         d, b, h = collect_all(mod)
