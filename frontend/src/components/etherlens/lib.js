@@ -1,12 +1,14 @@
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 export const API = `${BACKEND_URL}/api`;
 
 export const api = axios.create({ baseURL: API, timeout: 15000 });
 
 export function wsUrl() {
-  const u = new URL(BACKEND_URL);
+  // Same-origin by default (used by the PyInstaller bundle that serves UI + API together).
+  const base = BACKEND_URL || window.location.origin;
+  const u = new URL(base);
   const proto = u.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${u.host}/api/ws`;
 }

@@ -7,6 +7,7 @@ import TopologyMap from "./TopologyMap";
 import ThreatFeed from "./ThreatFeed";
 import FlowDrawer from "./FlowDrawer";
 import SettingsDrawer from "./SettingsDrawer";
+import SessionsDrawer from "./SessionsDrawer";
 import { Activity, Network, ShieldAlert, LayoutDashboard, GitBranch } from "lucide-react";
 
 const TABS = [
@@ -33,6 +34,7 @@ export default function Dashboard({ theme, setTheme }) {
   const [flows, setFlows] = useState([]);
   const [activeFlow, setActiveFlow] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const wsRef = useRef(null);
   const bufferRef = useRef([]);
@@ -156,6 +158,7 @@ export default function Dashboard({ theme, setTheme }) {
         protocolFilter={protocolFilter}
         setProtocolFilter={setProtocolFilter}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSessions={() => setSessionsOpen(true)}
       />
 
       {notice && (
@@ -216,6 +219,14 @@ export default function Dashboard({ theme, setTheme }) {
 
       <FlowDrawer open={!!activeFlow} onClose={() => setActiveFlow(null)} flow={activeFlow} />
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SessionsDrawer
+        open={sessionsOpen}
+        onClose={() => setSessionsOpen(false)}
+        onLoaded={(info) => {
+          setNotice(`Loaded "${info.name}" — ${info.packet_count} packets`);
+          setTimeout(() => setNotice(""), 5000);
+        }}
+      />
     </div>
   );
 }

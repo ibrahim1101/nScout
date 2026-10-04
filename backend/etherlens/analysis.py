@@ -53,8 +53,17 @@ def reassemble_stream(packets: List[Dict[str, Any]], flow_key: Tuple[str, str, i
             buckets["b_to_a"].append(p)
 
     def _assemble(ps: List[Dict[str, Any]]) -> bytes:
-        # Try to extract raw TCP payload from stored hex, order by seq if available.
-        chunks = []
+        """Overlap-aware reassembly keyed by seq byte range.
+
+        We model TCP's byte stream as a sorted list of [start, end) intervals.
+        When a new segment arrives:
+          * if its range is already fully covered, drop it (pure retransmit),
+          * if it partially overlaps, keep only the non-covered bytes,
+          * if it is a gap filler, insert it in order.
+        Final payload is the concatenation of intervals in seq order.
+        Base seq is anchored on the first observed segment to handle wraparound.
+        """
+        segments = []  # list of (seq, payload_bytes, pkt_number)
         for p in ps:
             try:
                 raw = bytes.fromhex(p.get("hex", "") or "")
@@ -64,19 +73,41 @@ def reassemble_stream(packets: List[Dict[str, Any]], flow_key: Tuple[str, str, i
                 tcp = pkt[TCP]
                 payload = bytes(tcp.payload) if tcp.payload else b""
                 if payload:
-                    chunks.append((int(tcp.seq or 0), payload, int(p.get("number", 0))))
+                    segments.append((int(tcp.seq or 0), payload, int(p.get("number", 0))))
             except Exception:
                 continue
-        chunks.sort(key=lambda c: (c[0], c[2]))
-        # De-duplicate overlapping seq
-        seen = set()
-        out = bytearray()
-        for seq, payload, _ in chunks:
-            if seq in seen:
-                continue
-            seen.add(seq)
-            out.extend(payload)
-        return bytes(out)
+        if not segments:
+            return b""
+
+        # Order by (seq, arrival-order) so retransmits come after originals.
+        segments.sort(key=lambda s: (s[0], s[2]))
+
+        # Build a sorted list of non-overlapping [start, end) → payload fragments.
+        kept: List[tuple] = []  # (start, end, bytes)
+        for seq, data, _num in segments:
+            start, end = seq, seq + len(data)
+            # Trim against existing intervals that overlap this one.
+            cursor = start
+            fragments = []
+            for ks, ke, _ in kept:
+                if ke <= cursor:  # existing interval ends before our cursor
+                    continue
+                if ks >= end:  # existing interval begins after we end
+                    break
+                # overlap region [max(cursor, ks), min(end, ke))
+                if ks > cursor:
+                    fragments.append((cursor, ks, data[cursor - start: ks - start]))
+                cursor = max(cursor, ke)
+                if cursor >= end:
+                    break
+            if cursor < end:
+                fragments.append((cursor, end, data[cursor - start: end - start]))
+            for fs, fe, fb in fragments:
+                if fe > fs:
+                    kept.append((fs, fe, fb))
+            kept.sort(key=lambda k: k[0])
+
+        return b"".join(b for _s, _e, b in kept)
 
     a_bytes = _assemble(buckets["a_to_b"])
     b_bytes = _assemble(buckets["b_to_a"])

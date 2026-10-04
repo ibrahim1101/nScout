@@ -17,6 +17,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from etherlens import analysis, geo, webhooks
 from etherlens.engine import CaptureSession
+from etherlens.sessions import save_session, list_sessions, load_session, delete_session
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -55,6 +56,10 @@ class WebhookSettings(BaseModel):
 
 class WebhookTestRequest(BaseModel):
     url: str
+
+
+class SaveSessionRequest(BaseModel):
+    name: str = "Untitled"
 
 
 # ---------- Webhook plumbing ----------
@@ -251,6 +256,38 @@ async def test_webhook(body: WebhookTestRequest):
     return result
 
 
+# ---------- Capture replay (save / list / load / delete) ----------
+@api.post("/sessions/save")
+async def sessions_save(body: SaveSessionRequest):
+    try:
+        meta = await save_session(db, session, body.name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"status": "saved", **meta}
+
+
+@api.get("/sessions")
+async def sessions_list():
+    return {"sessions": await list_sessions(db)}
+
+
+@api.post("/sessions/{sid}/load")
+async def sessions_load(sid: str):
+    try:
+        meta = await load_session(db, session, sid)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="session not found")
+    return {"status": "loaded", **meta, "stats": session.stats()}
+
+
+@api.delete("/sessions/{sid}")
+async def sessions_delete(sid: str):
+    ok = await delete_session(db, sid)
+    if not ok:
+        raise HTTPException(status_code=404, detail="session not found")
+    return {"status": "deleted"}
+
+
 # ---------- AI explain (SSE streaming) ----------
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 
@@ -356,6 +393,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# When running inside the PyInstaller single-folder bundle, serve the built React UI.
+_UI_DIR = ROOT_DIR / "frontend_build"
+if _UI_DIR.exists():
+    from fastapi.staticfiles import StaticFiles  # type: ignore
+    app.mount("/", StaticFiles(directory=str(_UI_DIR), html=True), name="ui")
 
 
 @app.on_event("startup")

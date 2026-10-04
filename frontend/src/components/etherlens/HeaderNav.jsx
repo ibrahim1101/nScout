@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Play, Square, Trash2, Upload, Moon, Sun, Radio, Zap, HardDrive, ShieldAlert, Search, Download, Settings } from "lucide-react";
+import { Play, Square, Trash2, Upload, Moon, Sun, Radio, Zap, HardDrive, ShieldAlert, Search, Download, Settings, Archive } from "lucide-react";
 import { fmtBps, API } from "./lib";
 
 const PROTOCOLS = ["", "TCP", "UDP", "HTTPS", "HTTP", "DNS", "ICMP", "ARP", "SSH", "TLS"];
@@ -7,7 +7,7 @@ const PROTOCOLS = ["", "TCP", "UDP", "HTTPS", "HTTP", "DNS", "ICMP", "ARP", "SSH
 export default function HeaderNav({
   theme, setTheme, interfaces, iface, setIface, status,
   onStart, onStop, onClear, onUpload, filter, setFilter, protocolFilter, setProtocolFilter,
-  onOpenSettings,
+  onOpenSettings, onOpenSessions,
 }) {
   const fileRef = useRef(null);
 
@@ -94,6 +94,14 @@ export default function HeaderNav({
               <Download size={14} /> Export
             </a>
             <button
+              data-testid="sessions-open-btn"
+              onClick={onOpenSessions}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold shadow-sm transition-colors"
+              title="Save / replay sessions"
+            >
+              <Archive size={14} /> Sessions
+            </button>
+            <button
               data-testid="settings-open-btn"
               onClick={onOpenSettings}
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-colors"
@@ -109,9 +117,9 @@ export default function HeaderNav({
           <div className="flex items-center gap-2 flex-wrap">
             <StatusPill
               testId="status-mode"
-              icon={status.running ? <span className="live-pulse" /> : <Radio size={12} />}
-              label={status.running ? (status.mode === "live" ? "LIVE" : status.mode === "simulated" ? "SIM" : "PCAP") : "IDLE"}
-              tone={status.running ? "emerald" : "slate"}
+              icon={(status.running || status.mode === "replay") ? <span className="live-pulse" /> : <Radio size={12} />}
+              label={status.mode === "replay" ? "REPLAY" : (status.running ? (status.mode === "live" ? "LIVE" : status.mode === "simulated" ? "SIM" : "PCAP") : "IDLE")}
+              tone={(status.running || status.mode === "replay") ? "emerald" : "slate"}
             />
             <StatusPill testId="status-pps" icon={<Zap size={12} />} label={`${status.pps || 0} pps`} />
             <StatusPill testId="status-mbps" icon={<HardDrive size={12} />} label={fmtBps((status.mbps || 0) * 1_000_000)} />
