@@ -45,9 +45,10 @@ feature is disabled.
 ## Troubleshooting
 
 - **"Mongo connection failed"** – install MongoDB locally
-  (`brew install mongodb-community` / `winget install MongoDB.Server`) or point
-  `MONGO_URL` at a managed instance (Atlas, Railway, etc.).
+  (<https://www.mongodb.com/try/download/community>) or point `MONGO_URL` at a
+  managed instance (Atlas, Railway, etc.). The app still runs without Mongo —
+  only the *Saved Sessions* feature is disabled.
 - **"No interfaces listed"** – install Npcap on Windows or run with
-  elevated privileges on macOS/Linux. The **Simulated** interface always works.
+  elevated privileges. The **Simulated** interface always works.
 - **AI explanations say "AI key not configured"** – set `EMERGENT_LLM_KEY`
   in your `.env`.

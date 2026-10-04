@@ -1,93 +1,77 @@
 # nScout
 
-Wireshark-class network monitor with a modern SaaS UI, AI-powered packet
-explanations, Geo + ASN enrichment, threat alerts, Follow-stream reassembly,
-save-and-replay sessions, PCAP import/export, Slack & Discord alerts.
+A Wireshark-class network monitor with a modern SaaS UI, AI-powered packet
+explanations, Geo + ASN enrichment, Follow-stream reassembly, threat alerts,
+save-and-replay sessions, PCAP import/export, and Slack / Discord webhooks.
 
-Runs two ways out of the box:
-
-| Mode | Best for | Start command |
-|---|---|---|
-| **Standalone desktop app** | Colleagues who want "double-click and go" | `./build.sh` then share `dist/nScout/` |
-| **Lite web service** | Teams, homelab, VPS, any Docker host | `docker compose up -d` → http://localhost:8001 |
+Ships as a single-folder Windows app your colleagues can double-click.
 
 ---
 
-## 1. Lite web service (Docker)
+## Quick start — build the Windows app
 
-```bash
-docker compose up -d
-open http://localhost:8001
+```powershell
+# If PowerShell blocks the script, just use build.bat (double-click).
+.\build.ps1
 ```
 
-That's it. The compose file brings up:
-- `nscout` — the FastAPI backend serving the compiled React UI on `:8001`
-- `mongo` — MongoDB 7 for saved sessions and settings
+Prereqs on the build machine:
+- Python 3.10 or newer (<https://python.org>)
+- Node.js 18 or newer (<https://nodejs.org>)
+- Yarn — `npm install -g yarn`
 
-To unlock **live packet capture** on a Linux host:
-```bash
-docker compose -f docker-compose.yml -f docker-compose.capture.yml up -d
-```
-This grants `CAP_NET_RAW` + `CAP_NET_ADMIN` and shares the host network stack.
-On macOS/Windows Docker runs inside a VM — use the standalone build below for
-native capture.
+Output: `dist\nScout\` — a self-contained folder (~370 MB).
+Share it as a zip; recipients just unzip and double-click `nScout.exe`.
 
-Pre-built images are published to GHCR on every `v*` tag push:
-```bash
-docker run --rm -p 8001:8001 ghcr.io/<your-org>/nscout:latest
-```
+## Automated release build
 
-## 2. Standalone desktop app (PyInstaller)
+Push a tag to GitHub and the Windows build runs for you automatically:
 
-```bash
-./build.sh         # macOS / Linux
-.\build.ps1        # Windows (PowerShell)
-.\build.bat        # Windows (double-click, no execution-policy hassles)
+```powershell
+git tag v0.1.0
+git push --tags
 ```
 
-> **Windows PowerShell tip** — if you see "is not digitally signed" the first
-> time, run `.\build.bat` instead, or launch once with
-> `powershell -ExecutionPolicy Bypass -File .\build.ps1`.
+GitHub Actions attaches `nScout-windows-x64.zip` to the release.
 
-Produces `dist/nScout/` — a self-contained folder (~370 MB) that your
-colleagues can unzip and double-click. See [BUNDLE_README.md](./BUNDLE_README.md)
-for per-OS capture permission instructions.
+## Live packet capture
 
-Automated builds: push a `vX.Y.Z` tag → GitHub Actions produces
-`nScout-windows-x64.zip` and `nScout-linux-x64.tar.gz` as release assets.
+nScout auto-detects whether it can capture real packets. If it can't, it
+transparently falls back to **Simulated** or **PCAP-upload** mode so you can
+still demo every feature.
 
-## 3. Development
+To unlock live capture on Windows:
+1. Install [Npcap](https://npcap.com) (free, from the Wireshark team)
+2. Launch nScout as **Administrator**
 
-```bash
+Then the Interface dropdown will list `Ethernet`, `Wi-Fi`, `Loopback`, etc.
+
+## Development
+
+```powershell
 # Backend
-cd backend && uvicorn server:app --reload --port 8001
+cd backend; uvicorn server:app --reload --port 8001
 
 # Frontend (separate shell)
-cd frontend && yarn install && yarn start
+cd frontend; yarn install; yarn start
 ```
 
-Then visit http://localhost:3000.
-
----
+Then visit <http://localhost:3000>.
 
 ## Configuration
 
-Environment variables (set in `.env` next to the binary, or in the compose
-file, or in your shell):
+Put a `.env` next to the binary (or in `backend/`) to override defaults:
 
-| Var | Purpose | Default |
-|---|---|---|
-| `MONGO_URL` | MongoDB connection string | `mongodb://localhost:27017` |
-| `DB_NAME` | Database name | `nscout` |
-| `CORS_ORIGINS` | Comma-separated allowed origins | `*` |
-| `EMERGENT_LLM_KEY` | Enables plain-English AI explanations and threat triage | (empty — AI disabled) |
+```ini
+MONGO_URL=mongodb://localhost:27017
+DB_NAME=nscout
+EMERGENT_LLM_KEY=sk-...           # enables plain-English AI explanations
+CORS_ORIGINS=*
+```
 
-Settings persisted inside Mongo:
-- Webhook URLs (Slack, Discord) and severity threshold → `etherlens_settings`
-- Saved capture sessions → `etherlens_sessions`
-
----
+If `MONGO_URL` is unreachable, nScout still runs — only the "Saved Sessions"
+feature is disabled.
 
 ## License
 
-Internal project. Add your own license file before publishing.
+Add your own license file before publishing.
