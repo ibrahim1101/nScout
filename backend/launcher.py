@@ -16,6 +16,10 @@ import time
 import webbrowser
 from pathlib import Path
 
+# Imported eagerly so PyInstaller's import tracer picks them up for the bundle.
+import uvicorn  # noqa: F401
+import fastapi  # noqa: F401
+
 
 def _bundle_dir() -> Path:
     """Return the directory containing bundled resources (frontend_build/, .env.example)."""
@@ -74,8 +78,7 @@ def main() -> None:
             pass
     threading.Thread(target=_open, daemon=True).start()
 
-    # Import after env is set so server.py reads the right MONGO_URL/DB_NAME.
-    import uvicorn
+    # server import runs app initialisation (so env is loaded first).
     from server import app  # noqa: F401 – imported for side-effects
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")

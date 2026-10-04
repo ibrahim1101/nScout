@@ -1,13 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for EtherLens AI – bundles the FastAPI backend and the
-pre-built React UI into a single-folder app.
+"""PyInstaller spec for nScout.
+
+Bundles the FastAPI backend and the pre-built React UI into a single-folder app.
 
 Build:
-    pyinstaller etherlens.spec
+    pyinstaller nscout.spec
 
 Output:
-    dist/EtherLens/EtherLens.exe   (Windows)
-    dist/EtherLens/EtherLens       (macOS/Linux)
+    dist/nScout/nScout.exe   (Windows)
+    dist/nScout/nScout       (macOS/Linux)
 """
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all, collect_submodules
@@ -19,7 +20,40 @@ FRONTEND_BUILD = PROJECT_ROOT / "frontend" / "build"
 
 datas = []
 binaries = []
-hiddenimports = []
+
+# Explicit hidden imports – uvicorn's workers / protocols are loaded by string
+# at runtime, so PyInstaller's static scanner alone misses them.
+hiddenimports = [
+    "uvicorn",
+    "uvicorn.logging",
+    "uvicorn.loops",
+    "uvicorn.loops.auto",
+    "uvicorn.loops.asyncio",
+    "uvicorn.protocols",
+    "uvicorn.protocols.http",
+    "uvicorn.protocols.http.auto",
+    "uvicorn.protocols.http.h11_impl",
+    "uvicorn.protocols.websockets",
+    "uvicorn.protocols.websockets.auto",
+    "uvicorn.protocols.websockets.wsproto_impl",
+    "uvicorn.lifespan",
+    "uvicorn.lifespan.on",
+    "uvicorn.lifespan.off",
+    "uvicorn.workers",
+    "uvicorn.config",
+    "uvicorn.main",
+    "uvicorn.server",
+    # emergentintegrations is loaded lazily inside the AI explain endpoint
+    "emergentintegrations",
+    "emergentintegrations.llm",
+    "emergentintegrations.llm.chat",
+    # fastapi / starlette dynamic bits
+    "email_validator",
+    "anyio",
+    "sniffio",
+    "h11",
+    "httptools",
+]
 
 # Ship the compiled React UI inside the bundle so the backend can serve it.
 if FRONTEND_BUILD.exists():
@@ -32,14 +66,18 @@ if env_file.exists():
 
 # Collect scapy, emergentintegrations and friends completely – they do a lot of
 # dynamic imports that PyInstaller otherwise misses.
-for mod in ("scapy", "emergentintegrations", "motor", "pydantic", "uvicorn", "fastapi", "starlette"):
+for mod in ("scapy", "emergentintegrations", "motor", "pydantic", "uvicorn",
+            "fastapi", "starlette", "pymongo"):
     try:
         d, b, h = collect_all(mod)
-        datas += d; binaries += b; hiddenimports += h
-    except Exception:
-        pass
+        datas += d
+        binaries += b
+        hiddenimports += h
+    except Exception as e:
+        print(f"[nscout.spec] WARNING: collect_all({mod!r}) failed: {e}")
 
 hiddenimports += collect_submodules("scapy.layers")
+hiddenimports += collect_submodules("uvicorn")
 
 block_cipher = None
 
