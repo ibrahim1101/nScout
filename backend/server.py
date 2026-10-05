@@ -10,6 +10,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 from etherlens import analysis,geo,webhooks,intelligence
+from etherlens.filters import filter_packets
+from etherlens.reports import json_report,html_report
 from etherlens.protocol_intelligence import tls_intelligence,packet_timeline,packet_ascii
 from etherlens.engine import CaptureSession
 from etherlens.sessions import save_session,list_sessions,load_session,delete_session
@@ -53,6 +55,10 @@ async def clear_capture():session.clear(); return {"status":"cleared"}
 async def status():return session.stats()
 @api.get("/packets")
 async def list_packets(limit:int=500,protocol:Optional[str]=None,q:Optional[str]=None):return {"packets":session.list_packets(limit=limit,protocol=protocol,q=q)}
+@api.get("/packets/search")
+async def smart_packet_search(expression:str="",limit:int=500):
+ packets=list(session.packets);health=intelligence.annotate_tcp_health(packets)
+ return {"expression":expression,"packets":filter_packets(packets,expression,health=health,limit=max(1,min(limit,5000)))}
 @api.get("/packets/{pid}")
 async def get_packet(pid:str):
  p=session.get_packet(pid)
@@ -82,6 +88,14 @@ async def devices_info():return {"devices":intelligence.device_intelligence(list
 async def investigation_timeline(bucket_seconds:float=1.0):return {"series":packet_timeline(list(session.packets),bucket_seconds)}
 @api.get("/investigation/summary")
 async def investigation_summary():return intelligence.investigation_summary(list(session.packets),session.list_threats())
+@api.get("/investigation/report.json")
+async def investigation_report_json():
+ summary=intelligence.investigation_summary(list(session.packets),session.list_threats())
+ return Response(content=json_report(summary),media_type="application/json",headers={"Content-Disposition":'attachment; filename="nscout-investigation.json"'})
+@api.get("/investigation/report.html")
+async def investigation_report_html():
+ summary=intelligence.investigation_summary(list(session.packets),session.list_threats())
+ return Response(content=html_report(summary),media_type="text/html; charset=utf-8",headers={"Content-Disposition":'attachment; filename="nscout-investigation.html"'})
 @api.get("/topology")
 async def topology(enrich:bool=False):
  data=session.topology()
