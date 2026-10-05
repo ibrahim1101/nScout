@@ -2,7 +2,7 @@
 
 nScout is a defensive network monitoring and investigation platform for live traffic and PCAP analysis. It combines packet inspection, connection and protocol intelligence, TCP health analysis, device discovery, security findings, investigation workflows, and optional AI-assisted explanations in a modern web UI.
 
-> **Development status:** nScout is under active development. The Intelligence Update is implemented and being finalized on the `intelligence-ui` branch before review, merge and packaging as a new Windows release. The latest stable release does not necessarily contain the in-development capabilities described below.
+> **Development status:** the approved Intelligence Update is implemented on the `intelligence-ui` branch and is in final validation before review, merge and packaging as a new Windows release. The latest stable release does not necessarily contain the in-development capabilities described below.
 
 ## What nScout does
 
@@ -12,6 +12,8 @@ Current Intelligence Update capabilities include:
 - Raw packet hex and printable ASCII plus detailed protocol fields such as TCP sequence/ACK information, flags, options, payload sizing and IP fragmentation/checksum metadata.
 - Connection intelligence that groups bidirectional conversations and tracks endpoints, packets, directional bytes, duration, state, resets and TCP-health signals.
 - Connection Story reconstruction that correlates observed conversation, protocol, DNS and TLS context while preserving encryption boundaries.
+- Deterministic Explain Connection analysis with evidence, TCP-health assessment, correlated DNS/TLS metadata and recommended investigation steps.
+- Optional AI-assisted connection explanation using bounded exact-connection packet evidence, TCP health, DNS, unencrypted HTTP, observable TLS metadata and relevant defensive findings. AI prompts explicitly prohibit decrypting or inferring encrypted application payloads.
 - TCP health analysis for retransmissions, duplicate ACKs, out-of-order traffic, zero-window conditions and resets.
 - DNS intelligence with query/response events, answer data, TTL/response-code information and failed lookup visibility.
 - HTTP inspection for unencrypted traffic, including methods, hosts, URLs, user agents, response status and content metadata when observable.
@@ -24,7 +26,7 @@ Current Intelligence Update capabilities include:
 - Dedicated PCAP Investigation Workspace with automatic summary, protocol/device/connection/security context and interesting-packet navigation into the Deep Packet Inspector.
 - Investigation report generation in JSON, standalone HTML and portable PDF.
 - Follow-stream TCP reconstruction, topology/Geo enrichment, saved sessions and Slack/Discord webhook support.
-- Optional contextual AI explanation of packets/security findings when an AI integration is configured. Explanations are instructed not to infer encrypted payload contents.
+- Optional contextual AI explanation of packets, security findings and reconstructed connections when an AI integration is configured. Core deterministic investigation remains available without an AI key.
 
 ## Intelligence Update
 
@@ -45,7 +47,9 @@ The approved investigation scope is:
 13. PCAP Investigation Workspace
 14. HTML / PDF / JSON Investigation Reporting
 
-The major analysis and investigation workflows above are now implemented on `intelligence-ui`. The topology workflow has also been redesigned around progressive disclosure rather than a dense all-connections graph: analysts can filter or focus the map, select a host or edge, inspect security context, and route that selection directly into Intelligence where a matching reconstructed connection opens in Connection Story. Connection packet drill-down uses endpoint-aware filtering so both sides of the selected conversation are preserved. Finalization work is focused on contextual Explain Connection polish, loading/error/empty-state polish, regression coverage, documentation accuracy and final CI validation. Release packaging remains deliberately deferred until the feature branch is reviewed.
+All 14 approved areas are implemented on `intelligence-ui`. The topology workflow has also been redesigned around progressive disclosure rather than a dense all-connections graph: analysts can filter or focus the map, select a host or edge, inspect security context, and route that selection directly into Intelligence where a matching reconstructed connection opens in Connection Story. Connection selection is deterministic, exact four-tuple matching is used when ports are supplied, and endpoint-only selection uses a stable traffic-ranked fallback. Connection packet drill-down preserves both directions of the selected conversation.
+
+Finalization is limited to regression/CI validation and release review. Release packaging remains deliberately deferred until the feature branch is reviewed and merged.
 
 ## Application modes
 
@@ -61,7 +65,7 @@ Live packet capture depends on the operating system and packet-capture driver. O
 
 The repository contains a PyInstaller-based Windows build pipeline that produces the nScout application folder and portable ZIP. Inno Setup support is also present for installer packaging.
 
-**Important:** release packaging is intentionally deferred while the Intelligence Update is being completed and reviewed. Do not assume the current development branch represents a finished installer release.
+**Important:** release packaging is intentionally deferred while the Intelligence Update is being reviewed and validated. Do not assume the current development branch represents a finished installer release.
 
 To build locally from source on Windows:
 
