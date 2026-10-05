@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./lib";
-import { ChevronRight, ChevronDown, Sparkles, Copy, Activity, ShieldAlert, Layers3, Network, Braces } from "lucide-react";
+import { ChevronRight, ChevronDown, Sparkles, Copy, Activity, ShieldAlert, Layers3 } from "lucide-react";
 
 const DETAIL_TABS = ["Summary", "Layers", "Connection", "Protocol", "TCP Health", "Hex", "Security", "Explain"];
 
@@ -20,7 +20,7 @@ function PacketTable({packets,selected,onSelect}){return <div className="flex-1 
 
 function DeepInspector({packet,onFollowFlow}){
  const [detail,setDetail]=useState(null),[tab,setTab]=useState("Summary");
- useEffect(()=>{setTab("Summary");if(!packet){setDetail(null);return;}api.get(`/packets/${packet.id}`).then(r=>setDetail(r.data)).catch(()=>setDetail(packet));},[packet?.id]);
+ useEffect(()=>{setTab("Summary");if(!packet){setDetail(null);return;}api.get(`/packets/${packet.id}`).then(r=>setDetail(r.data)).catch(()=>setDetail(packet));},[packet]);
  if(!packet)return <EmptyBlock title="Deep Packet Inspector" message="Select a packet to inspect protocol layers, connection context, health, raw bytes and security context."/>;
  const d=detail||packet;
  return <div className="h-full bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
@@ -43,6 +43,6 @@ function AIExplain({packet}){const [text,setText]=useState(""),[loading,setLoadi
 function Card({label,value}){return <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3"><div className="text-[10px] uppercase tracking-wider text-slate-500">{label}</div><div className="mt-1 text-xs font-mono-code break-all">{value||"—"}</div></div>}
 function Section({title,children}){return <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3"><div className="text-xs font-bold mb-2">{title}</div>{children}</div>}
 function KV({k,v}){return <div className="grid grid-cols-[120px_1fr] gap-2 py-1 text-[11px] font-mono-code"><span className="text-slate-500 break-all">{k}</span><span className="break-all">{v===undefined||v===null||v===""?"—":String(v)}</span></div>}
-function fmt(v){if(v===undefined||v===null)return "—";if(typeof v==="object")return JSON.stringify(v);return String(v)}
-function pick(d,...keys){for(const k of keys)if(d[k]!==undefined)return d[k];for(const l of d.layers||[])for(const k of keys)if(l.fields?.[k]!==undefined)return l.fields[k];return "—"}
-function EmptyBlock({title,message}){return <div className="h-full bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-8 text-center flex flex-col justify-center"><Braces className="mx-auto mb-3 text-slate-400"/><h3 className="font-display font-bold text-sm">{title}</h3><p className="mt-2 text-xs text-slate-500">{message}</p></div>}
+function EmptyBlock({title,message}){return <div className="h-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center p-8 text-center"><div><div className="font-bold mb-1">{title}</div><div className="text-sm text-slate-400">{message}</div></div></div>}
+function fmt(v){if(v===undefined||v===null||v==="")return "—";if(typeof v==="object")return JSON.stringify(v);return String(v)}
+function pick(obj,...keys){for(const k of keys)if(obj?.[k]!==undefined&&obj?.[k]!==null)return obj[k];return "—"}
