@@ -2,31 +2,32 @@
 
 nScout is a defensive network monitoring and investigation platform for live traffic and PCAP analysis. It combines packet inspection, connection and protocol intelligence, TCP health analysis, device discovery, security findings, investigation workflows, and optional AI-assisted explanations in a modern web UI.
 
-> **Development status:** nScout is under active development. The current Intelligence Update is being integrated and validated on the `intelligence-ui` branch before it is merged and packaged as a new Windows release. The latest stable release does not necessarily contain every feature described in the in-development sections below.
+> **Development status:** nScout is under active development. The Intelligence Update is implemented and being finalized on the `intelligence-ui` branch before review, merge and packaging as a new Windows release. The latest stable release does not necessarily contain the in-development capabilities described below.
 
 ## What nScout does
 
-Current backend capabilities include:
+Current Intelligence Update capabilities include:
 
-- Deep packet inspection for Ethernet, ARP, IPv4/IPv6, TCP, UDP, ICMP and DNS, with HTTP and observable TLS metadata where available.
-- Raw packet hex and printable ASCII views plus detailed protocol fields such as TCP sequence/ACK information, flags, options, payload sizing and IP fragmentation/checksum metadata.
-- Connection intelligence that groups bidirectional conversations and tracks endpoints, packets, bytes, duration, state, resets and TCP-health signals.
+- Deep Packet Inspector for Ethernet, ARP, IPv4/IPv6, TCP, UDP, ICMP, DNS, HTTP and observable TLS metadata, with Summary, Layers, Connection, Protocol, TCP Health, Hex/ASCII, Security and Explain views.
+- Raw packet hex and printable ASCII plus detailed protocol fields such as TCP sequence/ACK information, flags, options, payload sizing and IP fragmentation/checksum metadata.
+- Connection intelligence that groups bidirectional conversations and tracks endpoints, packets, directional bytes, duration, state, resets and TCP-health signals.
+- Connection Story reconstruction that correlates observed conversation, protocol, DNS and TLS context while preserving encryption boundaries.
 - TCP health analysis for retransmissions, duplicate ACKs, out-of-order traffic, zero-window conditions and resets.
 - DNS intelligence with query/response events, answer data, TTL/response-code information and failed lookup visibility.
 - HTTP inspection for unencrypted traffic, including methods, hosts, URLs, user agents, response status and content metadata when observable.
-- TLS intelligence based only on metadata visible without decrypting HTTPS. nScout does **not** claim to inspect encrypted application payloads.
+- TLS intelligence based only on metadata visible without decrypting HTTPS. When decoded from the capture, nScout can summarize SNI, TLS version, ALPN, cipher suites, handshake types and certificate subject/issuer/expiry metadata, and can flag observable legacy TLS or expired-certificate conditions. Port-only HTTPS observations remain explicitly metadata-only. nScout does **not** decrypt or claim to inspect encrypted application payloads.
 - Device discovery and traffic/protocol activity by observed endpoint.
 - Protocol dashboard and packet timeline analysis.
 - Smart analyst filters/search for captured packets.
-- Security findings including existing scan/flood, unusual DNS and cleartext-authentication heuristics. Additional security analytics are still being expanded.
-- PCAP import/export and automatic investigation summaries.
-- Investigation report generation in JSON and standalone HTML. PDF reporting is planned as part of the Intelligence Update.
+- Defensive security analysis for scan/flood and unusual DNS heuristics, cleartext-authentication indicators, ARP identity changes, failed TCP connections, periodic/beacon-like outbound traffic, abnormal traffic spikes and conservative special/reserved-destination findings. These are investigation leads, not proof of compromise.
+- Dedicated PCAP Investigation Workspace with automatic summary, protocol/device/connection/security context and interesting-packet navigation into the Deep Packet Inspector.
+- Investigation report generation in JSON, standalone HTML and portable PDF.
 - Follow-stream TCP reconstruction, topology/Geo enrichment, saved sessions and Slack/Discord webhook support.
-- Optional contextual AI explanation of packets/security findings when an AI integration is configured.
+- Optional contextual AI explanation of packets/security findings when an AI integration is configured. Explanations are instructed not to infer encrypted payload contents.
 
 ## Intelligence Update
 
-The current development roadmap is focused on these investigation areas:
+The approved investigation scope is:
 
 1. Deep Packet Inspector
 2. Connection Intelligence
@@ -43,7 +44,7 @@ The current development roadmap is focused on these investigation areas:
 13. PCAP Investigation Workspace
 14. HTML / PDF / JSON Investigation Reporting
 
-Most of the analysis foundations above are already implemented in the backend. The current `intelligence-ui` work is integrating Connections, Devices, DNS, Security, smart search and investigation/reporting workflows into the frontend. Some areas—particularly deeper TLS metadata, expanded security heuristics, connection storytelling, the finished PCAP investigation UI and PDF reporting—remain work in progress.
+The major analysis and investigation workflows above are now implemented on `intelligence-ui`. Finalization work is focused on schema/UI validation, contextual Explain Connection polish, loading/error/empty-state and navigation polish, regression coverage, documentation accuracy and final CI validation. Release packaging remains deliberately deferred until the feature branch is reviewed.
 
 ## Application modes
 
@@ -123,7 +124,7 @@ nScout currently uses:
 
 ## Project maturity and accuracy
 
-nScout is an actively evolving project rather than a claim of feature parity with mature packet-analysis suites. Documentation should describe capabilities that are actually implemented or explicitly mark them as in development. Protocol visibility also depends on what is observable in the capture: encrypted application payloads cannot be inferred simply because TLS traffic is present.
+nScout is an actively evolving project rather than a claim of feature parity with mature packet-analysis suites. Documentation should describe capabilities that are actually implemented or explicitly mark them as in development. Protocol visibility depends on what is observable in the capture: encrypted application payloads cannot be inferred simply because TLS traffic is present, and heuristic security findings require analyst validation.
 
 ## Responsible use
 
