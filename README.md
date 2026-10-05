@@ -20,6 +20,7 @@ Current Intelligence Update capabilities include:
 - Protocol dashboard and packet timeline analysis.
 - Smart analyst filters/search for captured packets.
 - Defensive security analysis for scan/flood and unusual DNS heuristics, cleartext-authentication indicators, ARP identity changes, failed TCP connections, periodic/beacon-like outbound traffic, abnormal traffic spikes and conservative special/reserved-destination findings. These are investigation leads, not proof of compromise.
+- Focused Network Map for scalable topology investigation, including Map/List views, live/frozen snapshots, Focus Mode, low-noise/high-volume views, protocol/host/port/search filters, traffic-weighted links, security overlays, host inspection and clickable connection drill-down into Connection Story.
 - Dedicated PCAP Investigation Workspace with automatic summary, protocol/device/connection/security context and interesting-packet navigation into the Deep Packet Inspector.
 - Investigation report generation in JSON, standalone HTML and portable PDF.
 - Follow-stream TCP reconstruction, topology/Geo enrichment, saved sessions and Slack/Discord webhook support.
@@ -44,7 +45,7 @@ The approved investigation scope is:
 13. PCAP Investigation Workspace
 14. HTML / PDF / JSON Investigation Reporting
 
-The major analysis and investigation workflows above are now implemented on `intelligence-ui`. Finalization work is focused on schema/UI validation, contextual Explain Connection polish, loading/error/empty-state and navigation polish, regression coverage, documentation accuracy and final CI validation. Release packaging remains deliberately deferred until the feature branch is reviewed.
+The major analysis and investigation workflows above are now implemented on `intelligence-ui`. The topology workflow has also been redesigned around progressive disclosure rather than a dense all-connections graph: analysts can filter or focus the map, select a host or edge, inspect security context, and drill a selected connection into reconstructed Connection Story context. Finalization work is focused on schema/UI validation, contextual Explain Connection polish, loading/error/empty-state and navigation polish, regression coverage, documentation accuracy and final CI validation. Release packaging remains deliberately deferred until the feature branch is reviewed.
 
 ## Application modes
 
