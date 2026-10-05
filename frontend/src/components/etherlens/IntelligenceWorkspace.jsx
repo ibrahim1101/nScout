@@ -1,67 +1,65 @@
 import { useEffect, useState } from "react";
 import { api } from "./lib";
-import { Network, Monitor, Globe2, ShieldAlert, Search, FileDown, RefreshCw } from "lucide-react";
+import { Network, Monitor, Globe2, ShieldAlert, Search, FileDown, RefreshCw, LockKeyhole, RadioTower } from "lucide-react";
 
 const PANELS = [
   { id: "connections", label: "Connections", icon: Network },
   { id: "devices", label: "Devices", icon: Monitor },
   { id: "dns", label: "DNS", icon: Globe2 },
+  { id: "http", label: "HTTP", icon: RadioTower },
+  { id: "tls", label: "TLS", icon: LockKeyhole },
   { id: "security", label: "Security", icon: ShieldAlert },
 ];
 
 export default function IntelligenceWorkspace({ threats = [], onSelectPacket }) {
   const [panel, setPanel] = useState("connections");
-  const [data, setData] = useState({ connections: [], devices: [], dns: {}, dashboard: {}, summary: {} });
+  const [data, setData] = useState({ connections: [], devices: [], dns: {}, http: {}, tls: {}, dashboard: {}, summary: {} });
+  const [selectedConnection, setSelectedConnection] = useState(null);
   const [expression, setExpression] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const refresh = async () => {
-    setLoading(true);
+    setLoading(true); setError("");
     try {
-      const [connections, devices, dns, dashboard, summary] = await Promise.all([
-        api.get("/intelligence/connections?limit=500"),
-        api.get("/intelligence/devices"),
-        api.get("/intelligence/dns"),
-        api.get("/intelligence/dashboard"),
-        api.get("/investigation/summary"),
+      const [connections, devices, dns, http, tls, dashboard, summary] = await Promise.all([
+        api.get("/intelligence/connections?limit=500"), api.get("/intelligence/devices"),
+        api.get("/intelligence/dns"), api.get("/intelligence/http"), api.get("/intelligence/tls"),
+        api.get("/intelligence/dashboard"), api.get("/investigation/summary"),
       ]);
-      setData({
-        connections: connections.data.connections || [],
-        devices: devices.data.devices || [],
-        dns: dns.data || {},
-        dashboard: dashboard.data || {},
-        summary: summary.data || {},
-      });
-    } finally { setLoading(false); }
+      setData({ connections: connections.data.connections || [], devices: devices.data.devices || [], dns: dns.data || {}, http: http.data || {}, tls: tls.data || {}, dashboard: dashboard.data || {}, summary: summary.data || {} });
+    } catch (e) { setError(e?.response?.data?.detail || e.message || "Unable to load intelligence data."); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => { refresh(); const id = setInterval(refresh, 3000); return () => clearInterval(id); }, []);
 
   const search = async (e) => {
-    e.preventDefault();
-    if (!expression.trim()) { setResults([]); return; }
-    try { const r = await api.get("/packets/search", { params: { expression, limit: 500 } }); setResults(r.data.packets || []); } catch (_) { setResults([]); }
+    e.preventDefault(); if (!expression.trim()) { setResults([]); return; }
+    try { const r = await api.get("/packets/search", { params: { expression, limit: 500 } }); setResults(r.data.packets || []); setError(""); }
+    catch (err) { setResults([]); setError(err?.response?.data?.detail || "Invalid search expression."); }
   };
 
   return <div className="space-y-4">
+    {error && <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-4 py-2 text-xs text-red-600 dark:text-red-300">{error}</div>}
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <Metric label="Connections" value={data.connections.length} />
-      <Metric label="Devices" value={data.devices.length} />
-      <Metric label="DNS Events" value={(data.dns.events || []).length} />
-      <Metric label="Security Findings" value={threats.length} danger={threats.length > 0} />
+      <Metric label="Connections" value={data.connections.length} /><Metric label="Devices" value={data.devices.length} />
+      <Metric label="DNS Events" value={(data.dns.events || []).length} /><Metric label="Security Findings" value={threats.length} danger={threats.length > 0} />
     </div>
 
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
       <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex flex-wrap gap-2 items-center justify-between">
-        <div className="flex gap-1">{PANELS.map(({id,label,icon:Icon}) => <button key={id} onClick={()=>setPanel(id)} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold ${panel===id?"bg-blue-600 text-white":"bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}><Icon size={13}/>{label}</button>)}</div>
+        <div className="flex flex-wrap gap-1">{PANELS.map(({id,label,icon:Icon}) => <button key={id} onClick={()=>setPanel(id)} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold ${panel===id?"bg-blue-600 text-white":"bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}><Icon size={13}/>{label}</button>)}</div>
         <button onClick={refresh} className="inline-flex items-center gap-1 text-xs text-slate-500"><RefreshCw size={13} className={loading?"animate-spin":""}/> refresh</button>
       </div>
-      {panel === "connections" && <Connections rows={data.connections}/>} 
-      {panel === "devices" && <Devices rows={data.devices}/>} 
-      {panel === "dns" && <DNS data={data.dns}/>} 
+      {panel === "connections" && <Connections rows={data.connections} selected={selectedConnection} onSelect={setSelectedConnection}/>} 
+      {panel === "devices" && <Devices rows={data.devices}/>} {panel === "dns" && <DNS data={data.dns}/>} 
+      {panel === "http" && <HTTP data={data.http}/>} {panel === "tls" && <TLS data={data.tls}/>} 
       {panel === "security" && <Security rows={threats} onSelectPacket={onSelectPacket}/>} 
     </div>
+
+    {panel === "connections" && selectedConnection && <ConnectionStory connection={selectedConnection} dns={data.dns} tls={data.tls}/>} 
 
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
       <div className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
@@ -71,7 +69,7 @@ export default function IntelligenceWorkspace({ threats = [], onSelectPacket }) 
       </div>
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
         <div className="flex items-center gap-2"><FileDown size={15}/><h3 className="font-display font-bold text-sm">Investigation Reports</h3></div>
-        <p className="text-xs text-slate-500 mt-2">Export the current investigation with protocol, connection and security findings.</p>
+        <p className="text-xs text-slate-500 mt-2">Export current protocol, connection and security findings.</p>
         <div className="flex gap-2 mt-4"><a href={`${api.defaults.baseURL}/investigation/report.html`} className="px-3 py-2 rounded-md bg-slate-900 dark:bg-slate-700 text-white text-xs font-semibold">HTML</a><a href={`${api.defaults.baseURL}/investigation/report.json`} className="px-3 py-2 rounded-md bg-slate-100 dark:bg-slate-800 text-xs font-semibold">JSON</a></div>
       </div>
     </div>
@@ -80,7 +78,12 @@ export default function IntelligenceWorkspace({ threats = [], onSelectPacket }) 
 
 function Metric({label,value,danger}) { return <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4"><div className="text-[11px] uppercase tracking-wider text-slate-500">{label}</div><div className={`mt-1 text-2xl font-bold ${danger?"text-red-500":""}`}>{Number(value||0).toLocaleString()}</div></div>; }
 function Table({headers,children,empty}) { return <div className="overflow-auto el-scroll"><table className="w-full text-xs"><thead><tr className="text-left text-slate-500 border-b border-slate-100 dark:border-slate-800">{headers.map(h=><th key={h} className="px-4 py-2">{h}</th>)}</tr></thead><tbody>{children}</tbody></table>{empty&&<div className="p-8 text-center text-slate-400 text-sm">No data yet.</div>}</div>; }
-function Connections({rows}) { return <Table headers={["Endpoint A","Endpoint B","State","Packets","Bytes","Retrans","Resets"]} empty={!rows.length}>{rows.map((r,i)=><tr key={i} className="border-t border-slate-100 dark:border-slate-800 font-mono-code"><td className="px-4 py-2">{r.a_ip}:{r.a_port}</td><td className="px-4 py-2">{r.b_ip}:{r.b_port}</td><td className="px-4 py-2">{r.state}</td><td className="px-4 py-2">{r.packet_count ?? r.packets}</td><td className="px-4 py-2">{r.bytes ?? r.total_bytes}</td><td className="px-4 py-2">{r.retransmissions||0}</td><td className="px-4 py-2">{r.resets||0}</td></tr>)}</Table>; }
-function Devices({rows}) { return <Table headers={["IP","MAC","Hostname","Packets","Bytes","Protocols","Last Seen"]} empty={!rows.length}>{rows.map((r,i)=><tr key={i} className="border-t border-slate-100 dark:border-slate-800"><td className="px-4 py-2 font-mono-code">{r.ip}</td><td className="px-4 py-2 font-mono-code">{r.mac||"—"}</td><td className="px-4 py-2">{r.hostname||"—"}</td><td className="px-4 py-2">{r.packets||0}</td><td className="px-4 py-2">{r.bytes||0}</td><td className="px-4 py-2">{(r.protocols||[]).join(", ")}</td><td className="px-4 py-2 font-mono-code">{r.last_seen||"—"}</td></tr>)}</Table>; }
-function DNS({data}) { const rows=data.events||[]; return <Table headers={["Time","Type","Domain","Result","RCODE","TTL"]} empty={!rows.length}>{rows.map((r,i)=><tr key={i} className="border-t border-slate-100 dark:border-slate-800"><td className="px-4 py-2 font-mono-code">{r.time_str||r.timestamp||"—"}</td><td className="px-4 py-2">{r.type||r.event||"DNS"}</td><td className="px-4 py-2 font-mono-code">{r.domain||r.query||"—"}</td><td className="px-4 py-2 font-mono-code">{(r.resolved_ips||r.answers||[]).join?.(", ") || r.answer || "—"}</td><td className="px-4 py-2">{r.rcode_name||r.rcode||"—"}</td><td className="px-4 py-2">{r.ttl??"—"}</td></tr>)}</Table>; }
+function Connections({rows,selected,onSelect}) { return <Table headers={["Endpoint A","Endpoint B","State","Packets","Bytes","Retrans","Resets"]} empty={!rows.length}>{rows.map((r,i)=><tr key={i} onClick={()=>onSelect(r)} className={`border-t border-slate-100 dark:border-slate-800 font-mono-code cursor-pointer ${selected===r?"bg-blue-50 dark:bg-blue-950/20":"hover:bg-slate-50 dark:hover:bg-slate-800"}`}><td className="px-4 py-2">{r.a_ip}:{r.a_port}</td><td className="px-4 py-2">{r.b_ip}:{r.b_port}</td><td className="px-4 py-2">{r.state}</td><td className="px-4 py-2">{r.packets}</td><td className="px-4 py-2">{fmt(r.bytes)}</td><td className="px-4 py-2">{r.retransmissions||0}</td><td className="px-4 py-2">{r.resets||0}</td></tr>)}</Table>; }
+function ConnectionStory({connection:r,dns,tls}) { const relatedDns=(dns.events||[]).filter(e=>[r.a_ip,r.b_ip].includes(e.src_ip)||[r.a_ip,r.b_ip].includes(e.dst_ip)); const tlsEvents=(tls.events||tls.connections||[]).filter(e=>[r.a_ip,r.b_ip].includes(e.src_ip)||[r.a_ip,r.b_ip].includes(e.dst_ip)); const health=(r.retransmissions||0)+(r.duplicate_acks||0)+(r.out_of_order||0)+(r.zero_windows||0)+(r.resets||0); return <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4"><div className="flex items-center justify-between"><div><h3 className="font-display font-bold text-sm">Connection Story</h3><p className="text-xs text-slate-500 mt-1 font-mono-code">{r.a_ip}:{r.a_port} ↔ {r.b_ip}:{r.b_port}</p></div><span className="text-xs font-semibold px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.state}</span></div><div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4"><Story label="Duration" value={`${r.duration_ms||0} ms`}/><Story label="Traffic" value={fmt(r.bytes)}/><Story label="A → B" value={fmt(r.a_to_b_bytes)}/><Story label="B → A" value={fmt(r.b_to_a_bytes)}/><Story label="TCP Issues" value={health}/></div><div className="mt-4 text-xs space-y-2"><div><b>Protocols:</b> {(r.protocols||[]).join(" → ")||"Unknown"}</div><div><b>DNS context:</b> {relatedDns.length?`${relatedDns.length} related DNS event(s)` : "No directly correlated DNS event observed."}</div><div><b>TLS context:</b> {tlsEvents.length?`${tlsEvents.length} related TLS event(s)` : "No directly correlated TLS metadata observed."}</div><div className="text-slate-500">Story is reconstructed only from observed packet metadata; encrypted application payload is not decrypted.</div></div></div>; }
+function Story({label,value}) { return <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-3"><div className="text-[10px] uppercase text-slate-500">{label}</div><div className="mt-1 text-sm font-semibold">{value}</div></div>; }
+function Devices({rows}) { return <Table headers={["IP","MAC","Packets","Bytes","Protocols","Last Seen"]} empty={!rows.length}>{rows.map((r,i)=><tr key={i} className="border-t border-slate-100 dark:border-slate-800"><td className="px-4 py-2 font-mono-code">{r.ip}</td><td className="px-4 py-2 font-mono-code">{r.mac||"—"}</td><td className="px-4 py-2">{r.packets||0}</td><td className="px-4 py-2">{fmt(r.total_bytes)}</td><td className="px-4 py-2">{(r.protocols||[]).join(", ")}</td><td className="px-4 py-2 font-mono-code">{r.last_seen||"—"}</td></tr>)}</Table>; }
+function DNS({data}) { const rows=data.events||[]; return <Table headers={["Time","Type","Domain","Answers","RCODE","TTL"]} empty={!rows.length}>{rows.map((r,i)=><tr key={i} className="border-t border-slate-100 dark:border-slate-800"><td className="px-4 py-2 font-mono-code">{r.timestamp||"—"}</td><td className="px-4 py-2">{r.response?"Response":"Query"}</td><td className="px-4 py-2 font-mono-code">{r.query||"—"}</td><td className="px-4 py-2 font-mono-code">{Array.isArray(r.answers)?r.answers.join(", "):"—"}</td><td className="px-4 py-2">{r.response_code??"—"}</td><td className="px-4 py-2">{r.ttl??"—"}</td></tr>)}</Table>; }
+function HTTP({data}) { const rows=data.events||[]; return <Table headers={["Time","Method","Host","Path","Status","User Agent"]} empty={!rows.length}>{rows.map((r,i)=><tr key={i} className="border-t border-slate-100 dark:border-slate-800"><td className="px-4 py-2">{r.timestamp||"—"}</td><td className="px-4 py-2 font-semibold">{r.method||"—"}</td><td className="px-4 py-2 font-mono-code">{r.host||"—"}</td><td className="px-4 py-2 font-mono-code">{r.path||"—"}</td><td className="px-4 py-2">{r.status||"—"}</td><td className="px-4 py-2 truncate max-w-xs">{r.user_agent||"—"}</td></tr>)}</Table>; }
+function TLS({data}) { const rows=data.events||data.connections||[]; return <Table headers={["Time","Source","Destination","Version","Server Name","Warning"]} empty={!rows.length}>{rows.map((r,i)=><tr key={i} className="border-t border-slate-100 dark:border-slate-800"><td className="px-4 py-2">{r.timestamp||"—"}</td><td className="px-4 py-2 font-mono-code">{r.src_ip||"—"}</td><td className="px-4 py-2 font-mono-code">{r.dst_ip||"—"}</td><td className="px-4 py-2">{r.version||r.tls_version||"—"}</td><td className="px-4 py-2 font-mono-code">{r.server_name||r.sni||"—"}</td><td className="px-4 py-2">{r.warning||"—"}</td></tr>)}</Table>; }
 function Security({rows,onSelectPacket}) { return <Table headers={["Severity","Finding","Source","Destination","Details"]} empty={!rows.length}>{rows.map((r,i)=><tr key={r.id||i} onClick={()=>r.packet_id&&onSelectPacket?.({id:r.packet_id})} className="border-t border-slate-100 dark:border-slate-800 cursor-pointer"><td className="px-4 py-2 font-semibold">{r.severity}</td><td className="px-4 py-2">{r.title||r.type}</td><td className="px-4 py-2 font-mono-code">{r.src||r.src_ip||"—"}</td><td className="px-4 py-2 font-mono-code">{r.dst||r.dst_ip||"—"}</td><td className="px-4 py-2 text-slate-500">{r.description||r.detail||"—"}</td></tr>)}</Table>; }
+function fmt(n) { const v=Number(n||0); if(v>=1048576)return `${(v/1048576).toFixed(1)} MB`; if(v>=1024)return `${(v/1024).toFixed(1)} KB`; return `${v} B`; }
