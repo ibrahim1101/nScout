@@ -24,7 +24,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
-SetupIconFile=..\frontend\public\favicon.ico
+SetupIconFile=..\assets\nscout.ico
 UninstallDisplayIcon={app}\nScout.exe
 ; Windows file-version metadata must be numeric. Keep the human-readable
 ; AppVersion above for dev/release labels such as 0.2.0-dev.
@@ -40,8 +40,8 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 Source: "..\dist\nScout\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\nScout"; Filename: "{app}\nScout.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\nScout"; Filename: "{app}\nScout.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autoprograms}\nScout"; Filename: "{app}\nScout.exe"; WorkingDir: "{app}"; IconFilename: "{app}\nScout.exe"
+Name: "{autodesktop}\nScout"; Filename: "{app}\nScout.exe"; WorkingDir: "{app}"; IconFilename: "{app}\nScout.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\nScout.exe"; Description: "Launch nScout"; Flags: nowait postinstall skipifsilent
