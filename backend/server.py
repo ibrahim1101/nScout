@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 from etherlens import analysis,geo,webhooks,intelligence
 from etherlens.filters import filter_packets
-from etherlens.reports import json_report,html_report
+from etherlens.reports import json_report,html_report,pdf_report
 from etherlens.protocol_intelligence import tls_intelligence,packet_timeline,packet_ascii
 from etherlens.engine import CaptureSession
 from etherlens.sessions import save_session,list_sessions,load_session,delete_session
@@ -96,6 +96,10 @@ async def investigation_report_json():
 async def investigation_report_html():
  summary=intelligence.investigation_summary(list(session.packets),session.list_threats())
  return Response(content=html_report(summary),media_type="text/html; charset=utf-8",headers={"Content-Disposition":'attachment; filename="nscout-investigation.html"'})
+@api.get("/investigation/report.pdf")
+async def investigation_report_pdf():
+ summary=intelligence.investigation_summary(list(session.packets),session.list_threats())
+ return Response(content=pdf_report(summary),media_type="application/pdf",headers={"Content-Disposition":'attachment; filename="nscout-investigation.pdf"'})
 @api.get("/topology")
 async def topology(enrich:bool=False):
  data=session.topology()
