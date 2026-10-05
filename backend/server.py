@@ -13,6 +13,7 @@ from etherlens import analysis,geo,webhooks,intelligence
 from etherlens.filters import filter_packets
 from etherlens.reports import json_report,html_report,pdf_report
 from etherlens.protocol_intelligence import tls_intelligence,packet_timeline,packet_ascii
+from etherlens.explanations import explain_connection
 from etherlens.engine import CaptureSession
 from etherlens.sessions import save_session,list_sessions,load_session,delete_session
 ROOT_DIR=Path(__file__).parent; load_dotenv(ROOT_DIR/".env"); logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s - %(message)s"); logger=logging.getLogger("nscout")
@@ -72,6 +73,16 @@ async def timeline():return {"series":session.timeline_series()}
 async def top_talkers(limit:int=10):return {"talkers":session.top_talkers(limit=limit)}
 @api.get("/intelligence/connections")
 async def intelligent_connections(limit:int=500):return {"connections":intelligence.connection_intelligence(list(session.packets),limit=limit)}
+@api.get("/intelligence/connections/explain")
+async def explain_intelligent_connection(a_ip:str,b_ip:str,a_port:Optional[int]=None,b_port:Optional[int]=None):
+ connections=intelligence.connection_intelligence(list(session.packets),limit=5000)
+ candidates=[c for c in connections if {str(c.get("a_ip")),str(c.get("b_ip"))}=={str(a_ip),str(b_ip)}]
+ if a_port is not None and b_port is not None:
+  exact=[c for c in candidates if {int(c.get("a_port") or 0),int(c.get("b_port") or 0)}=={int(a_port),int(b_port)}]
+  if exact:candidates=exact
+ if not candidates:raise HTTPException(status_code=404,detail="Connection not found")
+ connection=candidates[0]
+ return {"connection":connection,"explanation":explain_connection(connection,intelligence.dns_intelligence(list(session.packets)),tls_intelligence(list(session.packets)))}
 @api.get("/intelligence/dashboard")
 async def intelligent_dashboard():return intelligence.protocol_dashboard(list(session.packets))
 @api.get("/intelligence/tcp-health")
