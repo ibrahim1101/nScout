@@ -1,6 +1,7 @@
 """Protocol-level intelligence for nScout investigations."""
 from __future__ import annotations
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 
@@ -11,40 +12,83 @@ def _layer(packet: Dict[str, Any], prefix: str) -> Dict[str, Any]:
     return {}
 
 
+def _as_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(v) for v in value if v not in (None, ""))
+    return str(value)
+
+
+def _expiry_is_past(value: Any) -> bool:
+    """Best-effort expiry check for already-decoded certificate timestamps."""
+    text = _as_text(value).strip()
+    if not text:
+        return False
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed < datetime.now(timezone.utc)
+    except (TypeError, ValueError):
+        return False
+
+
 def tls_intelligence(packets: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Summarize visible TLS metadata without claiming encrypted payload access."""
+    """Summarize only TLS metadata visible in decoded handshake/record fields.
+
+    Port 443/8443 traffic remains useful context even when no TLS handshake was
+    decoded, but such packets are explicitly marked decoded=False. This function
+    never infers or exposes encrypted application payload contents.
+    """
     events = []
     servers = Counter()
     versions = Counter()
+    alpns = Counter()
+    ciphers = Counter()
+    handshakes = Counter()
     warnings = []
     for p in packets:
         tls = _layer(p, "Transport Layer Security")
-        # HTTPS-by-port is useful context, but is not proof that a TLS layer was decoded.
         if not tls and p.get("protocol") not in ("TLS", "HTTPS"):
             continue
-        sni = str(tls.get("SNI") or tls.get("Server Name") or "")
-        version = str(tls.get("Version") or "")
-        alpn = tls.get("ALPN") or tls.get("Application Protocol")
+        sni = _as_text(tls.get("SNI") or tls.get("Server Name"))
+        version = _as_text(tls.get("Version") or tls.get("TLS Version"))
+        alpn = _as_text(tls.get("ALPN") or tls.get("Application Protocol"))
+        cipher = _as_text(tls.get("Cipher Suite") or tls.get("Cipher"))
+        handshake = _as_text(tls.get("Handshake") or tls.get("Handshake Type"))
+        issuer = _as_text(tls.get("Certificate Issuer"))
+        subject = _as_text(tls.get("Certificate Subject"))
+        expiry = _as_text(tls.get("Certificate Expiry") or tls.get("Certificate Not After"))
         event = {
             "packet_id": p.get("id"), "timestamp": p.get("timestamp"),
             "src_ip": p.get("src_ip"), "src_port": p.get("src_port"),
             "dst_ip": p.get("dst_ip"), "dst_port": p.get("dst_port"),
-            "sni": sni, "version": version, "cipher": tls.get("Cipher Suite"),
-            "alpn": alpn, "handshake": tls.get("Handshake"),
-            "certificate_issuer": tls.get("Certificate Issuer"),
-            "certificate_expiry": tls.get("Certificate Expiry"),
-            "decoded": bool(tls),
+            "sni": sni, "version": version, "cipher": cipher,
+            "alpn": alpn, "handshake": handshake,
+            "certificate_issuer": issuer, "certificate_subject": subject,
+            "certificate_expiry": expiry, "decoded": bool(tls),
         }
         events.append(event)
         if sni: servers[sni] += 1
         if version: versions[version] += 1
-        if version in ("SSLv2", "SSLv3", "TLS 1.0", "TLS 1.1"):
+        if alpn: alpns[alpn] += 1
+        if cipher: ciphers[cipher] += 1
+        if handshake: handshakes[handshake] += 1
+        if version.upper().replace("V", "") in ("SSL2", "SSL3", "TLS 1.0", "TLS 1.1"):
             warnings.append({"packet_id": p.get("id"), "type": "legacy_tls", "detail": version})
+        if _expiry_is_past(expiry):
+            warnings.append({"packet_id": p.get("id"), "type": "expired_certificate", "detail": expiry})
     return {
         "events": events,
         "top_server_names": [{"server_name": k, "packets": v} for k, v in servers.most_common(25)],
         "versions": [{"version": k, "packets": v} for k, v in versions.most_common()],
+        "alpns": [{"alpn": k, "packets": v} for k, v in alpns.most_common()],
+        "cipher_suites": [{"cipher": k, "packets": v} for k, v in ciphers.most_common(25)],
+        "handshakes": [{"handshake": k, "packets": v} for k, v in handshakes.most_common()],
         "warnings": warnings,
+        "decoded_events": sum(1 for event in events if event["decoded"]),
+        "metadata_only_events": sum(1 for event in events if not event["decoded"]),
         "note": "TLS metadata is derived only from visible handshake/record information; encrypted application payload is not decrypted.",
     }
 

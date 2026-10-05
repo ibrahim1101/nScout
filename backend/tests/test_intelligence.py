@@ -47,3 +47,7 @@ def test_dashboard_and_investigation_summary_are_serializable_shapes():
     summary = investigation_summary(packets, [{"id": "t1", "severity": "low"}])
     assert summary["overview"]["total_packets"] == 1
     assert summary["threats"][0]["id"] == "t1"
+    assert "security" in summary
+    assert summary["security"]["existing_threat_count"] == 1
+    assert "findings" in summary["security"]
+    assert "not proof" in summary["security"]["note"]

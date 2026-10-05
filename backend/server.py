@@ -11,14 +11,19 @@ from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 from etherlens import analysis,geo,webhooks,intelligence
 from etherlens.filters import filter_packets
-from etherlens.reports import json_report,html_report
+from etherlens.reports import json_report,html_report,pdf_report
 from etherlens.protocol_intelligence import tls_intelligence,packet_timeline,packet_ascii
+from etherlens.explanations import explain_connection
+from etherlens.connection_selection import select_connection
+from etherlens.ai_context import connection_context,connection_prompt
 from etherlens.engine import CaptureSession
 from etherlens.sessions import save_session,list_sessions,load_session,delete_session
 ROOT_DIR=Path(__file__).parent; load_dotenv(ROOT_DIR/".env"); logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s - %(message)s"); logger=logging.getLogger("nscout")
 mongo_url=os.environ.get("MONGO_URL","mongodb://127.0.0.1:27017"); db_name=os.environ.get("DB_NAME","nscout"); client=AsyncIOMotorClient(mongo_url,serverSelectionTimeoutMS=1500,connectTimeoutMS=1500); db=client[db_name]; settings_col=db.etherlens_settings; mongo_available=False; session=CaptureSession(); app=FastAPI(title="nScout"); api=APIRouter(prefix="/api")
 class StartRequest(BaseModel): interface:str="simulated"
-class ExplainRequest(BaseModel): packet_id:Optional[str]=None; threat_id:Optional[str]=None
+class ExplainRequest(BaseModel):
+ packet_id:Optional[str]=None; threat_id:Optional[str]=None
+ a_ip:Optional[str]=None; a_port:Optional[int]=None; b_ip:Optional[str]=None; b_port:Optional[int]=None
 class WebhookSettings(BaseModel): slack_url:str=""; discord_url:str=""; min_severity:str="high"
 class WebhookTestRequest(BaseModel): url:str
 class SaveSessionRequest(BaseModel): name:str="Untitled"
@@ -72,6 +77,14 @@ async def timeline():return {"series":session.timeline_series()}
 async def top_talkers(limit:int=10):return {"talkers":session.top_talkers(limit=limit)}
 @api.get("/intelligence/connections")
 async def intelligent_connections(limit:int=500):return {"connections":intelligence.connection_intelligence(list(session.packets),limit=limit)}
+@api.get("/intelligence/connections/explain")
+async def explain_intelligent_connection(a_ip:str,b_ip:str,a_port:Optional[int]=None,b_port:Optional[int]=None):
+ connections=intelligence.connection_intelligence(list(session.packets),limit=5000)
+ try:connection=select_connection(connections,a_ip,b_ip,a_port,b_port)
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ if not connection:raise HTTPException(status_code=404,detail="Connection not found")
+ packets=list(session.packets)
+ return {"connection":connection,"explanation":explain_connection(connection,intelligence.dns_intelligence(packets),tls_intelligence(packets))}
 @api.get("/intelligence/dashboard")
 async def intelligent_dashboard():return intelligence.protocol_dashboard(list(session.packets))
 @api.get("/intelligence/tcp-health")
@@ -96,6 +109,10 @@ async def investigation_report_json():
 async def investigation_report_html():
  summary=intelligence.investigation_summary(list(session.packets),session.list_threats())
  return Response(content=html_report(summary),media_type="text/html; charset=utf-8",headers={"Content-Disposition":'attachment; filename="nscout-investigation.html"'})
+@api.get("/investigation/report.pdf")
+async def investigation_report_pdf():
+ summary=intelligence.investigation_summary(list(session.packets),session.list_threats())
+ return Response(content=pdf_report(summary),media_type="application/pdf",headers={"Content-Disposition":'attachment; filename="nscout-investigation.pdf"'})
 @api.get("/topology")
 async def topology(enrich:bool=False):
  data=session.topology()
@@ -161,16 +178,27 @@ def _build_prompt(pkt,threat):
  if pkt:
   packets=list(session.packets);health=intelligence.annotate_tcp_health(packets).get(str(pkt.get("id")),{"events":[],"healthy":True});connections=intelligence.connection_intelligence(packets);related=[c for c in connections if pkt.get("src_ip") in (c["a_ip"],c["b_ip"]) and pkt.get("dst_ip") in (c["a_ip"],c["b_ip"])][:3];context={"packet":pkt,"tcp_health":health,"related_connections":related,"dns":intelligence.dns_intelligence([pkt]),"http":intelligence.http_intelligence([pkt]),"tls":tls_intelligence([pkt])};return "You are nScout, a senior network investigator. Explain what happened, why the packet exists, whether it looks normal, relevant connection/protocol context, and what to investigate next. Never claim encrypted payload contents are visible.\n\nContext: "+json.dumps(context,default=str)[:12000]
  return "No packet selected."
+def _resolve_ai_connection(req:ExplainRequest,packets:list[dict]):
+ requested=bool(req.a_ip or req.b_ip or req.a_port is not None or req.b_port is not None)
+ if not requested:return None
+ if not req.a_ip or not req.b_ip:raise HTTPException(status_code=400,detail="Both a_ip and b_ip are required for connection explanation")
+ try:connection=select_connection(intelligence.connection_intelligence(packets,limit=5000),req.a_ip,req.b_ip,req.a_port,req.b_port)
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ if not connection:raise HTTPException(status_code=404,detail="Connection not found")
+ return connection
 @api.post("/ai/explain")
 async def ai_explain(req:ExplainRequest):
- pkt=session.get_packet(req.packet_id) if req.packet_id else None;threat=next((t for t in session.threats if t.get("id")==req.threat_id),None) if req.threat_id else None
- if not pkt and not threat:raise HTTPException(status_code=404,detail="packet or threat not found")
- prompt=_build_prompt(pkt,threat)
+ packets=list(session.packets);pkt=session.get_packet(req.packet_id) if req.packet_id else None;threat=next((t for t in session.threats if t.get("id")==req.threat_id),None) if req.threat_id else None;connection=_resolve_ai_connection(req,packets)
+ if not pkt and not threat and not connection:raise HTTPException(status_code=404,detail="packet, threat, or connection not found")
+ if connection:
+  context=connection_context(connection,packets,intelligence.dns_intelligence(packets),intelligence.http_intelligence(packets),tls_intelligence(packets),intelligence.annotate_tcp_health(packets),session.list_threats())
+  prompt=connection_prompt(context);session_key=f"connection-{connection.get('a_ip')}-{connection.get('a_port')}-{connection.get('b_ip')}-{connection.get('b_port')}"
+ else:prompt=_build_prompt(pkt,threat);session_key=req.packet_id or req.threat_id
  async def gen():
-  if not EMERGENT_LLM_KEY:yield "data: "+json.dumps({"delta":"AI key not configured."})+"\n\n";yield "data: [DONE]\n\n";return
+  if not EMERGENT_LLM_KEY:yield "data: "+json.dumps({"delta":"AI key not configured. Core deterministic analysis remains available."})+"\n\n";yield "data: [DONE]\n\n";return
   try:
    from emergentintegrations.llm.chat import LlmChat,UserMessage,TextDelta,StreamDone
-   chat=LlmChat(api_key=EMERGENT_LLM_KEY,session_id=f"explain-{req.packet_id or req.threat_id}",system_message="You are nScout, an expert network and security analyst.").with_model("openai","gpt-5.4")
+   chat=LlmChat(api_key=EMERGENT_LLM_KEY,session_id=f"explain-{session_key}",system_message="You are nScout, an expert defensive network and security analyst. Use only observed evidence and never claim encrypted application payload contents are visible.").with_model("openai","gpt-5.4")
    async for ev in chat.stream_message(UserMessage(text=prompt)):
     if isinstance(ev,TextDelta):yield "data: "+json.dumps({"delta":ev.content})+"\n\n"
     elif isinstance(ev,StreamDone):break
