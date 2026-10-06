@@ -4,7 +4,7 @@
 
 nScout is a defensive network monitoring, packet-analysis and investigation platform built to turn raw network traffic into understandable security context. It can inspect live traffic or imported PCAP captures, reconstruct conversations between hosts, analyze protocol behavior, surface network-health problems and defensive security findings, and provide an investigation workspace for drilling from a device or connection all the way down to individual packets.
 
-The current stable release is **nScout v0.2.0 — Intelligence Update**. The `v0.3-security-intelligence` branch contains the upcoming **v0.3 Security Intelligence** release candidate. A native Windows installer and portable Windows build for the stable release are available from the repository's Releases page.
+The current stable release is **nScout v0.2.0 — Intelligence Update**. The `main` branch now contains the completed **v0.3 Security Intelligence** milestone pending its tagged release. A native Windows installer and portable Windows build for the stable release are available from the repository's Releases page.
 
 ## What nScout does
 
@@ -51,7 +51,7 @@ nScout produces investigation leads for activity such as scan/flood patterns, su
 
 These findings are defensive heuristics and investigation leads, **not proof of compromise**. Analyst validation is still required.
 
-On the v0.3 branch, Detection Engine 2.0 enriches each finding with severity, confidence, investigation state and structured evidence. Host Intelligence associates those findings with observed hosts and calculates a transparent, bounded risk score for prioritization.
+Detection Engine 2.0 enriches each finding with severity, confidence, investigation state and structured evidence. Host Intelligence associates those findings with observed hosts and calculates a transparent, bounded risk score for prioritization.
 
 ### Network Map & Timeline
 
@@ -210,7 +210,7 @@ The v0.2.0 Windows release is built automatically through GitHub Actions and pac
 
 ## nScout v0.3 Security Intelligence
 
-The v0.3 development branch adds:
+The v0.3 milestone adds:
 
 1. Detection Engine 2.0 with explainable evidence and confidence metadata
 2. Host Intelligence profiles and severity/confidence-based risk scoring
@@ -231,4 +231,8 @@ nScout is intended for defensive network monitoring, troubleshooting, education 
 
 ## License
 
-A project license has not yet been selected. Add an appropriate license before distributing the project under licensing terms that have not been decided.
+nScout is free and open-source software licensed under the **GNU General Public License v3.0 (GPL-3.0)**. You may use, study, modify and redistribute nScout under the terms of GPLv3. Distributed modified versions must preserve the freedoms and obligations required by the GPL, including corresponding-source requirements where applicable.
+
+Copyright © 2026 Shaik Ibrahim.
+
+See [`LICENSE`](LICENSE) for the full license terms.
