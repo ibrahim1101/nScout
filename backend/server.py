@@ -97,6 +97,10 @@ async def http_info():return intelligence.http_intelligence(list(session.packets
 async def tls_info():return tls_intelligence(list(session.packets))
 @api.get("/intelligence/devices")
 async def devices_info():return {"devices":intelligence.device_intelligence(list(session.packets))}
+@api.get("/intelligence/hosts")
+async def hosts_info():
+ packets=list(session.packets);security=intelligence.security_intelligence(packets,session.list_threats())
+ return {"hosts":intelligence.host_intelligence(packets,security["findings"])}
 @api.get("/intelligence/timeline")
 async def investigation_timeline(bucket_seconds:float=1.0):return {"series":packet_timeline(list(session.packets),bucket_seconds)}
 @api.get("/investigation/summary")
