@@ -1,147 +1,34 @@
 import { useEffect, useState } from "react";
 import { api } from "./lib";
-import { X, Save, Check, AlertCircle, Zap } from "lucide-react";
+import { X, Save, Check, AlertCircle, Zap, BrainCircuit, Database, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
 const SEVERITIES = [
-  { v: "low", label: "Low & above" },
-  { v: "medium", label: "Medium & above" },
-  { v: "high", label: "High & above" },
-  { v: "critical", label: "Critical only" },
+  { v: "low", label: "Low & above" }, { v: "medium", label: "Medium & above" },
+  { v: "high", label: "High & above" }, { v: "critical", label: "Critical only" },
 ];
+const DEFAULTS={aiEnabled:false,preservePackets:true,autoRestore:true,redactReports:false,packetLimit:50000,detectionPreset:"balanced"};
+const readPrefs=()=>{try{return {...DEFAULTS,...JSON.parse(localStorage.getItem("nscout.preferences")||"{}")}}catch(_){return DEFAULTS}};
 
 export default function SettingsDrawer({ open, onClose }) {
-  const [slack, setSlack] = useState("");
-  const [discord, setDiscord] = useState("");
-  const [severity, setSeverity] = useState("high");
-  const [saved, setSaved] = useState(false);
-  const [testing, setTesting] = useState("");
-  const [testResult, setTestResult] = useState(null);
-
-  useEffect(() => {
-    if (!open) return;
-    api.get("/settings/webhooks").then((r) => {
-      setSlack(r.data.slack_url || "");
-      setDiscord(r.data.discord_url || "");
-      setSeverity(r.data.min_severity || "high");
-    });
-  }, [open]);
-
-  const save = async () => {
-    await api.post("/settings/webhooks", { slack_url: slack, discord_url: discord, min_severity: severity });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1800);
-  };
-
-  const test = async (url, which) => {
-    if (!url) return;
-    setTesting(which); setTestResult(null);
-    try {
-      const r = await api.post("/settings/webhooks/test", { url });
-      setTestResult({ which, ok: r.data.ok, msg: r.data.ok ? `OK (${r.data.status})` : (r.data.error || `HTTP ${r.data.status}`) });
-    } catch (e) {
-      setTestResult({ which, ok: false, msg: e.message });
-    } finally {
-      setTesting("");
-    }
-  };
-
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-end bg-slate-950/50 backdrop-blur-sm" onClick={onClose}>
-      <div
-        onClick={(e) => e.stopPropagation()}
-        data-testid="settings-drawer"
-        className="w-full max-w-md h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col"
-      >
-        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <h3 className="font-display font-bold">Alert Settings</h3>
-          <button data-testid="settings-close" onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md"><X size={16} /></button>
-        </div>
-
-        <div className="flex-1 overflow-auto el-scroll p-5 space-y-6">
-          <section>
-            <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5"><Zap size={14} className="text-amber-500" /> Minimum severity</h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Only forward threats at or above this severity to webhooks.</p>
-            <select
-              data-testid="settings-severity"
-              value={severity}
-              onChange={(e) => setSeverity(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm font-mono-code focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {SEVERITIES.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
-            </select>
-          </section>
-
-          <WebhookField
-            label="Slack webhook URL"
-            placeholder="https://hooks.slack.com/services/…"
-            value={slack}
-            onChange={setSlack}
-            onTest={() => test(slack, "slack")}
-            testing={testing === "slack"}
-            testId="settings-slack-url"
-            doc="https://api.slack.com/messaging/webhooks"
-          />
-          <WebhookField
-            label="Discord webhook URL"
-            placeholder="https://discord.com/api/webhooks/…"
-            value={discord}
-            onChange={setDiscord}
-            onTest={() => test(discord, "discord")}
-            testing={testing === "discord"}
-            testId="settings-discord-url"
-            doc="https://support.discord.com/hc/articles/228383668"
-          />
-
-          {testResult && (
-            <div data-testid="settings-test-result" className={`rounded-md border px-3 py-2 text-sm flex items-center gap-2 ${testResult.ok ? "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300" : "bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300"}`}>
-              {testResult.ok ? <Check size={14} /> : <AlertCircle size={14} />}
-              <span className="capitalize">{testResult.which}</span>: {testResult.msg}
-            </div>
-          )}
-        </div>
-
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <span className="text-xs text-slate-500 dark:text-slate-400">Changes persist in MongoDB</span>
-          <button
-            data-testid="settings-save"
-            onClick={save}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"
-          >
-            {saved ? <Check size={14} /> : <Save size={14} />}
-            {saved ? "Saved" : "Save"}
-          </button>
-        </div>
-      </div>
+  const [slack,setSlack]=useState(""),[discord,setDiscord]=useState(""),[severity,setSeverity]=useState("high");
+  const [prefs,setPrefs]=useState(readPrefs),[saved,setSaved]=useState(false),[testing,setTesting]=useState(""),[testResult,setTestResult]=useState(null);
+  useEffect(()=>{if(!open)return;setPrefs(readPrefs());api.get("/settings/webhooks").then(r=>{setSlack(r.data.slack_url||"");setDiscord(r.data.discord_url||"");setSeverity(r.data.min_severity||"high");}).catch(()=>{});},[open]);
+  const patch=(key,value)=>setPrefs(p=>({...p,[key]:value}));
+  const save=async()=>{localStorage.setItem("nscout.preferences",JSON.stringify(prefs));window.dispatchEvent(new CustomEvent("nscout:preferences",{detail:prefs}));await api.post("/settings/webhooks",{slack_url:slack,discord_url:discord,min_severity:severity});setSaved(true);setTimeout(()=>setSaved(false),1800);};
+  const test=async(url,which)=>{if(!url)return;setTesting(which);setTestResult(null);try{const r=await api.post("/settings/webhooks/test",{url});setTestResult({which,ok:r.data.ok,msg:r.data.ok?`OK (${r.data.status})`:(r.data.error||`HTTP ${r.data.status}`)});}catch(e){setTestResult({which,ok:false,msg:e.message});}finally{setTesting("");}};
+  if(!open)return null;
+  return <div className="fixed inset-0 z-50 flex items-start justify-end bg-slate-950/50 backdrop-blur-sm" onClick={onClose}><div onClick={e=>e.stopPropagation()} data-testid="settings-drawer" className="w-full max-w-lg h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col">
+    <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between"><div><h3 className="font-display font-bold">nScout Settings</h3><p className="text-[11px] text-slate-500">Capture, investigation, privacy and alert preferences</p></div><button data-testid="settings-close" onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md"><X size={16}/></button></div>
+    <div className="flex-1 overflow-auto el-scroll p-5 space-y-6">
+      <Group icon={BrainCircuit} title="AI integration"><Toggle label="Enable AI features" description="Disabled by default in v0.4. Turn this on only when you intentionally want AI-assisted features exposed." value={prefs.aiEnabled} onChange={v=>patch("aiEnabled",v)}/></Group>
+      <Group icon={Database} title="Capture & workspace"><Toggle label="Preserve packets when switching interfaces" description="Keep the current packet history while capture moves to another interface." value={prefs.preservePackets} onChange={v=>patch("preservePackets",v)}/><Toggle label="Restore previous workspace" description="Offer recovery of investigation state after restart or an unexpected close." value={prefs.autoRestore} onChange={v=>patch("autoRestore",v)}/><label className="block text-xs font-semibold mt-3">Packet retention limit<input type="number" min="1000" max="1000000" step="1000" value={prefs.packetLimit} onChange={e=>patch("packetLimit",Math.max(1000,Number(e.target.value)||1000))} className="mt-1 w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-transparent font-mono-code"/></label></Group>
+      <Group icon={ShieldCheck} title="Investigation & privacy"><Toggle label="Redact exported reports" description="Prepare reports for sharing by requesting anonymization of sensitive network identifiers." value={prefs.redactReports} onChange={v=>patch("redactReports",v)}/><label className="block text-xs font-semibold mt-3">Detection sensitivity<select value={prefs.detectionPreset} onChange={e=>patch("detectionPreset",e.target.value)} className="mt-1 w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950"><option value="conservative">Conservative</option><option value="balanced">Balanced</option><option value="sensitive">Sensitive</option></select></label></Group>
+      <Group icon={SlidersHorizontal} title="Alert delivery"><h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5"><Zap size={14} className="text-amber-500"/> Minimum severity</h4><select data-testid="settings-severity" value={severity} onChange={e=>setSeverity(e.target.value)} className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm">{SEVERITIES.map(s=><option key={s.v} value={s.v}>{s.label}</option>)}</select><WebhookField label="Slack webhook URL" value={slack} onChange={setSlack} onTest={()=>test(slack,"slack")} testing={testing==="slack"} testId="settings-slack-url"/><WebhookField label="Discord webhook URL" value={discord} onChange={setDiscord} onTest={()=>test(discord,"discord")} testing={testing==="discord"} testId="settings-discord-url"/></Group>
+      {testResult&&<div data-testid="settings-test-result" className={`rounded-md border px-3 py-2 text-sm flex items-center gap-2 ${testResult.ok?"bg-emerald-50 border-emerald-200 text-emerald-700":"bg-rose-50 border-rose-200 text-rose-700"}`}>{testResult.ok?<Check size={14}/>:<AlertCircle size={14}/>}<span className="capitalize">{testResult.which}</span>: {testResult.msg}</div>}
     </div>
-  );
+    <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between"><span className="text-xs text-slate-500">App preferences stay local; webhook settings persist in nScout.</span><button data-testid="settings-save" onClick={save} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">{saved?<Check size={14}/>:<Save size={14}/>} {saved?"Saved":"Save"}</button></div>
+  </div></div>;
 }
-
-function WebhookField({ label, placeholder, value, onChange, onTest, testing, testId, doc }) {
-  return (
-    <section>
-      <h4 className="text-sm font-semibold mb-1">{label}</h4>
-      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-        Paste your incoming webhook URL. <a className="text-blue-600 dark:text-blue-400 underline" href={doc} target="_blank" rel="noreferrer">How to create one</a>
-      </p>
-      <div className="flex gap-2">
-        <input
-          data-testid={testId}
-          type="url"
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm font-mono-code focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          data-testid={`${testId}-test`}
-          onClick={onTest}
-          disabled={!value || testing}
-          className="px-3 py-2 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm font-semibold disabled:opacity-50"
-        >
-          {testing ? "Testing…" : "Test"}
-        </button>
-      </div>
-    </section>
-  );
-}
+function Group({icon:Icon,title,children}){return <section className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3"><h4 className="font-display font-bold text-sm flex items-center gap-2"><Icon size={15}/>{title}</h4>{children}</section>}
+function Toggle({label,description,value,onChange}){return <label className="flex items-start justify-between gap-4 cursor-pointer"><span><span className="block text-sm font-semibold">{label}</span><span className="block text-xs text-slate-500 mt-0.5">{description}</span></span><input type="checkbox" checked={!!value} onChange={e=>onChange(e.target.checked)} className="mt-1 h-4 w-4 accent-blue-600"/></label>}
+function WebhookField({label,value,onChange,onTest,testing,testId}){return <div className="pt-2"><h4 className="text-xs font-semibold mb-1">{label}</h4><div className="flex gap-2"><input data-testid={testId} type="url" placeholder="https://…" value={value} onChange={e=>onChange(e.target.value)} className="flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm font-mono-code"/><button data-testid={`${testId}-test`} onClick={onTest} disabled={!value||testing} className="px-3 py-2 rounded-md bg-slate-100 dark:bg-slate-800 text-sm font-semibold disabled:opacity-50">{testing?"Testing…":"Test"}</button></div></div>}
