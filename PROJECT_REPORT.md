@@ -5,7 +5,7 @@
 - **Role:** Sole developer / architect
 - **Timeline:** January 2026
 - **Stack:** Python • FastAPI • Scapy • React • TailwindCSS • Recharts • MongoDB • WebSockets • OpenAI GPT-5.4 • PyInstaller
-- **Status:** Fully functional MVP, 33 / 33 automated backend tests passing, Windows single-file distribution built via GitHub Actions CI
+- **Status:** v0.3 Security Intelligence release candidate in development, 52 focused backend regression tests passing, Windows distribution built through GitHub Actions CI
 
 ---
 
@@ -43,6 +43,10 @@ nScout fills that gap in a single codebase.
 | **Deep protocol decoding** | Full Ethernet → IPv4 / IPv6 → TCP / UDP / ICMP / ARP → DNS / HTTP / HTTPS / TLS tree with ~25 application-layer protocols recognised by port. |
 | **Overlap-aware TCP reassembly** | My own byte-range interval algorithm (`analysis.py`) collapses retransmits and gaps into a clean bidirectional stream — same as Wireshark's "Follow TCP Stream" feature but written from scratch. |
 | **Real-time analytics** | WebSocket-pushed packets/sec and bps timeline, Recharts area + donut charts, protocol distribution, top-talkers table. |
+| **Security Intelligence** | Explainable passive findings with severity, confidence, investigation state and structured evidence for port scans, failed connections, DNS anomalies, ARP changes, beacon-like timing, traffic spikes and large transfers. |
+| **Host Intelligence** | Host-centric profiles with identity, traffic, services, domains, peers, associated findings and transparent risk scoring. |
+| **Investigation Timeline** | Correlated DNS, TCP, TLS, HTTP and security events with host/domain/connection/protocol/severity/time filters. |
+| **Advanced packet search** | Safe parser for boolean logic, parentheses, comparisons and protocol-aware fields while retaining compact legacy filters. |
 | **Topology map** | SVG force-ish layout showing hosts as nodes, flows as animated edges, with Geo-IP + ASN enrichment (country flags, cities, organisations) via ip-api.com batched + cached. |
 | **AI anomaly detection** | Behavioural rules for SYN flood, port scan, ICMP flood, DNS tunnelling, cleartext credentials — each triggers a plain-English GPT-5.4 explanation via Server-Sent Events. |
 | **Save & replay sessions** | Full packet snapshots (hex-preserved) persisted in MongoDB; "Replay" reconstitutes every tab exactly as it was captured. |
@@ -82,6 +86,10 @@ nScout fills that gap in a single codebase.
 |---|---|
 | `engine.py` | Capture session: ring buffers (packets, threats, flows, hosts, timeline), `dissect_packet()` normaliser, `ThreatState` behavioural detector, `AsyncSniffer` loop, traffic simulator fallback. |
 | `analysis.py` | **Overlap-aware TCP reassembly** (byte-range interval merge), PCAP export via `wrpcap`, bidirectional flow listing. |
+| `security_intelligence.py` | Explainable passive security heuristics and structured finding metadata. |
+| `host_intelligence.py` | Host correlation, peer/service/domain inventory and risk scoring. |
+| `investigation_timeline.py` | Cross-protocol chronological event correlation and timeline filters. |
+| `filters.py` | Validated advanced filter parser and packet predicate evaluation. |
 | `geo.py` | ip-api.com batch client with in-memory cache + Unicode country-flag emitter. Private IPs short-circuited. |
 | `webhooks.py` | Slack and Discord payload formatters, severity-gated async fan-out. |
 | `sessions.py` | Save / list / load / delete snapshots in MongoDB; replay reconstitutes state through the dissector. |
@@ -94,7 +102,8 @@ nScout fills that gap in a single codebase.
 | `Dashboard.jsx` | Top-level state container, WS subscription, REST polling fallback, tab router. |
 | `HeaderNav.jsx` | Interface select, start / stop / clear / export, filter bar, status pills, light / dark toggle. |
 | `PacketAnalyzer.jsx` | 3-pane view: virtualised packet table + protocol tree + hex / ASCII dump + AI explain (SSE stream). |
-| `AnalyticsDashboard.jsx` | Recharts area + donut charts, top-talkers table with usage bars. |
+| `AnalyticsDashboard.jsx` | Traffic charts plus security posture, severity distribution, risky-host ranking and recent findings. |
+| `IntelligenceWorkspace.jsx` | Connections, hosts, correlated timeline, protocol intelligence, security findings, advanced search and reports. |
 | `TopologyMap.jsx` | SVG network graph, animated packet motion along edges, Geo + ASN tooltip. |
 | `ThreatFeed.jsx` | Severity-filtered threat list with per-threat AI explanation drawer. |
 | `FlowDrawer.jsx` | TCP conversation modal with text / hex payload rendering. |
@@ -142,7 +151,7 @@ Replaced raw `_id`-leaking patterns with a `BaseDocument`-style `_packet_doc` no
 
 ## 6. Testing
 
-- **Automated backend regression suite:** 33 tests covering health, capture lifecycle, packet listing / filtering, protocol stats, timeline, top talkers, topology (enriched + plain), PCAP upload & export, Follow-stream reassembly, flow listing, Geo endpoint, Slack / Discord webhook send + test, session save / list / load / delete, AI explain SSE framing.
+- **Focused backend regression suite:** 52 tests covering packet/connection intelligence, TCP health, protocol metadata, Detection Engine 2.0, Host Intelligence, the correlated Investigation Timeline, Advanced Filtering, reports and deterministic explanations.
 - **100 % pass rate** across iterations 1 → 4 (`/app/test_reports/iteration_*.json`).
 - **Manual UI smoke tests** at desktop (1920 × 800) and mobile (390 × 844) viewports with zero horizontal overflow.
 - **PyInstaller bundle verified** to boot in < 2 seconds and serve both API and UI from a single process.
@@ -158,7 +167,7 @@ Replaced raw `_id`-leaking patterns with a `BaseDocument`-style `_packet_doc` no
 - **36 MB** PyInstaller launcher; **~370 MB** total bundle including Python runtime + Scapy + emergentintegrations.
 - **< 2 s** cold-boot to serving traffic.
 - **~70 packets / sec** sustained in the built-in simulator with full UI tracking.
-- **33 / 33** automated regression tests green.
+- **52 / 52** focused backend regression tests green on the v0.3 branch.
 
 ---
 

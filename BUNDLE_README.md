@@ -10,6 +10,21 @@ no Python, Node, or developer tools required on their machine.
 2. A console window opens and your browser auto-launches at `http://127.0.0.1:8001`.
 3. Click **Start** to begin monitoring.
 
+## v0.3 investigation workflow
+
+The Security Intelligence build adds Detection Engine findings, host risk
+profiles, a correlated Investigation Timeline, advanced boolean packet search
+and an operator-focused security dashboard.
+
+1. Start a capture or upload an authorized PCAP.
+2. Open **Analytics** to review security posture and prioritized hosts.
+3. Use **Intelligence** to inspect hosts, connections, domains and findings.
+4. Use **Timeline** and **Advanced Packet Search** to locate packet evidence.
+5. Export JSON, HTML or PDF investigation reports when needed.
+
+Security findings are passive heuristic leads, not proof of compromise. nScout
+does not decrypt HTTPS application payloads.
+
 **macOS / Linux**
 ```bash
 ./nScout
