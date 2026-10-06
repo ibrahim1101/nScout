@@ -1,3 +1,4 @@
+import useAIEnabled from "./useAIEnabled";
 import { useRef, useState } from "react";
 import { api } from "./lib";
 import { AlertTriangle, Shield, ShieldAlert, ShieldCheck, Sparkles, X } from "lucide-react";
@@ -10,6 +11,7 @@ const SEVERITY = {
 };
 
 export default function ThreatFeed({ threats, onSelectPacket }) {
+  const aiEnabled=useAIEnabled();
   const [filter, setFilter] = useState("all");
   const [drawerThreat, setDrawerThreat] = useState(null);
 
@@ -19,7 +21,7 @@ export default function ThreatFeed({ threats, onSelectPacket }) {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
         <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
-          <h3 className="font-display font-bold text-sm">AI Threat Feed</h3>
+          <h3 className="font-display font-bold text-sm">Threat Feed</h3>
           <div className="flex items-center gap-1">
             {["all", "critical", "high", "medium", "low"].map((f) => (
               <button
@@ -59,13 +61,13 @@ export default function ThreatFeed({ threats, onSelectPacket }) {
                   </div>
                 </div>
                 <div className="flex flex-col gap-1 shrink-0">
-                  <button
+                  {aiEnabled&&<button
                     data-testid={`threat-explain-${t.id}`}
                     onClick={() => setDrawerThreat(t)}
                     className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
                   >
                     <Sparkles size={11} /> AI
-                  </button>
+                  </button>}
                   {t.packet_id && (
                     <button
                       data-testid={`threat-view-packet-${t.id}`}
@@ -80,13 +82,13 @@ export default function ThreatFeed({ threats, onSelectPacket }) {
         </div>
       </div>
 
-      <aside className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
+      {aiEnabled&&<aside className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
         <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <h3 className="font-display font-bold text-sm">AI Explanation</h3>
           {drawerThreat && <button data-testid="ai-drawer-close" onClick={() => setDrawerThreat(null)} className="text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"><X size={16} /></button>}
         </div>
         <ThreatExplainer threat={drawerThreat} />
-      </aside>
+      </aside>}
     </div>
   );
 }
@@ -111,6 +113,7 @@ function ThreatExplainer({ threat }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ threat_id: threat.id }),
         });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let buf = "";

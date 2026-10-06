@@ -9,7 +9,7 @@ from fastapi.responses import Response,StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
-from etherlens import analysis,geo,webhooks,intelligence
+from etherlens import analysis,geo,webhooks,intelligence,ai_provider
 from etherlens.filters import FilterSyntaxError,filter_packets,validate_filter
 from etherlens.reports import json_report,html_report,pdf_report
 from etherlens.protocol_intelligence import tls_intelligence,packet_timeline,packet_ascii
@@ -20,6 +20,26 @@ from etherlens.engine import CaptureSession
 from etherlens.sessions import save_session,list_sessions,load_session,delete_session
 ROOT_DIR=Path(__file__).parent; load_dotenv(ROOT_DIR/".env"); logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s - %(message)s"); logger=logging.getLogger("nscout")
 mongo_url=os.environ.get("MONGO_URL","mongodb://127.0.0.1:27017"); db_name=os.environ.get("DB_NAME","nscout"); client=AsyncIOMotorClient(mongo_url,serverSelectionTimeoutMS=1500,connectTimeoutMS=1500); db=client[db_name]; settings_col=db.etherlens_settings; mongo_available=False; session=CaptureSession(); app=FastAPI(title="nScout"); api=APIRouter(prefix="/api")
+AI_SETTINGS_PATH=Path(os.environ.get("NSCOUT_DATA_DIR", str(Path.home()/".nscout")))/"ai-settings.json"
+_ai_settings=ai_provider.load_settings(AI_SETTINGS_PATH)
+_ai_lock=asyncio.Lock()
+@api.get("/settings/ai")
+async def get_ai_settings():return _ai_settings.model_dump()
+@api.post("/settings/ai")
+async def set_ai_settings(body:ai_provider.AISettings):
+ global _ai_settings
+ async with _ai_lock:
+  try:await asyncio.to_thread(ai_provider.save_settings,AI_SETTINGS_PATH,body)
+  except OSError as exc:raise HTTPException(status_code=500,detail="Could not save AI settings") from exc
+  _ai_settings=body
+ return {"status":"saved","settings":body.model_dump()}
+@api.post("/settings/ai/test")
+async def test_ai_settings(body:ai_provider.AISettings):
+ if body.provider=="emergent":return {"ok":bool(os.environ.get("EMERGENT_LLM_KEY")),"models":[],"message":"Cloud key configured" if os.environ.get("EMERGENT_LLM_KEY") else "Cloud key not configured"}
+ try:
+  available=await asyncio.wait_for(asyncio.to_thread(ai_provider.models,body),timeout=body.timeout_seconds+5)
+  return {"ok":True,"models":available,"message":"Connected to local model server"}
+ except (ai_provider.AIUnavailable,asyncio.TimeoutError) as exc:return {"ok":False,"models":[],"message":str(exc) or "Local AI timed out"}
 class StartRequest(BaseModel): interface:str="simulated"
 class ExplainRequest(BaseModel):
  packet_id:Optional[str]=None; threat_id:Optional[str]=None
@@ -196,6 +216,8 @@ def _resolve_ai_connection(req:ExplainRequest,packets:list[dict]):
  return connection
 @api.post("/ai/explain")
 async def ai_explain(req:ExplainRequest):
+ if not _ai_settings.enabled:raise HTTPException(status_code=403,detail="AI is disabled in Settings")
+ settings=_ai_settings.model_copy(deep=True)
  packets=list(session.packets);pkt=session.get_packet(req.packet_id) if req.packet_id else None;threat=next((t for t in session.threats if t.get("id")==req.threat_id),None) if req.threat_id else None;connection=_resolve_ai_connection(req,packets)
  if not pkt and not threat and not connection:raise HTTPException(status_code=404,detail="packet, threat, or connection not found")
  if connection:
@@ -203,6 +225,17 @@ async def ai_explain(req:ExplainRequest):
   prompt=connection_prompt(context);session_key=f"connection-{connection.get('a_ip')}-{connection.get('a_port')}-{connection.get('b_ip')}-{connection.get('b_port')}"
  else:prompt=_build_prompt(pkt,threat);session_key=req.packet_id or req.threat_id
  async def gen():
+  if settings.provider!="emergent":
+   try:
+    if _ai_lock.locked():raise ai_provider.AIUnavailable("Local AI is busy. Try again when the current explanation finishes.")
+    async with _ai_lock:
+     answer=await asyncio.wait_for(asyncio.to_thread(ai_provider.complete,settings,prompt),timeout=settings.timeout_seconds+5)
+    yield "data: "+json.dumps({"delta":answer,"provider":settings.provider,"model":settings.model})+"\n\n"
+   except (ai_provider.AIUnavailable,asyncio.TimeoutError) as exc:
+    message=str(exc) or "Local AI timed out."
+    fallback=explain_connection(connection,intelligence.dns_intelligence(packets),tls_intelligence(packets)) if connection else {k:pkt.get(k) for k in ("protocol","src_ip","dst_ip","info","length")} if pkt else threat.get("description", "Review the finding evidence.")
+    yield "data: "+json.dumps({"delta":message+"\n\nDeterministic context:\n"+json.dumps(fallback,default=str),"fallback":True})+"\n\n"
+   yield "data: [DONE]\n\n";return
   if not EMERGENT_LLM_KEY:yield "data: "+json.dumps({"delta":"AI key not configured. Core deterministic analysis remains available."})+"\n\n";yield "data: [DONE]\n\n";return
   try:
    from emergentintegrations.llm.chat import LlmChat,UserMessage,TextDelta,StreamDone

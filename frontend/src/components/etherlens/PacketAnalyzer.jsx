@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import useAIEnabled from "./useAIEnabled";
 import { api } from "./lib";
 import { ChevronRight, ChevronDown, Sparkles, Copy, Activity, ShieldAlert, Layers3 } from "lucide-react";
 
@@ -19,14 +20,15 @@ function follow(p,cb){const [a_ip,a_port,b_ip,b_port]=(p.src_ip<p.dst_ip||(p.src
 function PacketTable({packets,selected,onSelect}){return <div className="flex-1 overflow-auto el-scroll"><table className="w-full text-xs"><thead className="sticky top-0 bg-slate-50 dark:bg-slate-800/90 z-10"><tr className="text-left text-slate-500 uppercase tracking-wider text-[10px]"><th className="px-3 py-2">#</th><th className="px-3 py-2">Time</th><th className="px-3 py-2">Source</th><th className="px-3 py-2">Destination</th><th className="px-3 py-2">Proto</th><th className="px-3 py-2 text-right">Len</th><th className="px-3 py-2">Info</th></tr></thead><tbody className="font-mono-code">{!packets.length&&<tr><td colSpan={7} className="text-center text-slate-400 py-12 text-sm">No packets yet. Start capture or upload a PCAP.</td></tr>}{packets.map(p=><tr key={p.id} onClick={()=>onSelect(p)} className={`border-t border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 ${selected?.id===p.id?"bg-blue-50 dark:bg-blue-500/10":""}`}><td className="px-3 py-1.5 text-slate-400">{p.number}</td><td className="px-3 py-1.5 whitespace-nowrap">{p.time_str}</td><td className="px-3 py-1.5 whitespace-nowrap">{p.src_ip}{p.src_port?`:${p.src_port}`:""}</td><td className="px-3 py-1.5 whitespace-nowrap">{p.dst_ip}{p.dst_port?`:${p.dst_port}`:""}</td><td className="px-3 py-1.5"><span className={`proto-badge proto-${p.protocol}`}>{p.protocol}</span></td><td className="px-3 py-1.5 text-right text-slate-500">{p.length}</td><td className="px-3 py-1.5 truncate max-w-[260px]">{p.info}</td></tr>)}</tbody></table></div>}
 
 function DeepInspector({packet,onFollowFlow}){
+ const aiEnabled=useAIEnabled();
  const [detail,setDetail]=useState(null),[tab,setTab]=useState("Summary");
  useEffect(()=>{setTab("Summary");if(!packet){setDetail(null);return;}api.get(`/packets/${packet.id}`).then(r=>setDetail(r.data)).catch(()=>setDetail(packet));},[packet]);
  if(!packet)return <EmptyBlock title="Deep Packet Inspector" message="Select a packet to inspect protocol layers, connection context, health, raw bytes and security context."/>;
  const d=detail||packet;
  return <div className="h-full bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
    <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between"><div><h3 className="font-display font-bold text-sm">Deep Packet Inspector</h3><div className="text-[10px] text-slate-500 font-mono-code">Packet #{d.number} · {d.protocol} · {d.length} bytes</div></div>{d.src_port&&d.dst_port&&<button onClick={()=>follow(d,onFollowFlow)} className="text-xs px-2 py-1 rounded bg-blue-600 text-white">Connection</button>}</div>
-   <div className="flex gap-1 px-2 py-2 border-b border-slate-200 dark:border-slate-800 overflow-x-auto el-scroll">{DETAIL_TABS.map(t=><button key={t} onClick={()=>setTab(t)} className={`whitespace-nowrap px-2.5 py-1.5 rounded-md text-[11px] font-semibold ${tab===t?"bg-slate-900 dark:bg-blue-600 text-white":"text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"}`}>{t}</button>)}</div>
-   <div className="flex-1 overflow-auto el-scroll p-3">{tab==="Summary"&&<Summary d={d}/>} {tab==="Layers"&&<Layers d={d}/>} {tab==="Connection"&&<Connection d={d}/>} {tab==="Protocol"&&<Protocol d={d}/>} {tab==="TCP Health"&&<TcpHealth d={d}/>} {tab==="Hex"&&<Hex d={d}/>} {tab==="Security"&&<Security d={d}/>} {tab==="Explain"&&<AIExplain packet={d}/>}</div>
+   <div className="flex gap-1 px-2 py-2 border-b border-slate-200 dark:border-slate-800 overflow-x-auto el-scroll">{DETAIL_TABS.filter(t=>t!=="Explain"||aiEnabled).map(t=><button key={t} onClick={()=>setTab(t)} className={`whitespace-nowrap px-2.5 py-1.5 rounded-md text-[11px] font-semibold ${tab===t?"bg-slate-900 dark:bg-blue-600 text-white":"text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"}`}>{t}</button>)}</div>
+   <div className="flex-1 overflow-auto el-scroll p-3">{tab==="Summary"&&<Summary d={d}/>} {tab==="Layers"&&<Layers d={d}/>} {tab==="Connection"&&<Connection d={d}/>} {tab==="Protocol"&&<Protocol d={d}/>} {tab==="TCP Health"&&<TcpHealth d={d}/>} {tab==="Hex"&&<Hex d={d}/>} {tab==="Security"&&<Security d={d}/>} {tab==="Explain"&&aiEnabled&&<AIExplain packet={d}/>}</div>
  </div>
 }
 
