@@ -50,6 +50,16 @@ class InvestigationWorkspace:
     def _touch(self) -> None:
         self.updated_at = _utc_now()
 
+    def update_details(self, name: Optional[str] = None, description: Optional[str] = None) -> None:
+        if name is not None:
+            name = name.strip()
+            if not name:
+                raise ValueError("Investigation name is required")
+            self.name = name
+        if description is not None:
+            self.description = description.strip()
+        self._touch()
+
     def add_evidence(self, item: EvidenceItem) -> EvidenceItem:
         # One referenced object should appear once in the locker. Updating its
         # analyst context is safer than silently producing duplicate evidence.

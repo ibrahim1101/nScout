@@ -229,7 +229,7 @@ v0.4 extends the security-intelligence foundation into a persistent analyst work
 The development branch currently includes:
 
 - Expanded settings foundation for capture, investigation, privacy and detection preferences.
-- Investigation workspace lifecycle foundation with regression coverage; full application integration remains in progress.
+- Durable local Investigation Workspace API for case metadata, evidence, analyst notes and finding lifecycle, with atomic persistence that does not require MongoDB; UI integration remains in progress.
 - Optional local LLM explanations for selected packets, findings and connections, using Ollama, LM Studio or a custom local OpenAI-compatible server.
 - AI disabled by default, with backend enforcement, model discovery, connection testing, model selection and timeout/output limits.
 - Persistent AI settings without MongoDB and observed-context fallback when local inference is unavailable.
@@ -254,9 +254,9 @@ provider selection. See the guide for optional authentication and data-directory
 
 ### Validation status
 
-The current v0.4 development implementation has **75 passing focused backend regression tests**,
-and the changed frontend files pass syntax validation. Full frontend build,
-real-model testing and packaged Windows end-to-end validation remain pending.
+The current v0.4 development implementation has **81 passing focused backend regression tests**.
+The branch is protected by Docker smoke testing and a Windows gate that builds
+the React UI, PyInstaller bundle and installer. Real-model testing remains pending.
 This is development progress, not a v0.4 release announcement.
 
 ## Project maturity & accuracy

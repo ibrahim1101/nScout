@@ -2,12 +2,12 @@
 from __future__ import annotations
 import asyncio,json,logging,os
 from pathlib import Path
-from typing import List,Optional
+from typing import Any,Dict,List,Optional
 from dotenv import load_dotenv
 from fastapi import APIRouter,FastAPI,File,HTTPException,UploadFile,WebSocket,WebSocketDisconnect
 from fastapi.responses import Response,StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 from starlette.middleware.cors import CORSMiddleware
 from etherlens import analysis,geo,webhooks,intelligence,ai_provider
 from etherlens.filters import FilterSyntaxError,filter_packets,validate_filter
@@ -18,9 +18,13 @@ from etherlens.connection_selection import select_connection
 from etherlens.ai_context import connection_context,connection_prompt
 from etherlens.engine import CaptureSession
 from etherlens.sessions import save_session,list_sessions,load_session,delete_session
+from etherlens.investigation_workspace import EvidenceItem
+from etherlens.investigation_store import InvestigationNotFound,InvestigationStore
 ROOT_DIR=Path(__file__).parent; load_dotenv(ROOT_DIR/".env"); logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s - %(message)s"); logger=logging.getLogger("nscout")
 mongo_url=os.environ.get("MONGO_URL","mongodb://127.0.0.1:27017"); db_name=os.environ.get("DB_NAME","nscout"); client=AsyncIOMotorClient(mongo_url,serverSelectionTimeoutMS=1500,connectTimeoutMS=1500); db=client[db_name]; settings_col=db.etherlens_settings; mongo_available=False; session=CaptureSession(); app=FastAPI(title="nScout"); api=APIRouter(prefix="/api")
-AI_SETTINGS_PATH=Path(os.environ.get("NSCOUT_DATA_DIR", str(Path.home()/".nscout")))/"ai-settings.json"
+DATA_DIR=Path(os.environ.get("NSCOUT_DATA_DIR", str(Path.home()/".nscout")))
+AI_SETTINGS_PATH=DATA_DIR/"ai-settings.json"
+_investigation_store=InvestigationStore(DATA_DIR/"investigations")
 _ai_settings=ai_provider.load_settings(AI_SETTINGS_PATH)
 _ai_lock=asyncio.Lock()
 @api.get("/settings/ai")
@@ -47,6 +51,16 @@ class ExplainRequest(BaseModel):
 class WebhookSettings(BaseModel): slack_url:str=""; discord_url:str=""; min_severity:str="high"
 class WebhookTestRequest(BaseModel): url:str
 class SaveSessionRequest(BaseModel): name:str="Untitled"
+class CreateInvestigationRequest(BaseModel):
+ name:str=Field(min_length=1,max_length=160);description:str=Field(default="",max_length=2000)
+class UpdateInvestigationRequest(BaseModel):
+ name:Optional[str]=Field(default=None,min_length=1,max_length=160);description:Optional[str]=Field(default=None,max_length=2000)
+class EvidenceRequest(BaseModel):
+ type:str=Field(min_length=1,max_length=32);ref_id:str=Field(min_length=1,max_length=500);title:str=Field(default="",max_length=500);note:str=Field(default="",max_length=4000);snapshot:Dict[str,Any]=Field(default_factory=dict)
+class InvestigationNoteRequest(BaseModel):
+ text:str=Field(min_length=1,max_length=10000);author:str=Field(default="analyst",min_length=1,max_length=160)
+class FindingStateRequest(BaseModel):
+ state:str=Field(min_length=1,max_length=32);note:str=Field(default="",max_length=4000)
 _webhook_cache={"slack_url":"","discord_url":"","min_severity":"high"}; _SEV_RANK={"low":1,"medium":2,"high":3,"critical":4}
 async def _load_settings():
  global mongo_available
@@ -129,6 +143,56 @@ async def investigation_timeline_view(host:str="",domain:str="",connection:str="
  return intelligence.investigation_timeline(packets,security["findings"],host=host,domain=domain,connection=connection,protocol=protocol,min_severity=min_severity,start=start,end=end,limit=limit)
 @api.get("/investigation/summary")
 async def investigation_summary():return intelligence.investigation_summary(list(session.packets),session.list_threats())
+def _workspace_result(workspace):return {"investigation":workspace.to_dict()}
+async def _workspace_get(workspace_id:str):
+ try:return await asyncio.to_thread(_investigation_store.get,workspace_id)
+ except InvestigationNotFound as exc:raise HTTPException(status_code=404,detail="Investigation not found") from exc
+ except ValueError as exc:raise HTTPException(status_code=500,detail=str(exc)) from exc
+async def _workspace_mutate(workspace_id:str,operation):
+ try:return await asyncio.to_thread(_investigation_store.mutate,workspace_id,operation)
+ except InvestigationNotFound as exc:raise HTTPException(status_code=404,detail="Investigation not found") from exc
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+@api.post("/investigations",status_code=201)
+async def investigations_create(body:CreateInvestigationRequest):
+ try:workspace=await asyncio.to_thread(_investigation_store.create,body.name,body.description)
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ return _workspace_result(workspace)
+@api.get("/investigations")
+async def investigations_list():return {"investigations":await asyncio.to_thread(_investigation_store.list)}
+@api.get("/investigations/{workspace_id}")
+async def investigations_get(workspace_id:str):return _workspace_result(await _workspace_get(workspace_id))
+@api.patch("/investigations/{workspace_id}")
+async def investigations_update(workspace_id:str,body:UpdateInvestigationRequest):
+ workspace=await _workspace_mutate(workspace_id,lambda item:item.update_details(body.name,body.description))
+ return _workspace_result(workspace)
+@api.delete("/investigations/{workspace_id}")
+async def investigations_delete(workspace_id:str):
+ try:deleted=await asyncio.to_thread(_investigation_store.delete,workspace_id)
+ except InvestigationNotFound as exc:raise HTTPException(status_code=404,detail="Investigation not found") from exc
+ if not deleted:raise HTTPException(status_code=404,detail="Investigation not found")
+ return {"status":"deleted"}
+@api.post("/investigations/{workspace_id}/evidence")
+async def investigations_add_evidence(workspace_id:str,body:EvidenceRequest):
+ if len(json.dumps(body.snapshot,default=str))>128*1024:raise HTTPException(status_code=413,detail="Evidence snapshot is too large")
+ try:evidence=EvidenceItem(body.type,body.ref_id.strip(),title=body.title.strip(),note=body.note.strip(),snapshot=body.snapshot)
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ workspace=await _workspace_mutate(workspace_id,lambda item:item.add_evidence(evidence))
+ return _workspace_result(workspace)
+@api.delete("/investigations/{workspace_id}/evidence/{evidence_id}")
+async def investigations_remove_evidence(workspace_id:str,evidence_id:str):
+ removed={"value":False}
+ def operation(item):removed["value"]=item.remove_evidence(evidence_id)
+ workspace=await _workspace_mutate(workspace_id,operation)
+ if not removed["value"]:raise HTTPException(status_code=404,detail="Evidence not found")
+ return _workspace_result(workspace)
+@api.post("/investigations/{workspace_id}/notes")
+async def investigations_add_note(workspace_id:str,body:InvestigationNoteRequest):
+ workspace=await _workspace_mutate(workspace_id,lambda item:item.add_note(body.text,body.author.strip()))
+ return _workspace_result(workspace)
+@api.put("/investigations/{workspace_id}/findings/{finding_id}/state")
+async def investigations_set_finding_state(workspace_id:str,finding_id:str,body:FindingStateRequest):
+ workspace=await _workspace_mutate(workspace_id,lambda item:item.set_finding_state(finding_id,body.state,body.note))
+ return _workspace_result(workspace)
 @api.get("/investigation/report.json")
 async def investigation_report_json():
  summary=intelligence.investigation_summary(list(session.packets),session.list_threats())
