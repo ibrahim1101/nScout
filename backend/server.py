@@ -102,7 +102,9 @@ async def hosts_info():
  packets=list(session.packets);security=intelligence.security_intelligence(packets,session.list_threats())
  return {"hosts":intelligence.host_intelligence(packets,security["findings"])}
 @api.get("/intelligence/timeline")
-async def investigation_timeline(bucket_seconds:float=1.0):return {"series":packet_timeline(list(session.packets),bucket_seconds)}
+async def investigation_timeline_view(host:str="",domain:str="",connection:str="",protocol:str="",min_severity:str="info",start:Optional[float]=None,end:Optional[float]=None,limit:int=1000):
+ packets=list(session.packets);security=intelligence.security_intelligence(packets,session.list_threats())
+ return intelligence.investigation_timeline(packets,security["findings"],host=host,domain=domain,connection=connection,protocol=protocol,min_severity=min_severity,start=start,end=end,limit=limit)
 @api.get("/investigation/summary")
 async def investigation_summary():return intelligence.investigation_summary(list(session.packets),session.list_threats())
 @api.get("/investigation/report.json")
