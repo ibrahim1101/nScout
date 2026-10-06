@@ -4,7 +4,7 @@
 
 nScout is a defensive network monitoring, packet-analysis and investigation platform built to turn raw network traffic into understandable security context. It can inspect live traffic or imported PCAP captures, reconstruct conversations between hosts, analyze protocol behavior, surface network-health problems and defensive security findings, and provide an investigation workspace for drilling from a device or connection all the way down to individual packets.
 
-The current stable release is **nScout v0.2.0 — Intelligence Update**. The `main` branch now contains the completed **v0.3 Security Intelligence** milestone pending its tagged release. A native Windows installer and portable Windows build for the stable release are available from the repository's Releases page.
+The current stable release is [**nScout v0.3.0 — Security Intelligence**](https://github.com/ibrahim1101/nScout/releases/tag/v0.3.0), available as a native Windows installer and portable ZIP. **v0.4.0 — Investigation Platform is in development** on `v0.4-investigation-platform`; its features are not yet included in the stable installer. Follow [the development PR](https://github.com/ibrahim1101/nScout/pull/3) for progress.
 
 ## What nScout does
 
@@ -79,8 +79,8 @@ Export investigation information as **JSON, standalone HTML or PDF** for sharing
 
 ### Recommended: Windows installer
 
-1. Open the **Releases** section of this repository and select **nScout v0.2.0** (or the newest stable release).
-2. Download `nScout-Setup-0.2.0-windows-x64.exe`.
+1. Open the **Releases** section of this repository and select **nScout v0.3.0** (or the newest stable release).
+2. Download `nScout-Setup-0.3.0-windows-x64.exe`.
 3. Run the installer and complete the setup wizard.
 4. Launch **nScout** from the Start Menu or desktop shortcut created by the installer.
 5. nScout starts its local backend and opens the application in your default browser.
@@ -105,7 +105,7 @@ Install **Npcap** to provide packet-capture support. Running nScout as Administr
 
 ### Linux / macOS
 
-Native Linux packaging is being developed. The application architecture already supports Linux/macOS execution from compatible builds/source, but the Windows v0.2.0 package should not be treated as a Linux/macOS installer.
+Native Linux packaging is being developed. The application architecture already supports Linux/macOS execution from compatible builds/source, but the Windows package should not be treated as a Linux/macOS installer.
 
 On Linux, live capture normally requires libpcap and suitable capabilities/permissions. A typical capability configuration for a native binary is:
 
@@ -133,6 +133,8 @@ CORS_ORIGINS=*
 ```
 
 MongoDB is currently used for persisted saved sessions/settings. If MongoDB is unavailable, nScout continues to run while persistence-dependent functionality such as Saved Sessions is unavailable.
+
+On the v0.4 development branch, optional local LLM settings persist independently of MongoDB. See the setup section below.
 
 The AI integration is optional. Packet capture, protocol parsing, deterministic investigation intelligence, PCAP analysis and reporting do not require an AI key. Never commit API keys or credentials to the repository.
 
@@ -220,6 +222,42 @@ The v0.3 milestone adds:
 6. Expanded focused regression coverage (52 tests)
 
 See [the v0.3 Security Intelligence guide](docs/v0.3-security-intelligence.md) for rule coverage, filter syntax, API routes, risk scoring and the recommended analyst workflow.
+
+## nScout v0.4.0 — Investigation Platform (in development)
+
+v0.4 extends the security-intelligence foundation into a persistent analyst workflow.
+The development branch currently includes:
+
+- Expanded settings foundation for capture, investigation, privacy and detection preferences.
+- Investigation workspace lifecycle foundation with regression coverage; full application integration remains in progress.
+- Optional local LLM explanations for selected packets, findings and connections, using Ollama, LM Studio or a custom local OpenAI-compatible server.
+- AI disabled by default, with backend enforcement, model discovery, connection testing, model selection and timeout/output limits.
+- Persistent AI settings without MongoDB and observed-context fallback when local inference is unavailable.
+
+Capture preference wiring, workspace recovery, investigation notes/bookmarks,
+evidence locker, finding lifecycle, Live Hosts, PCAP comparison, baselines,
+expanded exports/redaction and further map/UI improvements remain under development.
+See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress.
+Full AI Analyst remains planned for v0.5; Sensor Mode and threat-intelligence integrations are later milestones.
+
+### Connect a local model (v0.4 development builds)
+
+1. Start a model server on the same computer as the nScout backend.
+2. Open **Settings → AI integration**, enable AI and select **Ollama**, **LM Studio** or a custom local provider.
+3. Enter the API base URL: `http://127.0.0.1:11434/v1` for Ollama or `http://127.0.0.1:1234/v1` for LM Studio.
+4. **Test connection / discover models**, choose or enter the exact model ID, then **Save**.
+
+Local providers need no cloud AI key. Only loopback endpoints are supported;
+local failures never automatically switch to cloud AI. Select a locally running
+model in your server. The existing cloud integration remains a separate explicit
+provider selection. See the guide for optional authentication and data-directory settings.
+
+### Validation status
+
+The current v0.4 development implementation has **75 passing focused backend regression tests**,
+and the changed frontend files pass syntax validation. Full frontend build,
+real-model testing and packaged Windows end-to-end validation remain pending.
+This is development progress, not a v0.4 release announcement.
 
 ## Project maturity & accuracy
 

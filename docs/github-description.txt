@@ -1,0 +1,1 @@
+nScout — open-source defensive network monitoring, packet analysis and security investigation. Live capture, PCAP analysis, host intelligence and evidence-based reporting. v0.4 in development adds persistent investigation workflows and optional local LLM explanations.
