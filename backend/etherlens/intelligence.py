@@ -4,6 +4,7 @@ from collections import Counter, defaultdict
 from typing import Any, Dict, Iterable, List, Tuple
 from .protocol_intelligence import tls_intelligence, packet_timeline
 from .security_intelligence import security_intelligence
+from .host_intelligence import host_intelligence
 
 TCP_PROTOCOLS = {"TCP", "HTTP", "HTTPS", "TLS", "SSH", "FTP", "SMTP", "SMTPS", "POP3", "POP3S", "IMAP", "IMAPS"}
 
@@ -97,4 +98,4 @@ def protocol_dashboard(packets):
 
 def investigation_summary(packets, threats):
     connections=connection_intelligence(packets); health=annotate_tcp_health(packets); health_counts=Counter(event for value in health.values() for event in value.get("events",[])); security=security_intelligence(packets, threats)
-    return {"overview":protocol_dashboard(packets),"connections":connections[:50],"devices":device_intelligence(packets)[:50],"dns":dns_intelligence(packets),"http":http_intelligence(packets),"tls":tls_intelligence(packets),"timeline":packet_timeline(packets),"tcp_health":dict(health_counts),"security":security,"threats":threats[:100],"interesting_packets":[{"packet_id":pid,**value} for pid,value in health.items()][:100]}
+    return {"overview":protocol_dashboard(packets),"connections":connections[:50],"devices":device_intelligence(packets)[:50],"hosts":host_intelligence(packets, security["findings"])[:100],"dns":dns_intelligence(packets),"http":http_intelligence(packets),"tls":tls_intelligence(packets),"timeline":packet_timeline(packets),"tcp_health":dict(health_counts),"security":security,"threats":threats[:100],"interesting_packets":[{"packet_id":pid,**value} for pid,value in health.items()][:100]}
