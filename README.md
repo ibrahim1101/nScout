@@ -4,7 +4,7 @@
 
 nScout is a defensive network monitoring, packet-analysis and investigation platform built to turn raw network traffic into understandable security context. It can inspect live traffic or imported PCAP captures, reconstruct conversations between hosts, analyze protocol behavior, surface network-health problems and defensive security findings, and provide an investigation workspace for drilling from a device or connection all the way down to individual packets.
 
-The current stable release is **nScout v0.2.0 — Intelligence Update**. A native Windows installer and portable Windows build are available from the repository's Releases page.
+The current stable release is **nScout v0.2.0 — Intelligence Update**. The `v0.3-security-intelligence` branch contains the upcoming **v0.3 Security Intelligence** release candidate. A native Windows installer and portable Windows build for the stable release are available from the repository's Releases page.
 
 ## What nScout does
 
@@ -51,9 +51,17 @@ nScout produces investigation leads for activity such as scan/flood patterns, su
 
 These findings are defensive heuristics and investigation leads, **not proof of compromise**. Analyst validation is still required.
 
+On the v0.3 branch, Detection Engine 2.0 enriches each finding with severity, confidence, investigation state and structured evidence. Host Intelligence associates those findings with observed hosts and calculates a transparent, bounded risk score for prioritization.
+
 ### Network Map & Timeline
 
 Explore observed hosts and connections through an investigation-oriented topology with focus/filter controls, traffic-weighted links, security overlays and direct connection drill-down. The packet timeline highlights traffic bursts, DNS events, connection activity, errors and findings.
+
+The v0.3 Investigation Timeline adds a chronological evidence view that correlates DNS queries/answers, TCP lifecycle events, TLS/HTTP metadata and security findings. It can be filtered by host, domain, connection/port, protocol, severity and time range.
+
+### Advanced Packet Search
+
+The v0.3 search parser supports `AND`, `OR`, `NOT`, parentheses, comparisons and `contains` across packet, endpoint, DNS, HTTP, TLS, TCP-health and security-severity fields. Legacy compact filters such as `ip:10.0.0.15 port:443 bytes>1000` remain supported. Malformed expressions are rejected with a clear validation error; expressions are parsed without dynamic code execution.
 
 ### PCAP Investigation Workspace
 
@@ -199,6 +207,19 @@ The Intelligence Update includes the completed investigation scope:
 14. HTML / PDF / JSON Investigation Reporting
 
 The v0.2.0 Windows release is built automatically through GitHub Actions and packaged as both a native installer and a portable ZIP.
+
+## nScout v0.3 Security Intelligence
+
+The v0.3 development branch adds:
+
+1. Detection Engine 2.0 with explainable evidence and confidence metadata
+2. Host Intelligence profiles and severity/confidence-based risk scoring
+3. Correlated Investigation Timeline
+4. Advanced boolean packet search with saved filters and history
+5. Security Operations Dashboard with posture, severity and risky-host views
+6. Expanded focused regression coverage (52 tests)
+
+See [the v0.3 Security Intelligence guide](docs/v0.3-security-intelligence.md) for rule coverage, filter syntax, API routes, risk scoring and the recommended analyst workflow.
 
 ## Project maturity & accuracy
 

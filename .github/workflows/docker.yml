@@ -2,7 +2,7 @@ name: docker-nscout
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "v0.3-security-intelligence"]
     paths:
       - "Dockerfile"
       - ".dockerignore"

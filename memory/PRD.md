@@ -51,6 +51,15 @@ A Wireshark-class network monitor with a modern SaaS UI, AI insights, Geo + ASN 
 - README.md rewritten with 3-way setup (Docker lite / standalone build / dev)
 - BUNDLE_README.md updated
 
+### v0.3 — Security Intelligence
+- Detection Engine 2.0: explainable passive findings with severity, confidence, state and structured evidence
+- Host Intelligence: identity, traffic, services, domains, peers, associated findings and risk scoring
+- Investigation Timeline: correlated DNS, TCP, TLS, HTTP and security events with analyst filters
+- Advanced Packet Search: boolean logic, parentheses, comparisons, protocol-aware fields and saved filters
+- Security Operations Dashboard: posture, severity distribution, risky hosts and recent detections
+- Focused deterministic regression suite expanded to 52 passing tests
+- Remaining release gate: documentation review plus Windows build/CI verification
+
 ## Distribution matrix
 | Mode | File | Command | Output |
 |---|---|---|---|
@@ -67,6 +76,7 @@ A Wireshark-class network monitor with a modern SaaS UI, AI insights, Geo + ASN 
 - Code-signing cert for Windows installer
 - Auto-updater channel
 - Suricata-style signature rules alongside behavioural threats
+- Persist analyst triage state and notes for Security Intelligence findings
 ### P2
 - Multi-user auth + capture permissions (settings/sessions currently unauth)
 - Webhook retry/backoff on 429
