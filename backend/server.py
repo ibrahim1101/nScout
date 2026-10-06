@@ -10,7 +10,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 from etherlens import analysis,geo,webhooks,intelligence
-from etherlens.filters import filter_packets
+from etherlens.filters import FilterSyntaxError,filter_packets,validate_filter
 from etherlens.reports import json_report,html_report,pdf_report
 from etherlens.protocol_intelligence import tls_intelligence,packet_timeline,packet_ascii
 from etherlens.explanations import explain_connection
@@ -62,8 +62,10 @@ async def status():return session.stats()
 async def list_packets(limit:int=500,protocol:Optional[str]=None,q:Optional[str]=None):return {"packets":session.list_packets(limit=limit,protocol=protocol,q=q)}
 @api.get("/packets/search")
 async def smart_packet_search(expression:str="",limit:int=500):
- packets=list(session.packets);health=intelligence.annotate_tcp_health(packets)
- return {"expression":expression,"packets":filter_packets(packets,expression,health=health,limit=max(1,min(limit,5000)))}
+ packets=list(session.packets);health=intelligence.annotate_tcp_health(packets);security=intelligence.security_intelligence(packets,session.list_threats())
+ try:matches=filter_packets(packets,expression,health=health,findings=security["findings"],limit=max(1,min(limit,5000)));validation=validate_filter(expression)
+ except FilterSyntaxError as exc:raise HTTPException(status_code=400,detail=f"Invalid filter: {exc}") from exc
+ return {"expression":expression,"validation":validation,"count":len(matches),"packets":matches}
 @api.get("/packets/{pid}")
 async def get_packet(pid:str):
  p=session.get_packet(pid)
