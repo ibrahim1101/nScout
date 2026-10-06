@@ -229,7 +229,7 @@ v0.4 extends the security-intelligence foundation into a persistent analyst work
 The development branch currently includes:
 
 - Expanded settings foundation for capture, investigation, privacy and detection preferences.
-- Durable local Investigation Workspace API for case metadata, evidence, analyst notes and finding lifecycle, with atomic persistence that does not require MongoDB; UI integration remains in progress.
+- Dedicated Investigation Workspace UI backed by durable local cases: bookmark selected packets, observed hosts and findings; add analyst notes; review/remove evidence; and manage finding lifecycle without requiring MongoDB.
 - Optional local LLM explanations for selected packets, findings and connections, using Ollama, LM Studio or a custom local OpenAI-compatible server.
 - AI disabled by default, with backend enforcement, model discovery, connection testing, model selection and timeout/output limits.
 - Persistent AI settings without MongoDB and observed-context fallback when local inference is unavailable.
