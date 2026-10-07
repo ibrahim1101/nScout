@@ -18,7 +18,14 @@ process-contract primitives needed by a shell without changing web/developer
 mode. The current packaged application remains unchanged until the shell is
 implemented and validated on Windows.
 
-The desktop spike must pass these gates before replacing the current launcher:
+The development branch now contains a Tauri 2 shell scaffold and a dedicated CI
+workflow. It packages the existing backend as a hidden one-file sidecar, waits
+for the launcher's atomic readiness file, redirects the native WebView to the
+loopback UI, displays a bounded startup failure state and terminates the owned
+child during application exit. The workflow uploads a development artifact and
+never publishes a release.
+
+The desktop build must still pass these gates before replacing the current launcher:
 
 - hidden sidecar process (no console window) bound only to loopback;
 - readiness timeout and actionable startup failure UI;
