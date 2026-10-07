@@ -230,6 +230,7 @@ The development branch currently includes:
 
 - Expanded settings foundation for capture, investigation, privacy and detection preferences.
 - Running captures can switch interfaces through a serialized transition, optionally preserving current evidence; the configured bounded packet-retention limit now applies in the backend.
+- Capture health now exposes runtime session identity, interface history, buffer pressure and live-to-simulated fallback warnings; saved snapshots retain capture provenance.
 - Dedicated Investigation Workspace UI backed by durable local cases: bookmark selected packets, observed hosts and findings; add analyst notes; review/remove evidence; and manage finding lifecycle without requiring MongoDB.
 - Optional local LLM explanations for selected packets, findings and connections, using Ollama, LM Studio or a custom local OpenAI-compatible server.
 - AI disabled by default, with backend enforcement, model discovery, connection testing, model selection and timeout/output limits.

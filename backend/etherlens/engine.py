@@ -97,7 +97,9 @@ def _simulate_one(anomaly=False):
 class CaptureSession:
     MIN_PACKET_LIMIT=1000; MAX_PACKET_LIMIT=1000000; DEFAULT_PACKET_LIMIT=5000; MAX_THREATS=300
     def __init__(self):
-        self.packet_limit=self.DEFAULT_PACKET_LIMIT; self.packets=deque(maxlen=self.packet_limit); self.threats=deque(maxlen=self.MAX_THREATS); self.by_id={}; self.running=False; self.mode="idle"; self.interface=""; self.counter=0; self.start_ts=None; self.dropped_packets=0; self.threat_state=ThreatState(); self.flows={}; self.hosts={}; self.timeline=deque(maxlen=120); self._task=None; self._subscribers=[]
+        self.packet_limit=self.DEFAULT_PACKET_LIMIT; self.packets=deque(maxlen=self.packet_limit); self.threats=deque(maxlen=self.MAX_THREATS); self.by_id={}; self.running=False; self.mode="idle"; self.interface=""; self.counter=0; self.start_ts=None; self.dropped_packets=0; self.threat_state=ThreatState(); self.flows={}; self.hosts={}; self.timeline=deque(maxlen=120); self._task=None; self._subscribers=[]; self._reset_capture_metadata()
+    def _reset_capture_metadata(self):
+        self.capture_id=str(uuid.uuid4()); self.capture_created_at=time.time(); self.requested_mode="idle"; self.last_packet_at=None; self.capture_error=None; self.fallback_active=False; self.switch_count=0; self.interface_history=deque(maxlen=50)
     def configure_packet_limit(self,packet_limit:int):
         if isinstance(packet_limit,bool) or not isinstance(packet_limit,int) or not self.MIN_PACKET_LIMIT<=packet_limit<=self.MAX_PACKET_LIMIT:
             raise ValueError(f"packet_limit must be between {self.MIN_PACKET_LIMIT} and {self.MAX_PACKET_LIMIT}")
@@ -106,7 +108,11 @@ class CaptureSession:
         self.packet_limit=packet_limit; self.packets=deque(retained,maxlen=packet_limit); retained_ids={packet["id"] for packet in retained}; self.by_id={pid:packet for pid,packet in self.by_id.items() if pid in retained_ids}
     async def start(self,interface="simulated",reset_started_at=True):
         if self.running:return
-        self.running=True; self.interface=interface; self.start_ts=time.time() if reset_started_at or self.start_ts is None else self.start_ts; self.mode="live" if interface not in ("simulated","",None) else "simulated"; self._task=asyncio.create_task(self._loop())
+        now=time.time(); previous=self.interface; requested_mode="live" if interface not in ("simulated","",None) else "simulated"
+        self.running=True; self.interface=interface; self.start_ts=now if reset_started_at or self.start_ts is None else self.start_ts; self.mode=requested_mode; self.requested_mode=requested_mode; self.capture_error=None; self.fallback_active=False
+        if previous and previous!=interface:self.switch_count+=1
+        self.interface_history.append({"from":previous or None,"to":interface,"timestamp":now,"preserved_packets":len(self.packets),"reason":"switch" if previous and previous!=interface else "start" if not previous else "resume"})
+        self._task=asyncio.create_task(self._loop())
     async def stop(self):
         self.running=False
         if self._task:
@@ -116,7 +122,7 @@ class CaptureSession:
             self._task=None
         self.mode="idle"
     def clear(self):
-        self.packets.clear(); self.threats.clear(); self.by_id.clear(); self.flows.clear(); self.hosts.clear(); self.timeline.clear(); self.counter=0; self.start_ts=None; self.dropped_packets=0; self.threat_state=ThreatState()
+        self.packets.clear(); self.threats.clear(); self.by_id.clear(); self.flows.clear(); self.hosts.clear(); self.timeline.clear(); self.counter=0; self.start_ts=None; self.dropped_packets=0; self.threat_state=ThreatState(); self.interface=""; self.mode="idle"; self._reset_capture_metadata()
     async def switch_interface(self,interface,preserve_packets=True,packet_limit=None):
         if not isinstance(interface,str) or not interface.strip():raise ValueError("interface is required")
         interface=interface.strip(); previous=self.interface; retained=len(self.packets)
@@ -136,6 +142,7 @@ class CaptureSession:
     def ingest(self,pkt,ts=None):
         self.counter+=1; ts=ts if ts is not None else time.time(); p=dissect_packet(pkt,self.counter,ts); evicted_id=self.packets[0]["id"] if len(self.packets)==self.packet_limit else None; self.packets.append(p); self.by_id[p["id"]]=p
         if evicted_id is not None:self.by_id.pop(evicted_id,None); self.dropped_packets+=1
+        self.last_packet_at=ts
         if p["src_ip"] and p["dst_ip"]:
             key=tuple(sorted((p["src_ip"],p["dst_ip"]))); f=self.flows.setdefault(key,{"a":key[0],"b":key[1],"packets":0,"bytes":0,"protocols":set(),"last_ts":ts}); f["packets"]+=1; f["bytes"]+=p["length"]; f["protocols"].add(p["protocol"]); f["last_ts"]=ts
             for ip in (p["src_ip"],p["dst_ip"]):
@@ -160,7 +167,9 @@ class CaptureSession:
                         while self.running:await asyncio.sleep(.5)
                     finally:sniffer.stop()
                     return
-                except Exception:self.mode="simulated"
+                except Exception as exc:
+                    if not self.running:return
+                    self.capture_error=f"Live capture unavailable ({type(exc).__name__})"; self.fallback_active=True; self.mode="simulated"
             while self.running:
                 p=self.ingest(_simulate_one(random.random()<.01)); await self._broadcast({"type":"packet","data":p}); await asyncio.sleep(.05)
         except asyncio.CancelledError:pass
@@ -172,7 +181,21 @@ class CaptureSession:
     def stats(self):
         now=time.time(); total=len(self.packets); total_bytes=sum(p["length"] for p in self.packets); duration=max(1,now-(self.start_ts or now)); pc={}
         for p in self.packets:pc[p["protocol"]]=pc.get(p["protocol"],0)+1
-        return {"running":self.running,"mode":self.mode,"interface":self.interface,"total_packets":total,"total_bytes":total_bytes,"packet_limit":self.packet_limit,"dropped_packets":self.dropped_packets,"pps":round(total/duration,1),"mbps":round(total_bytes*8/duration/1e6,3),"threats":len(self.threats),"unique_hosts":len(self.hosts),"unique_flows":len(self.flows),"protocol_counts":pc,"duration_sec":round(duration,1)}
+        return {"running":self.running,"mode":self.mode,"requested_mode":self.requested_mode,"interface":self.interface,"capture_id":self.capture_id,"capture_created_at":self.capture_created_at,"capture_started_at":self.start_ts,"last_packet_at":self.last_packet_at,"switch_count":self.switch_count,"total_packets":total,"total_bytes":total_bytes,"packet_limit":self.packet_limit,"buffer_utilization":round(total/self.packet_limit,4),"dropped_packets":self.dropped_packets,"capture_health":self.capture_health(now),"pps":round(total/duration,1),"mbps":round(total_bytes*8/duration/1e6,3),"threats":len(self.threats),"unique_hosts":len(self.hosts),"unique_flows":len(self.flows),"protocol_counts":pc,"duration_sec":round(duration,1)}
+    def capture_health(self,now=None):
+        now=now or time.time()
+        if not self.running:
+            if self.mode in ("pcap","replay"):return {"state":"ready","reason":"Offline capture evidence is loaded.","fallback_active":False}
+            return {"state":"idle","reason":"Capture is stopped.","fallback_active":self.fallback_active}
+        if self.fallback_active:return {"state":"degraded","reason":"Live capture failed; simulated fallback is active.","fallback_active":True}
+        if self.capture_error:return {"state":"error","reason":self.capture_error,"fallback_active":False}
+        if self.running and self.last_packet_at is None and self.start_ts and now-self.start_ts>5:return {"state":"warning","reason":"Capture is running but no packets have arrived yet.","fallback_active":False}
+        if self.running and self.last_packet_at and now-self.last_packet_at>10:return {"state":"warning","reason":"No packets observed in the last 10 seconds.","fallback_active":False}
+        if self.dropped_packets and len(self.packets)>=self.packet_limit:return {"state":"warning","reason":"The retention limit is active; oldest packets are being evicted.","fallback_active":False}
+        return {"state":"healthy","reason":"Capture is running and packet processing is responsive.","fallback_active":False}
+    def diagnostics(self):
+        stats=self.stats()
+        return {"capture_id":self.capture_id,"created_at":self.capture_created_at,"started_at":self.start_ts,"running":self.running,"requested_mode":self.requested_mode,"actual_mode":self.mode,"interface":self.interface,"health":stats["capture_health"],"last_packet_at":self.last_packet_at,"buffer":{"packets":len(self.packets),"limit":self.packet_limit,"utilization":stats["buffer_utilization"],"evicted_packets":self.dropped_packets},"switch_count":self.switch_count,"interface_history":list(self.interface_history),"task_active":bool(self._task and not self._task.done())}
     def timeline_series(self):return list(self.timeline)
     def top_talkers(self,limit=10):return [{"ip":h["ip"],"packets":h["packets"],"bytes":h["bytes"],"ports":sorted(h["ports"])[:10]} for h in sorted(self.hosts.values(),key=lambda x:x["bytes"],reverse=True)[:limit]]
     def topology(self):return {"nodes":[{"id":ip,"packets":h["packets"],"bytes":h["bytes"],"ports":sorted(h["ports"])[:8],"type":"local" if ip.startswith(("10.","192.168.","172.")) else "external"} for ip,h in self.hosts.items()],"edges":[{"source":a,"target":b,"packets":f["packets"],"bytes":f["bytes"],"protocols":sorted(f["protocols"])[:4]} for (a,b),f in self.flows.items()]}

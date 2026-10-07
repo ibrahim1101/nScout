@@ -115,6 +115,8 @@ async def clear_capture():
  async with _capture_control_lock:session.clear(); return {"status":"cleared","stats":session.stats()}
 @api.get("/capture/status")
 async def status():return session.stats()
+@api.get("/capture/diagnostics")
+async def capture_diagnostics():return session.diagnostics()
 @api.get("/packets")
 async def list_packets(limit:int=500,protocol:Optional[str]=None,q:Optional[str]=None):return {"packets":session.list_packets(limit=limit,protocol=protocol,q=q)}
 @api.get("/packets/search")

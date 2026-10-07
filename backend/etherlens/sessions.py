@@ -44,6 +44,12 @@ async def save_session(db, session: CaptureSession, name: str) -> Dict[str, Any]
         "packet_count": len(pkts),
         "threat_count": len(session.threats),
         "duration_sec": session.stats().get("duration_sec"),
+        "source_capture_id": session.capture_id,
+        "source_interface": session.interface,
+        "source_mode": session.mode,
+        "packet_limit": session.packet_limit,
+        "evicted_packets": session.dropped_packets,
+        "interface_history": list(session.interface_history),
         "packets": [_packet_doc(p) for p in pkts],
         "threats": list(session.threats),
     }
@@ -62,6 +68,10 @@ async def list_sessions(db) -> List[Dict[str, Any]]:
             "packet_count": doc.get("packet_count", 0),
             "threat_count": doc.get("threat_count", 0),
             "duration_sec": doc.get("duration_sec"),
+            "source_capture_id": doc.get("source_capture_id"),
+            "source_interface": doc.get("source_interface"),
+            "source_mode": doc.get("source_mode"),
+            "evicted_packets": doc.get("evicted_packets", 0),
         })
     return rows
 
@@ -80,6 +90,7 @@ async def load_session(db, session: CaptureSession, sid: str) -> Dict[str, Any]:
     await session.stop()
     session.clear()
     session.mode = "replay"
+    session.requested_mode = "replay"
     session.interface = f"session:{doc.get('name','?')}"
     session.start_ts = time.time()
 

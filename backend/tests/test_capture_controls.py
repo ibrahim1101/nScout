@@ -47,6 +47,7 @@ def test_packet_limit_rejects_unbounded_values():
 def test_interface_switch_preserves_or_clears_capture_state():
     async def scenario():
         session = CaptureSession()
+        original_capture_id = session.capture_id
         first = session.ingest(packet(1))
         session.interface = "adapter-a"
         session.running = True
@@ -56,11 +57,47 @@ def test_interface_switch_preserves_or_clears_capture_state():
         assert preserved["previous_interface"] == "adapter-a"
         assert preserved["preserved_packets"] == 1
         assert session.get_packet(first["id"]) is not None
+        assert session.capture_id == original_capture_id
+        assert session.switch_count == 1
 
         cleared = await session.switch_interface("simulated", False, 1000)
         assert cleared["preserved_packets"] == 0
         assert session.get_packet(first["id"]) is None
         assert session.counter == 0
+        assert session.capture_id != original_capture_id
         await session.stop()
+
+    asyncio.run(scenario())
+
+
+def test_capture_diagnostics_explain_fallback_and_buffer_pressure():
+    session = CaptureSession()
+    session.running = True
+    session.requested_mode = "live"
+    session.mode = "simulated"
+    session.interface = "adapter-a"
+    session.capture_error = "Live capture unavailable (RuntimeError)"
+    session.fallback_active = True
+
+    diagnostics = session.diagnostics()
+
+    assert diagnostics["health"]["state"] == "degraded"
+    assert diagnostics["health"]["fallback_active"] is True
+    assert diagnostics["requested_mode"] == "live"
+    assert diagnostics["actual_mode"] == "simulated"
+    assert diagnostics["buffer"]["limit"] == session.DEFAULT_PACKET_LIMIT
+
+
+def test_capture_metadata_records_interface_history_without_packet_content():
+    async def scenario():
+        session = CaptureSession()
+        await session.start("simulated")
+        await session.switch_interface("adapter-b", True, 1000)
+        diagnostics = session.diagnostics()
+        await session.stop()
+
+        assert diagnostics["switch_count"] == 1
+        assert [row["to"] for row in diagnostics["interface_history"]] == ["simulated", "adapter-b"]
+        assert all("packets" not in row for row in diagnostics["interface_history"])
 
     asyncio.run(scenario())
