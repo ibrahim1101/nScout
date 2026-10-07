@@ -5,7 +5,7 @@ export const KEYBOARD_SHORTCUTS = [
   { id: "toggle-capture", category: "Capture", keys: ["Space"], description: "Start or stop capture", code: "Space" },
   { id: "close-panels", category: "Navigation", keys: ["Esc"], description: "Close the active drawer or panel", key: "Escape", allowInForm: true },
   { id: "shortcut-help", category: "Navigation", keys: ["?"], description: "Open this keyboard-shortcut reference", key: "?", ignoreShift: true },
-  ...["Packets", "Intelligence", "Investigations", "PCAP Investigation", "Analytics", "Flows", "Topology", "Threats"].map((label, index) => ({
+  ...["Packets", "Intelligence", "Live Hosts", "Investigations", "PCAP Investigation", "Analytics", "Flows", "Topology", "Threats"].map((label, index) => ({
     id: `tab-${index + 1}`,
     category: "Navigation",
     keys: ["Alt", String(index + 1)],

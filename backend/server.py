@@ -21,12 +21,14 @@ from etherlens.capture_backends import provider_inventory
 from etherlens.sessions import CaptureSessionNotFound,LocalCaptureSessionStore,delete_session,list_sessions,load_session,restore_capture_session
 from etherlens.investigation_workspace import EvidenceItem
 from etherlens.investigation_store import InvestigationNotFound,InvestigationStore
+from etherlens.host_profiles import HostProfileStore
 ROOT_DIR=Path(__file__).parent; load_dotenv(ROOT_DIR/".env"); logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s - %(message)s"); logger=logging.getLogger("nscout")
 mongo_url=os.environ.get("MONGO_URL","mongodb://127.0.0.1:27017"); db_name=os.environ.get("DB_NAME","nscout"); client=AsyncIOMotorClient(mongo_url,serverSelectionTimeoutMS=1500,connectTimeoutMS=1500); db=client[db_name]; settings_col=db.etherlens_settings; mongo_available=False; session=CaptureSession(); app=FastAPI(title="nScout"); api=APIRouter(prefix="/api")
 DATA_DIR=Path(os.environ.get("NSCOUT_DATA_DIR", str(Path.home()/".nscout")))
 AI_SETTINGS_PATH=DATA_DIR/"ai-settings.json"
 _investigation_store=InvestigationStore(DATA_DIR/"investigations")
 _capture_session_store=LocalCaptureSessionStore(DATA_DIR/"capture-sessions")
+_host_profile_store=HostProfileStore(DATA_DIR/"host-profiles.json")
 _ai_settings=ai_provider.load_settings(AI_SETTINGS_PATH)
 _ai_lock=asyncio.Lock()
 @api.get("/settings/ai")
@@ -67,6 +69,8 @@ class InvestigationNoteRequest(BaseModel):
  text:str=Field(min_length=1,max_length=10000);author:str=Field(default="analyst",min_length=1,max_length=160)
 class FindingStateRequest(BaseModel):
  state:str=Field(min_length=1,max_length=32);note:str=Field(default="",max_length=4000)
+class HostProfileRequest(BaseModel):
+ alias:Optional[str]=Field(default=None,max_length=120);watchlisted:Optional[bool]=None
 _webhook_cache={"slack_url":"","discord_url":"","min_severity":"high"}; _SEV_RANK={"low":1,"medium":2,"high":3,"critical":4}
 _capture_control_lock=asyncio.Lock()
 async def _load_settings():
@@ -162,7 +166,16 @@ async def devices_info():return {"devices":intelligence.device_intelligence(list
 @api.get("/intelligence/hosts")
 async def hosts_info():
  packets=list(session.packets);security=intelligence.security_intelligence(packets,session.list_threats())
- return {"hosts":intelligence.host_intelligence(packets,security["findings"])}
+ profiles=intelligence.host_intelligence(packets,security["findings"])
+ try:profiles=await asyncio.to_thread(_host_profile_store.enrich,profiles)
+ except ValueError as exc:logger.warning("Host profile persistence unavailable: %s",exc)
+ return {"hosts":profiles}
+@api.patch("/intelligence/hosts/{host_ip}")
+async def update_host_profile(host_ip:str,body:HostProfileRequest):
+ if body.alias is None and body.watchlisted is None:raise HTTPException(status_code=400,detail="Alias or watchlist state is required")
+ try:profile=await asyncio.to_thread(_host_profile_store.update,host_ip,body.alias,body.watchlisted)
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ return {"profile":profile}
 @api.get("/intelligence/timeline")
 async def investigation_timeline_view(host:str="",domain:str="",connection:str="",protocol:str="",min_severity:str="info",start:Optional[float]=None,end:Optional[float]=None,limit:int=1000):
  packets=list(session.packets);security=intelligence.security_intelligence(packets,session.list_threats())

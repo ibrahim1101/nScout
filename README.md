@@ -239,9 +239,10 @@ The development branch currently includes:
 - Persistent AI settings without MongoDB and observed-context fallback when local inference is unavailable.
 - Local Capture Sessions with atomic persistence, replay and capture provenance without requiring MongoDB; legacy Mongo sessions remain accessible when MongoDB is configured.
 - Searchable in-app Keyboard Shortcuts help sourced from the same definitions as the implemented global shortcuts.
+- A dedicated Live Hosts investigation view with passive Active/Recently Seen/Inactive semantics, persistent analyst aliases and watchlists, bounded activity history, host search and packet drill-down.
 
 Capture preference wiring, workspace recovery, investigation notes/bookmarks,
-evidence locker, finding lifecycle, Live Hosts, PCAP comparison, baselines,
+evidence locker, finding lifecycle, PCAP comparison, baselines,
 expanded exports/redaction and further map/UI improvements remain under development.
 See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for development-only validation gates.
 Full AI Analyst remains planned for v0.5; Sensor Mode and threat-intelligence integrations are later milestones.
