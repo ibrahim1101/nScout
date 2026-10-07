@@ -65,6 +65,143 @@ jobs:
       - name: Upload development installer
         uses: actions/upload-artifact@v4
         with:
-          name: nScout-v0.4-desktop-development
+          name: nScout-v0.4-desktop-windows-development
           path: desktop/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+  linux-desktop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential \
+            libayatana-appindicator3-dev \
+            libpcap-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf
+          python -m pip install --upgrade pip pyinstaller
+          python -m pip install -r backend/requirements.txt
+          npm install --global yarn@1.22.22
+
+      - name: Build React UI
+        working-directory: frontend
+        env:
+          REACT_APP_BACKEND_URL: ""
+          DISABLE_EMERGENT_OVERLAY: "true"
+        run: |
+          if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else yarn install; fi
+          yarn build
+          test -f build/index.html
+
+      - name: Build Linux backend sidecar
+        run: |
+          pyinstaller --noconfirm --clean nscout-sidecar.spec
+          test -x dist/nscout-backend
+          target_triple="$(rustc -vV | sed -n 's/^host: //p')"
+          test -n "$target_triple"
+          mkdir -p desktop/src-tauri/binaries
+          install -m 0755 dist/nscout-backend \
+            "desktop/src-tauri/binaries/nscout-backend-${target_triple}"
+
+      - name: Build development-only Linux packages
+        working-directory: desktop
+        run: |
+          npm install --no-audit --no-fund
+          cargo test --manifest-path src-tauri/Cargo.toml
+          npm run tauri build -- --bundles deb,appimage
+
+      - name: Upload development Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nScout-v0.4-desktop-linux-development
+          path: |
+            desktop/src-tauri/target/release/bundle/deb/*.deb
+            desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
+  macos-desktop:
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install macOS desktop dependencies
+        run: |
+          python -m pip install --upgrade pip pyinstaller
+          python -m pip install -r backend/requirements.txt
+          npm install --global yarn@1.22.22
+
+      - name: Build React UI
+        working-directory: frontend
+        env:
+          REACT_APP_BACKEND_URL: ""
+          DISABLE_EMERGENT_OVERLAY: "true"
+        run: |
+          if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else yarn install; fi
+          yarn build
+          test -f build/index.html
+
+      - name: Build macOS backend sidecar
+        run: |
+          pyinstaller --noconfirm --clean nscout-sidecar.spec
+          test -x dist/nscout-backend
+          target_triple="$(rustc -vV | sed -n 's/^host: //p')"
+          test -n "$target_triple"
+          mkdir -p desktop/src-tauri/binaries
+          install -m 0755 dist/nscout-backend \
+            "desktop/src-tauri/binaries/nscout-backend-${target_triple}"
+
+      - name: Generate native macOS icon
+        run: |
+          iconset="$RUNNER_TEMP/nscout.iconset"
+          mkdir -p "$iconset"
+          for size in 16 32 128 256 512; do
+            sips -z "$size" "$size" assets/nscout-logo.png \
+              --out "$iconset/icon_${size}x${size}.png" >/dev/null
+            doubled=$((size * 2))
+            sips -z "$doubled" "$doubled" assets/nscout-logo.png \
+              --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+          done
+          iconutil --convert icns "$iconset" --output assets/nscout.icns
+          test -s assets/nscout.icns
+
+      - name: Build development-only macOS packages
+        working-directory: desktop
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
+        run: |
+          npm install --no-audit --no-fund
+          cargo test --manifest-path src-tauri/Cargo.toml
+          npm run tauri build -- --bundles app,dmg \
+            --config src-tauri/tauri.macos.conf.json
+
+      - name: Upload development macOS packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nScout-v0.4-desktop-macos-development
+          path: |
+            desktop/src-tauri/target/release/bundle/macos/*.app
+            desktop/src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error

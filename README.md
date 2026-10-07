@@ -105,7 +105,11 @@ Install **Npcap** to provide packet-capture support. Running nScout as Administr
 
 ### Linux / macOS
 
-Native Linux packaging is being developed. The application architecture already supports Linux/macOS execution from compatible builds/source, but the Windows package should not be treated as a Linux/macOS installer.
+The v0.4 development branch builds unsigned Linux AppImage/deb and macOS
+app/DMG artifacts in CI using the same React/FastAPI + Tauri application. These
+artifacts are development-only and are not stable downloads: clean-install,
+capture-permission and investigation-workflow validation is still pending. The
+stable v0.3 Windows packages must not be treated as Linux/macOS installers.
 
 On Linux, live capture normally requires libpcap and suitable capabilities/permissions. A typical capability configuration for a native binary is:
 
@@ -186,8 +190,8 @@ nScout uses:
 - **WebSockets** — live application updates.
 - **MongoDB / Motor / PyMongo** — optional legacy session access and webhook-setting persistence.
 - **PyInstaller** — standalone application packaging.
-- **Inno Setup** — native Windows installer.
-- **GitHub Actions** — automated verification and Windows release builds.
+- **Inno Setup / Tauri** — stable Windows installer and development desktop packaging.
+- **GitHub Actions** — automated verification plus development Windows, Linux and macOS package builds.
 
 ## nScout v0.2.0
 
@@ -234,7 +238,7 @@ The development branch currently includes:
 - Dedicated Investigation Workspace UI backed by durable local cases: bookmark selected packets, observed hosts and findings; add analyst notes; review/remove evidence; and manage finding lifecycle without requiring MongoDB.
 - Optional local LLM explanations for selected packets, findings and connections, using Ollama, LM Studio or a custom local OpenAI-compatible server.
 - AI disabled by default, with backend enforcement, model discovery, connection testing, model selection and timeout/output limits.
-- Development-only Tauri 2 shell scaffold with a native window, hidden FastAPI sidecar, readiness/error handling, single-instance focus, bounded lifecycle diagnostics and owned-process shutdown while preserving React/FastAPI; the stable v0.3 package still uses the browser launcher.
+- Development-only Tauri 2 shell with a native window, packaged FastAPI sidecar, readiness/error handling, single-instance focus, bounded lifecycle diagnostics and owned-process shutdown while preserving React/FastAPI. CI now constructs Windows NSIS, Linux AppImage/deb and macOS app/DMG artifacts; clean-system support validation remains pending, and stable v0.3 still uses the browser launcher.
 - A capture-provider capability boundary and documented Windows Pktmon/WFP evaluation. Npcap remains required for supported Windows live capture until native parity is verified.
 - Persistent AI settings without MongoDB and observed-context fallback when local inference is unavailable.
 - Local Capture Sessions with atomic persistence, replay and capture provenance without requiring MongoDB; legacy Mongo sessions remain accessible when MongoDB is configured.
@@ -245,7 +249,7 @@ The development branch currently includes:
 Capture preference wiring, workspace recovery, investigation notes/bookmarks,
 evidence locker, finding lifecycle, PCAP comparison, baselines,
 expanded exports/redaction and further map/UI improvements remain under development.
-See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for development-only validation gates.
+See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, the [cross-platform desktop packaging guide](docs/cross-platform-desktop.md) for development builds and release gates, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for Windows capture validation.
 Full AI Analyst remains planned for v0.5; Sensor Mode and threat-intelligence integrations are later milestones.
 
 ### Connect a local model (v0.4 development builds)
@@ -262,9 +266,11 @@ provider selection. See the guide for optional authentication and data-directory
 
 ### Validation status
 
-The current v0.4 development implementation has **90 passing focused backend regression tests**.
-The branch is protected by Docker smoke testing and a Windows gate that builds
-the React UI, PyInstaller bundle and installer. Real-model testing remains pending.
+The current v0.4 development implementation has **107 passing focused backend regression tests**.
+The branch is protected by Docker smoke testing, the existing Windows
+PyInstaller/Inno gate and development Tauri package builds for Windows, Linux
+and macOS. Package construction is not equivalent to clean-system support.
+Real-model and operating-system lifecycle/capture testing remain pending.
 This is development progress, not a v0.4 release announcement.
 
 ## Project maturity & accuracy

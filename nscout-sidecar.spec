@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """Development-only one-file backend sidecar for the Tauri desktop shell."""
+import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
@@ -8,6 +9,7 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 PROJECT_ROOT = Path(".").resolve()
 BACKEND = PROJECT_ROOT / "backend"
 FRONTEND_BUILD = PROJECT_ROOT / "frontend" / "build"
+WINDOWS_ICON = PROJECT_ROOT / "assets" / "nscout.ico"
 
 if not (FRONTEND_BUILD / "index.html").exists():
     raise SystemExit("React build missing; build frontend before the desktop sidecar")
@@ -65,5 +67,8 @@ exe = EXE(
     upx=True,
     console=False,
     disable_windowed_traceback=False,
-    icon=str(PROJECT_ROOT / "assets" / "nscout.ico"),
+    # ICO is a Windows executable resource. Tauri applies the application icon
+    # when packaging Linux/macOS bundles, so avoid asking PyInstaller to
+    # reinterpret a Windows-only resource on those platforms.
+    icon=str(WINDOWS_ICON) if sys.platform == "win32" else None,
 )

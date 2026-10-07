@@ -26,9 +26,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": "all",
     "externalBin": ["binaries/nscout-backend"],
-    "icon": ["../../assets/nscout.ico"],
+    "icon": ["../../assets/nscout-logo.png", "../../assets/nscout.ico"],
     "shortDescription": "Defensive network monitoring and investigation",
     "longDescription": "nScout defensive network monitoring, packet analysis and investigation platform"
   }

@@ -1,7 +1,7 @@
 [package]
 name = "nscout-desktop"
 version = "0.4.0-dev.1"
-description = "Development-only nScout Windows desktop shell"
+description = "Development-only cross-platform nScout desktop shell"
 authors = ["nScout"]
 edition = "2021"
 
