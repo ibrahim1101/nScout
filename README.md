@@ -232,12 +232,14 @@ The development branch currently includes:
 - Dedicated Investigation Workspace UI backed by durable local cases: bookmark selected packets, observed hosts and findings; add analyst notes; review/remove evidence; and manage finding lifecycle without requiring MongoDB.
 - Optional local LLM explanations for selected packets, findings and connections, using Ollama, LM Studio or a custom local OpenAI-compatible server.
 - AI disabled by default, with backend enforcement, model discovery, connection testing, model selection and timeout/output limits.
+- Desktop-transition groundwork for a Tauri-hosted native window while preserving the React/FastAPI application; the stable v0.3 package still uses the browser launcher.
+- A capture-provider capability boundary and documented Windows Pktmon/WFP evaluation. Npcap remains required for supported Windows live capture until native parity is verified.
 - Persistent AI settings without MongoDB and observed-context fallback when local inference is unavailable.
 
 Capture preference wiring, workspace recovery, investigation notes/bookmarks,
 evidence locker, finding lifecycle, Live Hosts, PCAP comparison, baselines,
 expanded exports/redaction and further map/UI improvements remain under development.
-See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress.
+See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for development-only validation gates.
 Full AI Analyst remains planned for v0.5; Sensor Mode and threat-intelligence integrations are later milestones.
 
 ### Connect a local model (v0.4 development builds)
@@ -254,7 +256,7 @@ provider selection. See the guide for optional authentication and data-directory
 
 ### Validation status
 
-The current v0.4 development implementation has **81 passing focused backend regression tests**.
+The current v0.4 development implementation has **90 passing focused backend regression tests**.
 The branch is protected by Docker smoke testing and a Windows gate that builds
 the React UI, PyInstaller bundle and installer. Real-model testing remains pending.
 This is development progress, not a v0.4 release announcement.

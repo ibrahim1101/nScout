@@ -5,6 +5,8 @@ at the same origin, and opens the browser only after the server is ready.
 """
 from __future__ import annotations
 
+import argparse
+import json
 import os
 import socket
 import sys
@@ -54,32 +56,62 @@ def _ensure_env() -> None:
     os.environ.setdefault("CORS_ORIGINS", "*")
 
 
-def _open_when_ready(url: str) -> None:
-    """Wait for FastAPI to accept requests before opening the browser."""
+def _truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _write_readiness(path: Path, url: str) -> None:
+    """Atomically publish sidecar readiness for a supervising desktop shell."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps({"status": "ready", "url": url}), encoding="utf-8")
+    temporary.replace(path)
+
+
+def _signal_when_ready(url: str, open_browser: bool, readiness_file: Path | None) -> None:
+    """Wait for FastAPI, then notify the selected client without racing startup."""
     health_url = url + "/api/"
     for _ in range(120):
         try:
             with urllib.request.urlopen(health_url, timeout=0.5) as response:
                 if 200 <= response.status < 500:
-                    webbrowser.open(url)
+                    if readiness_file:
+                        _write_readiness(readiness_file, url)
+                    if open_browser:
+                        webbrowser.open(url)
                     return
         except Exception:
             time.sleep(0.25)
     print(f" nScout did not become ready. Check the errors above, then try {url}")
 
 
-def main() -> None:
+def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the local nScout backend and UI")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("NSCOUT_PORT", "8001")))
+    parser.add_argument("--no-browser", action="store_true", help="Do not launch an external browser")
+    parser.add_argument("--readiness-file", type=Path, help="Write local JSON after the API is ready")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = _arguments(argv)
     _ensure_env()
-    port = _pick_port(8001)
+    port = _pick_port(args.port)
     url = f"http://127.0.0.1:{port}"
+    desktop_mode = _truthy(os.environ.get("NSCOUT_DESKTOP_MODE"))
+    open_browser = not (args.no_browser or desktop_mode)
 
     print("=" * 60)
     print(" nScout - starting")
-    print(f"  Open in browser: {url}")
+    print(f"  Local application URL: {url}")
     print("  Press Ctrl+C to stop")
     print("=" * 60)
 
-    threading.Thread(target=_open_when_ready, args=(url,), daemon=True).start()
+    threading.Thread(
+        target=_signal_when_ready,
+        args=(url, open_browser, args.readiness_file),
+        daemon=True,
+    ).start()
 
     from server import app
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")

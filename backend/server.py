@@ -17,6 +17,7 @@ from etherlens.explanations import explain_connection
 from etherlens.connection_selection import select_connection
 from etherlens.ai_context import connection_context,connection_prompt
 from etherlens.engine import CaptureSession
+from etherlens.capture_backends import provider_inventory
 from etherlens.sessions import save_session,list_sessions,load_session,delete_session
 from etherlens.investigation_workspace import EvidenceItem
 from etherlens.investigation_store import InvestigationNotFound,InvestigationStore
@@ -82,6 +83,8 @@ async def interfaces():
   for name in psutil.net_if_addrs():out.append({"name":name,"label":name,"capturable":True,"live":True})
  except Exception:pass
  return {"interfaces":out}
+@api.get("/capture/backends")
+async def capture_backends():return provider_inventory()
 @api.post("/capture/start")
 async def start_capture(req:StartRequest):
  if session.running:return {"status":"already_running","stats":session.stats()}
