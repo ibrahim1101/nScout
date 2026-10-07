@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Play, Square, Trash2, Upload, Moon, Sun, Radio, Zap, HardDrive, ShieldAlert, Search, Download, Settings, Archive, Activity } from "lucide-react";
+import { Play, Square, Trash2, Upload, Moon, Sun, Radio, Zap, HardDrive, ShieldAlert, Search, Download, Settings, Archive, Activity, CircleHelp } from "lucide-react";
 import { fmtBps, API } from "./lib";
 
 const PROTOCOLS = ["", "TCP", "UDP", "HTTPS", "HTTP", "DNS", "ICMP", "ARP", "SSH", "TLS"];
@@ -7,7 +7,7 @@ const PROTOCOLS = ["", "TCP", "UDP", "HTTPS", "HTTP", "DNS", "ICMP", "ARP", "SSH
 export default function HeaderNav({
   theme, setTheme, interfaces, iface, setIface, status,
   onStart, onStop, onClear, onUpload, filter, setFilter, protocolFilter, setProtocolFilter,
-  onOpenSettings, onOpenSessions,
+  onOpenSettings, onOpenShortcuts, onOpenSessions,
 }) {
   const fileRef = useRef(null);
 
@@ -102,10 +102,19 @@ export default function HeaderNav({
               <Archive size={14} /> Sessions
             </button>
             <button
+              data-testid="shortcuts-open-btn"
+              onClick={onOpenShortcuts}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-colors"
+              title="Keyboard shortcuts (?)"
+              aria-label="Keyboard shortcuts"
+            >
+              <CircleHelp size={14} />
+            </button>
+            <button
               data-testid="settings-open-btn"
               onClick={onOpenSettings}
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-colors"
-              title="Alert settings"
+              title="Settings (Ctrl / Command + comma)"
             >
               <Settings size={14} />
             </button>

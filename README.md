@@ -238,6 +238,7 @@ The development branch currently includes:
 - A capture-provider capability boundary and documented Windows Pktmon/WFP evaluation. Npcap remains required for supported Windows live capture until native parity is verified.
 - Persistent AI settings without MongoDB and observed-context fallback when local inference is unavailable.
 - Local Capture Sessions with atomic persistence, replay and capture provenance without requiring MongoDB; legacy Mongo sessions remain accessible when MongoDB is configured.
+- Searchable in-app Keyboard Shortcuts help sourced from the same definitions as the implemented global shortcuts.
 
 Capture preference wiring, workspace recovery, investigation notes/bookmarks,
 evidence locker, finding lifecycle, Live Hosts, PCAP comparison, baselines,
