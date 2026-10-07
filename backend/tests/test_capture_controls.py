@@ -101,3 +101,13 @@ def test_capture_metadata_records_interface_history_without_packet_content():
         assert all("packets" not in row for row in diagnostics["interface_history"])
 
     asyncio.run(scenario())
+
+
+def test_packet_timestamp_keeps_epoch_and_explicit_utc_transport_time():
+    captured_at = 1_700_000_000.125
+    item = CaptureSession().ingest(packet(1), ts=captured_at)
+
+    assert item["timestamp"] == captured_at
+    assert item["timestamp_iso"].endswith("Z")
+    assert item["time_str"].endswith("Z")
+    assert item["layers"][0]["fields"]["Arrival Time"] == item["timestamp_iso"]

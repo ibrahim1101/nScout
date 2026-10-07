@@ -240,6 +240,7 @@ The development branch currently includes:
 - Local Capture Sessions with atomic persistence, replay and capture provenance without requiring MongoDB; legacy Mongo sessions remain accessible when MongoDB is configured.
 - Searchable in-app Keyboard Shortcuts help sourced from the same definitions as the implemented global shortcuts.
 - A dedicated Live Hosts investigation view with passive Active/Recently Seen/Inactive semantics, persistent analyst aliases and watchlists, bounded activity history, host search and packet drill-down.
+- Packet timestamps preserve canonical UTC/epoch evidence while displaying in the user's system-local timezone across desktop platforms.
 
 Capture preference wiring, workspace recovery, investigation notes/bookmarks,
 evidence locker, finding lifecycle, PCAP comparison, baselines,

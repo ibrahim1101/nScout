@@ -31,7 +31,8 @@ def dissect_packet(pkt:Packet,number:int,ts:float)->Dict[str,Any]:
     try: pkt=pkt.__class__(bytes(pkt))
     except Exception: pass
     raw=bytes(pkt); layers=[]; src_ip=dst_ip=""; src_port=dst_port=None; protocol="ETH"; info=""; payload_size=0
-    layers.append({"name":"Frame","fields":{"Frame Number":number,"Arrival Time":datetime.fromtimestamp(ts,tz=timezone.utc).isoformat(),"Frame Length":f"{len(raw)} bytes","Capture Length":f"{len(raw)} bytes"}})
+    captured_at=datetime.fromtimestamp(ts,tz=timezone.utc); timestamp_iso=captured_at.isoformat().replace("+00:00","Z")
+    layers.append({"name":"Frame","fields":{"Frame Number":number,"Arrival Time":timestamp_iso,"Frame Length":f"{len(raw)} bytes","Capture Length":f"{len(raw)} bytes"}})
     if Ether in pkt:
         e=pkt[Ether]; layers.append({"name":"Ethernet II","fields":{"Destination":e.dst,"Source":e.src,"Type":hex(e.type)}})
     if ARP in pkt:
@@ -62,7 +63,7 @@ def dissect_packet(pkt:Packet,number:int,ts:float)->Dict[str,Any]:
         elif HTTPResponse in pkt:
             h=pkt[HTTPResponse]; protocol="HTTP"; code=_decode(h.Status_Code); reason=_decode(h.Reason_Phrase); info=f"HTTP {code} {reason}"; layers.append({"name":"Hypertext Transfer Protocol","fields":{"Status":f"{code} {reason}","Status Code":code,"Server":_decode(h.Server),"Content-Type":_decode(getattr(h,"Content_Type",b"")),"Content-Length":_decode(getattr(h,"Content_Length",b""))}})
     except Exception: pass
-    return {"id":str(uuid.uuid4()),"number":number,"timestamp":ts,"time_str":datetime.fromtimestamp(ts,tz=timezone.utc).strftime("%H:%M:%S.%f")[:-3],"src_ip":src_ip,"dst_ip":dst_ip,"src_port":src_port,"dst_port":dst_port,"protocol":protocol,"length":len(raw),"payload_size":payload_size,"info":info or pkt.summary(),"layers":layers,"hex":raw.hex(),"flags":_tcp_flags(int(pkt[TCP].flags)) if TCP in pkt else ""}
+    return {"id":str(uuid.uuid4()),"number":number,"timestamp":ts,"timestamp_iso":timestamp_iso,"time_str":captured_at.strftime("%H:%M:%S.%f")[:-3]+"Z","src_ip":src_ip,"dst_ip":dst_ip,"src_port":src_port,"dst_port":dst_port,"protocol":protocol,"length":len(raw),"payload_size":payload_size,"info":info or pkt.summary(),"layers":layers,"hex":raw.hex(),"flags":_tcp_flags(int(pkt[TCP].flags)) if TCP in pkt else ""}
 
 @dataclass
 class ThreatState:
