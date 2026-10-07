@@ -59,6 +59,7 @@ jobs:
         shell: pwsh
         run: |
           npm install --no-audit --no-fund
+          cargo test --manifest-path src-tauri/Cargo.toml
           npm run tauri build -- --bundles nsis
 
       - name: Upload development installer

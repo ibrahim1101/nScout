@@ -232,7 +232,7 @@ The development branch currently includes:
 - Dedicated Investigation Workspace UI backed by durable local cases: bookmark selected packets, observed hosts and findings; add analyst notes; review/remove evidence; and manage finding lifecycle without requiring MongoDB.
 - Optional local LLM explanations for selected packets, findings and connections, using Ollama, LM Studio or a custom local OpenAI-compatible server.
 - AI disabled by default, with backend enforcement, model discovery, connection testing, model selection and timeout/output limits.
-- Development-only Tauri 2 shell scaffold with a native window, hidden FastAPI sidecar, readiness/error handling and owned-process shutdown while preserving React/FastAPI; the stable v0.3 package still uses the browser launcher.
+- Development-only Tauri 2 shell scaffold with a native window, hidden FastAPI sidecar, readiness/error handling, single-instance focus, bounded lifecycle diagnostics and owned-process shutdown while preserving React/FastAPI; the stable v0.3 package still uses the browser launcher.
 - A capture-provider capability boundary and documented Windows Pktmon/WFP evaluation. Npcap remains required for supported Windows live capture until native parity is verified.
 - Persistent AI settings without MongoDB and observed-context fallback when local inference is unavailable.
 

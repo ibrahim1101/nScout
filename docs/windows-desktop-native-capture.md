@@ -25,11 +25,18 @@ loopback UI, displays a bounded startup failure state and terminates the owned
 child during application exit. The workflow uploads a development artifact and
 never publishes a release.
 
+Repeat launches now focus and restore the existing native window instead of
+starting another backend. The shell also writes a bounded, rotating JSONL
+lifecycle log in its application-data directory for startup and shutdown
+diagnosis. These records contain event names and timestamps only (plus a small
+fixed reason where needed), never packets, payloads or investigation content.
+
 The desktop build must still pass these gates before replacing the current launcher:
 
 - hidden sidecar process (no console window) bound only to loopback;
 - readiness timeout and actionable startup failure UI;
-- one application instance or conflict-safe dynamic port allocation;
+- single-instance focus and conflict-safe dynamic port allocation (implemented;
+  clean-VM behavior still requires validation);
 - graceful sidecar termination on normal exit and forced cleanup after crash;
 - existing browser/developer mode retained;
 - nScout icon, Start Menu shortcut, uninstall entry and signed installer;

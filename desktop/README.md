@@ -7,7 +7,9 @@ until clean-VM lifecycle and capture validation are complete.
 The shell starts a hidden PyInstaller backend sidecar, passes `--no-browser`,
 waits for its atomic readiness file, navigates the native WebView window to the
 loopback application URL, and kills the owned child process when the app exits.
-The existing browser launcher remains available for source/developer use.
+It also returns repeat launches to the existing window and records bounded,
+content-free lifecycle diagnostics in the application data directory. The
+existing browser launcher remains available for source/developer use.
 
 ## Windows development build
 
@@ -21,6 +23,8 @@ The dedicated GitHub workflow automates those steps and uploads a development
 artifact only. It does not attach files to a GitHub release.
 
 Before promotion, validate startup timeout/error handling, dynamic-port
-selection, one-instance behavior, normal and forced shutdown, orphan cleanup,
+selection, single-instance focus, normal and forced shutdown, orphan cleanup,
 sleep/resume, install/upgrade/uninstall, shortcuts, Npcap capture and the native
-capture prototype on clean supported Windows VMs.
+capture prototype on clean supported Windows VMs. The development shell keeps
+at most two approximately 256 KiB JSONL lifecycle logs and never writes packet
+or investigation content to them.
