@@ -95,12 +95,18 @@ def _simulate_one(anomaly=False):
     return Ether(src=local[1],dst=GATEWAY[1])/IP(src=local[0],dst=ip)/ICMP(type=8)
 
 class CaptureSession:
-    MAX_PACKETS=5000; MAX_THREATS=300
+    MIN_PACKET_LIMIT=1000; MAX_PACKET_LIMIT=1000000; DEFAULT_PACKET_LIMIT=5000; MAX_THREATS=300
     def __init__(self):
-        self.packets=deque(maxlen=self.MAX_PACKETS); self.threats=deque(maxlen=self.MAX_THREATS); self.by_id={}; self.running=False; self.mode="idle"; self.interface=""; self.counter=0; self.start_ts=None; self.threat_state=ThreatState(); self.flows={}; self.hosts={}; self.timeline=deque(maxlen=120); self._task=None; self._subscribers=[]
-    async def start(self,interface="simulated"):
+        self.packet_limit=self.DEFAULT_PACKET_LIMIT; self.packets=deque(maxlen=self.packet_limit); self.threats=deque(maxlen=self.MAX_THREATS); self.by_id={}; self.running=False; self.mode="idle"; self.interface=""; self.counter=0; self.start_ts=None; self.dropped_packets=0; self.threat_state=ThreatState(); self.flows={}; self.hosts={}; self.timeline=deque(maxlen=120); self._task=None; self._subscribers=[]
+    def configure_packet_limit(self,packet_limit:int):
+        if isinstance(packet_limit,bool) or not isinstance(packet_limit,int) or not self.MIN_PACKET_LIMIT<=packet_limit<=self.MAX_PACKET_LIMIT:
+            raise ValueError(f"packet_limit must be between {self.MIN_PACKET_LIMIT} and {self.MAX_PACKET_LIMIT}")
+        if packet_limit==self.packet_limit:return
+        retained=list(self.packets)[-packet_limit:]; removed=max(0,len(self.packets)-len(retained)); self.dropped_packets+=removed
+        self.packet_limit=packet_limit; self.packets=deque(retained,maxlen=packet_limit); retained_ids={packet["id"] for packet in retained}; self.by_id={pid:packet for pid,packet in self.by_id.items() if pid in retained_ids}
+    async def start(self,interface="simulated",reset_started_at=True):
         if self.running:return
-        self.running=True; self.interface=interface; self.start_ts=time.time(); self.mode="live" if interface not in ("simulated","",None) else "simulated"; self._task=asyncio.create_task(self._loop())
+        self.running=True; self.interface=interface; self.start_ts=time.time() if reset_started_at or self.start_ts is None else self.start_ts; self.mode="live" if interface not in ("simulated","",None) else "simulated"; self._task=asyncio.create_task(self._loop())
     async def stop(self):
         self.running=False
         if self._task:
@@ -110,7 +116,16 @@ class CaptureSession:
             self._task=None
         self.mode="idle"
     def clear(self):
-        self.packets.clear(); self.threats.clear(); self.by_id.clear(); self.flows.clear(); self.hosts.clear(); self.timeline.clear(); self.counter=0; self.threat_state=ThreatState()
+        self.packets.clear(); self.threats.clear(); self.by_id.clear(); self.flows.clear(); self.hosts.clear(); self.timeline.clear(); self.counter=0; self.start_ts=None; self.dropped_packets=0; self.threat_state=ThreatState()
+    async def switch_interface(self,interface,preserve_packets=True,packet_limit=None):
+        if not isinstance(interface,str) or not interface.strip():raise ValueError("interface is required")
+        interface=interface.strip(); previous=self.interface; retained=len(self.packets)
+        if packet_limit is not None:self.configure_packet_limit(packet_limit)
+        if self.running and interface==previous:return {"status":"unchanged","previous_interface":previous,"preserved_packets":len(self.packets),"stats":self.stats()}
+        await self.stop()
+        if not preserve_packets:self.clear(); retained=0
+        await self.start(interface,reset_started_at=not preserve_packets)
+        return {"status":"switched","previous_interface":previous,"preserved_packets":min(retained,len(self.packets)),"stats":self.stats()}
     def subscribe(self):q=asyncio.Queue(maxsize=1000); self._subscribers.append(q); return q
     def unsubscribe(self,q):
         if q in self._subscribers:self._subscribers.remove(q)
@@ -119,7 +134,8 @@ class CaptureSession:
             try:q.put_nowait(msg)
             except asyncio.QueueFull:self.unsubscribe(q)
     def ingest(self,pkt,ts=None):
-        self.counter+=1; ts=ts if ts is not None else time.time(); p=dissect_packet(pkt,self.counter,ts); self.packets.append(p); self.by_id[p["id"]]=p
+        self.counter+=1; ts=ts if ts is not None else time.time(); p=dissect_packet(pkt,self.counter,ts); evicted_id=self.packets[0]["id"] if len(self.packets)==self.packet_limit else None; self.packets.append(p); self.by_id[p["id"]]=p
+        if evicted_id is not None:self.by_id.pop(evicted_id,None); self.dropped_packets+=1
         if p["src_ip"] and p["dst_ip"]:
             key=tuple(sorted((p["src_ip"],p["dst_ip"]))); f=self.flows.setdefault(key,{"a":key[0],"b":key[1],"packets":0,"bytes":0,"protocols":set(),"last_ts":ts}); f["packets"]+=1; f["bytes"]+=p["length"]; f["protocols"].add(p["protocol"]); f["last_ts"]=ts
             for ip in (p["src_ip"],p["dst_ip"]):
@@ -156,7 +172,7 @@ class CaptureSession:
     def stats(self):
         now=time.time(); total=len(self.packets); total_bytes=sum(p["length"] for p in self.packets); duration=max(1,now-(self.start_ts or now)); pc={}
         for p in self.packets:pc[p["protocol"]]=pc.get(p["protocol"],0)+1
-        return {"running":self.running,"mode":self.mode,"interface":self.interface,"total_packets":total,"total_bytes":total_bytes,"pps":round(total/duration,1),"mbps":round(total_bytes*8/duration/1e6,3),"threats":len(self.threats),"unique_hosts":len(self.hosts),"unique_flows":len(self.flows),"protocol_counts":pc,"duration_sec":round(duration,1)}
+        return {"running":self.running,"mode":self.mode,"interface":self.interface,"total_packets":total,"total_bytes":total_bytes,"packet_limit":self.packet_limit,"dropped_packets":self.dropped_packets,"pps":round(total/duration,1),"mbps":round(total_bytes*8/duration/1e6,3),"threats":len(self.threats),"unique_hosts":len(self.hosts),"unique_flows":len(self.flows),"protocol_counts":pc,"duration_sec":round(duration,1)}
     def timeline_series(self):return list(self.timeline)
     def top_talkers(self,limit=10):return [{"ip":h["ip"],"packets":h["packets"],"bytes":h["bytes"],"ports":sorted(h["ports"])[:10]} for h in sorted(self.hosts.values(),key=lambda x:x["bytes"],reverse=True)[:limit]]
     def topology(self):return {"nodes":[{"id":ip,"packets":h["packets"],"bytes":h["bytes"],"ports":sorted(h["ports"])[:8],"type":"local" if ip.startswith(("10.","192.168.","172.")) else "external"} for ip,h in self.hosts.items()],"edges":[{"source":a,"target":b,"packets":f["packets"],"bytes":f["bytes"],"protocols":sorted(f["protocols"])[:4]} for (a,b),f in self.flows.items()]}

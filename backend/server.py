@@ -45,7 +45,11 @@ async def test_ai_settings(body:ai_provider.AISettings):
   available=await asyncio.wait_for(asyncio.to_thread(ai_provider.models,body),timeout=body.timeout_seconds+5)
   return {"ok":True,"models":available,"message":"Connected to local model server"}
  except (ai_provider.AIUnavailable,asyncio.TimeoutError) as exc:return {"ok":False,"models":[],"message":str(exc) or "Local AI timed out"}
-class StartRequest(BaseModel): interface:str="simulated"
+class StartRequest(BaseModel):
+ interface:str=Field(default="simulated",min_length=1,max_length=512);packet_limit:Optional[int]=Field(default=None,ge=1000,le=1000000)
+class SwitchCaptureRequest(BaseModel):
+ interface:str=Field(min_length=1,max_length=512);preserve_packets:bool=True;packet_limit:Optional[int]=Field(default=None,ge=1000,le=1000000)
+class CaptureConfigurationRequest(BaseModel):packet_limit:int=Field(ge=1000,le=1000000)
 class ExplainRequest(BaseModel):
  packet_id:Optional[str]=None; threat_id:Optional[str]=None
  a_ip:Optional[str]=None; a_port:Optional[int]=None; b_ip:Optional[str]=None; b_port:Optional[int]=None
@@ -63,6 +67,7 @@ class InvestigationNoteRequest(BaseModel):
 class FindingStateRequest(BaseModel):
  state:str=Field(min_length=1,max_length=32);note:str=Field(default="",max_length=4000)
 _webhook_cache={"slack_url":"","discord_url":"","min_severity":"high"}; _SEV_RANK={"low":1,"medium":2,"high":3,"critical":4}
+_capture_control_lock=asyncio.Lock()
 async def _load_settings():
  global mongo_available
  try:
@@ -87,12 +92,27 @@ async def interfaces():
 async def capture_backends():return provider_inventory()
 @api.post("/capture/start")
 async def start_capture(req:StartRequest):
- if session.running:return {"status":"already_running","stats":session.stats()}
- session.clear(); await session.start(req.interface); return {"status":"started","stats":session.stats()}
+ async with _capture_control_lock:
+  if session.running:return {"status":"already_running","stats":session.stats()}
+  if req.packet_limit is not None:session.configure_packet_limit(req.packet_limit)
+  session.clear(); await session.start(req.interface); return {"status":"started","stats":session.stats()}
+@api.post("/capture/switch")
+async def switch_capture(req:SwitchCaptureRequest):
+ async with _capture_control_lock:
+  try:return await session.switch_interface(req.interface,req.preserve_packets,req.packet_limit)
+  except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+@api.post("/capture/configuration")
+async def configure_capture(req:CaptureConfigurationRequest):
+ async with _capture_control_lock:
+  try:session.configure_packet_limit(req.packet_limit)
+  except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+  return {"status":"configured","stats":session.stats()}
 @api.post("/capture/stop")
-async def stop_capture():await session.stop(); return {"status":"stopped","stats":session.stats()}
+async def stop_capture():
+ async with _capture_control_lock:await session.stop(); return {"status":"stopped","stats":session.stats()}
 @api.post("/capture/clear")
-async def clear_capture():session.clear(); return {"status":"cleared"}
+async def clear_capture():
+ async with _capture_control_lock:session.clear(); return {"status":"cleared","stats":session.stats()}
 @api.get("/capture/status")
 async def status():return session.stats()
 @api.get("/packets")
