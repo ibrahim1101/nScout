@@ -18,7 +18,7 @@ from etherlens.connection_selection import select_connection
 from etherlens.ai_context import connection_context,connection_prompt
 from etherlens.engine import CaptureSession
 from etherlens.capture_backends import provider_inventory
-from etherlens.sessions import save_session,list_sessions,load_session,delete_session
+from etherlens.sessions import CaptureSessionNotFound,LocalCaptureSessionStore,delete_session,list_sessions,load_session,restore_capture_session
 from etherlens.investigation_workspace import EvidenceItem
 from etherlens.investigation_store import InvestigationNotFound,InvestigationStore
 ROOT_DIR=Path(__file__).parent; load_dotenv(ROOT_DIR/".env"); logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s - %(message)s"); logger=logging.getLogger("nscout")
@@ -26,6 +26,7 @@ mongo_url=os.environ.get("MONGO_URL","mongodb://127.0.0.1:27017"); db_name=os.en
 DATA_DIR=Path(os.environ.get("NSCOUT_DATA_DIR", str(Path.home()/".nscout")))
 AI_SETTINGS_PATH=DATA_DIR/"ai-settings.json"
 _investigation_store=InvestigationStore(DATA_DIR/"investigations")
+_capture_session_store=LocalCaptureSessionStore(DATA_DIR/"capture-sessions")
 _ai_settings=ai_provider.load_settings(AI_SETTINGS_PATH)
 _ai_lock=asyncio.Lock()
 @api.get("/settings/ai")
@@ -73,7 +74,7 @@ async def _load_settings():
  try:
   await client.admin.command("ping"); mongo_available=True; doc=await settings_col.find_one({"_id":"webhooks"})
   if doc:_webhook_cache.update({k:doc.get(k,_webhook_cache[k]) for k in _webhook_cache})
- except Exception as exc: mongo_available=False; logger.warning("MongoDB unavailable; saved sessions/settings persistence disabled: %s",exc)
+ except Exception as exc: mongo_available=False; logger.warning("MongoDB unavailable; legacy sessions and webhook persistence disabled: %s",exc)
 async def _threat_hook(threat):
  if _SEV_RANK.get(threat.get("severity","low"),1)<_SEV_RANK.get(_webhook_cache.get("min_severity","high"),3):return
  urls=[u for u in (_webhook_cache.get("slack_url"),_webhook_cache.get("discord_url")) if u]
@@ -268,25 +269,38 @@ async def save_webhook_settings(body:WebhookSettings):
  _webhook_cache.update(body.model_dump());return {"status":"saved" if mongo_available else "saved_in_memory","settings":_webhook_cache}
 @api.post("/settings/webhooks/test")
 async def test_webhook(body:WebhookTestRequest):return await webhooks.send(body.url,{"severity":"high","type":"Test Alert","title":"nScout test notification","description":"This is a test alert from nScout.","src":"127.0.0.1","dst":"127.0.0.1"})
-def _require_mongo():
- if not mongo_available:raise HTTPException(status_code=503,detail="MongoDB is unavailable; saved sessions are disabled")
 @api.post("/sessions/save")
 async def sessions_save(body:SaveSessionRequest):
- _require_mongo()
- try:meta=await save_session(db,session,body.name)
- except ValueError as e:raise HTTPException(status_code=400,detail=str(e))
+ async with _capture_control_lock:
+  try:meta=await asyncio.to_thread(_capture_session_store.save,session,body.name)
+  except ValueError as e:raise HTTPException(status_code=400,detail=str(e)) from e
+  except OSError as e:raise HTTPException(status_code=500,detail="Could not save capture session") from e
  return {"status":"saved",**meta}
 @api.get("/sessions")
-async def sessions_list():return {"sessions":await list_sessions(db),"mongo_available":True} if mongo_available else {"sessions":[],"mongo_available":False}
+async def sessions_list():
+ local=await asyncio.to_thread(_capture_session_store.list)
+ legacy=await list_sessions(db) if mongo_available else []
+ known={row["id"] for row in local}
+ combined=local+[row for row in legacy if row["id"] not in known]
+ combined.sort(key=lambda row:row.get("created_at") or "",reverse=True)
+ return {"sessions":combined[:100],"storage":"local","mongo_available":mongo_available}
 @api.post("/sessions/{sid}/load")
 async def sessions_load(sid:str):
- _require_mongo()
- try:meta=await load_session(db,session,sid)
- except KeyError:raise HTTPException(status_code=404,detail="session not found")
+ async with _capture_control_lock:
+  try:
+   doc=await asyncio.to_thread(_capture_session_store.get,sid)
+   meta=await restore_capture_session(session,doc)
+  except CaptureSessionNotFound:
+   if not mongo_available:raise HTTPException(status_code=404,detail="session not found")
+   try:meta=await load_session(db,session,sid)
+   except KeyError:raise HTTPException(status_code=404,detail="session not found")
+  except ValueError as exc:raise HTTPException(status_code=422,detail=str(exc)) from exc
  return {"status":"loaded",**meta,"stats":session.stats()}
 @api.delete("/sessions/{sid}")
 async def sessions_delete(sid:str):
- _require_mongo();ok=await delete_session(db,sid)
+ try:ok=await asyncio.to_thread(_capture_session_store.delete,sid)
+ except CaptureSessionNotFound:ok=False
+ if not ok and mongo_available:ok=await delete_session(db,sid)
  if not ok:raise HTTPException(status_code=404,detail="session not found")
  return {"status":"deleted"}
 EMERGENT_LLM_KEY=os.environ.get("EMERGENT_LLM_KEY","")

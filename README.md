@@ -132,7 +132,7 @@ EMERGENT_LLM_KEY=your-key-here
 CORS_ORIGINS=*
 ```
 
-MongoDB is currently used for persisted saved sessions/settings. If MongoDB is unavailable, nScout continues to run while persistence-dependent functionality such as Saved Sessions is unavailable.
+MongoDB remains optional for legacy saved sessions and webhook settings. On the v0.4 development branch, new Capture Sessions are stored locally and remain available without MongoDB.
 
 On the v0.4 development branch, optional local LLM settings persist independently of MongoDB. See the setup section below.
 
@@ -184,7 +184,7 @@ nScout uses:
 - **Scapy** — packet parsing/capture and PCAP processing.
 - **React** — analyst interface.
 - **WebSockets** — live application updates.
-- **MongoDB / Motor / PyMongo** — optional persisted sessions/settings.
+- **MongoDB / Motor / PyMongo** — optional legacy session access and webhook-setting persistence.
 - **PyInstaller** — standalone application packaging.
 - **Inno Setup** — native Windows installer.
 - **GitHub Actions** — automated verification and Windows release builds.
@@ -237,6 +237,7 @@ The development branch currently includes:
 - Development-only Tauri 2 shell scaffold with a native window, hidden FastAPI sidecar, readiness/error handling, single-instance focus, bounded lifecycle diagnostics and owned-process shutdown while preserving React/FastAPI; the stable v0.3 package still uses the browser launcher.
 - A capture-provider capability boundary and documented Windows Pktmon/WFP evaluation. Npcap remains required for supported Windows live capture until native parity is verified.
 - Persistent AI settings without MongoDB and observed-context fallback when local inference is unavailable.
+- Local Capture Sessions with atomic persistence, replay and capture provenance without requiring MongoDB; legacy Mongo sessions remain accessible when MongoDB is configured.
 
 Capture preference wiring, workspace recovery, investigation notes/bookmarks,
 evidence locker, finding lifecycle, Live Hosts, PCAP comparison, baselines,

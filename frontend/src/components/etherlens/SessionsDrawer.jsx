@@ -58,7 +58,7 @@ export default function SessionsDrawer({ open, onClose, onLoaded, status = {} })
         <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div>
             <h3 className="font-display font-bold">Saved Sessions</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Snapshot, archive & replay captures</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Local snapshots — MongoDB not required</p>
           </div>
           <button data-testid="sessions-close" onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md"><X size={16} /></button>
         </div>
@@ -103,6 +103,8 @@ export default function SessionsDrawer({ open, onClose, onLoaded, status = {} })
                   <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono-code flex items-center gap-3 flex-wrap">
                     <span className="inline-flex items-center gap-1"><Clock size={11} />{new Date(s.created_at).toLocaleString()}</span>
                     <span className="inline-flex items-center gap-1"><Package size={11} />{s.packet_count.toLocaleString()} pkts</span>
+                    <span className="uppercase tracking-wide text-blue-500">{s.storage || "local"}</span>
+                    {s.truncated && <span className="text-amber-500">Newest {s.packet_count.toLocaleString()} of {s.source_packet_count.toLocaleString()}</span>}
                     {s.source_interface && <span>{s.source_interface}</span>}
                     {s.threat_count > 0 && <span className="inline-flex items-center gap-1 text-rose-500"><ShieldAlert size={11} />{s.threat_count} alerts</span>}
                   </div>
