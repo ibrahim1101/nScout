@@ -7,7 +7,7 @@ const PROTOCOLS = ["", "TCP", "UDP", "HTTPS", "HTTP", "DNS", "ICMP", "ARP", "SSH
 export default function HeaderNav({
   theme, setTheme, interfaces, iface, setIface, status,
   onStart, onStop, onClear, onUpload, filter, setFilter, protocolFilter, setProtocolFilter,
-  onOpenSettings, onOpenShortcuts, onOpenSessions,
+  onOpenSettings, onOpenShortcuts, onOpenSessions, onOpenGlobalSearch,
 }) {
   const fileRef = useRef(null);
 
@@ -100,6 +100,14 @@ export default function HeaderNav({
               title="Save / replay sessions"
             >
               <Archive size={14} /> Sessions
+            </button>
+            <button
+              data-testid="global-search-open-btn"
+              onClick={onOpenGlobalSearch}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 text-sm font-semibold text-blue-700 dark:text-blue-300 transition-colors"
+              title="Global investigation search (Ctrl / Command + Shift + K)"
+            >
+              <Search size={14} /> Search
             </button>
             <button
               data-testid="shortcuts-open-btn"

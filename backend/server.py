@@ -22,6 +22,7 @@ from etherlens.sessions import CaptureSessionNotFound,LocalCaptureSessionStore,d
 from etherlens.investigation_workspace import EvidenceItem
 from etherlens.investigation_store import InvestigationNotFound,InvestigationStore
 from etherlens.host_profiles import HostProfileStore
+from etherlens.global_search import search_investigation_data
 ROOT_DIR=Path(__file__).parent; load_dotenv(ROOT_DIR/".env"); logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s - %(message)s"); logger=logging.getLogger("nscout")
 mongo_url=os.environ.get("MONGO_URL","mongodb://127.0.0.1:27017"); db_name=os.environ.get("DB_NAME","nscout"); client=AsyncIOMotorClient(mongo_url,serverSelectionTimeoutMS=1500,connectTimeoutMS=1500); db=client[db_name]; settings_col=db.etherlens_settings; mongo_available=False; session=CaptureSession(); app=FastAPI(title="nScout"); api=APIRouter(prefix="/api")
 DATA_DIR=Path(os.environ.get("NSCOUT_DATA_DIR", str(Path.home()/".nscout")))
@@ -182,6 +183,26 @@ async def investigation_timeline_view(host:str="",domain:str="",connection:str="
  return intelligence.investigation_timeline(packets,security["findings"],host=host,domain=domain,connection=connection,protocol=protocol,min_severity=min_severity,start=start,end=end,limit=limit)
 @api.get("/investigation/summary")
 async def investigation_summary():return intelligence.investigation_summary(list(session.packets),session.list_threats())
+@api.get("/search")
+async def global_investigation_search(q:str="",limit:int=50):
+ packets=list(session.packets);security=intelligence.security_intelligence(packets,session.list_threats())
+ hosts=intelligence.host_intelligence(packets,security["findings"])
+ try:hosts=await asyncio.to_thread(_host_profile_store.enrich,hosts)
+ except ValueError as exc:logger.warning("Host profile persistence unavailable during search: %s",exc)
+ saved=[]
+ try:
+  summaries=await asyncio.to_thread(_investigation_store.list)
+  for summary in summaries[:500]:
+   try:saved.append((await asyncio.to_thread(_investigation_store.get,summary["id"])).to_dict())
+   except (InvestigationNotFound,ValueError):continue
+ except ValueError as exc:logger.warning("Investigation persistence unavailable during search: %s",exc)
+ try:
+  return search_investigation_data(q,packets=packets,hosts=hosts,
+   connections=intelligence.connection_intelligence(packets,limit=5000),
+   dns_events=intelligence.dns_intelligence(packets)["events"],findings=security["findings"],
+   timeline=intelligence.investigation_timeline(packets,security["findings"],limit=5000)["events"],
+   investigations=saved,limit=limit)
+ except (ValueError,TypeError) as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
 def _workspace_result(workspace):return {"investigation":workspace.to_dict()}
 async def _workspace_get(workspace_id:str):
  try:return await asyncio.to_thread(_investigation_store.get,workspace_id)

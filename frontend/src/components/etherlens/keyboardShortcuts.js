@@ -1,5 +1,6 @@
 export const KEYBOARD_SHORTCUTS = [
   { id: "focus-filter", category: "Search", keys: ["Ctrl / ⌘", "K"], description: "Focus the packet filter", key: "k", primary: true, allowInForm: true },
+  { id: "global-search", category: "Search", keys: ["Ctrl / ⌘", "Shift", "K"], description: "Open Global Investigation Search", key: "k", primary: true, shift: true, allowInForm: true },
   { id: "open-settings", category: "Navigation", keys: ["Ctrl / ⌘", ","], description: "Open Settings", key: ",", primary: true, allowInForm: true },
   { id: "open-sessions", category: "Capture", keys: ["Ctrl / ⌘", "Shift", "S"], description: "Open Capture Sessions", key: "s", primary: true, shift: true, allowInForm: true },
   { id: "toggle-capture", category: "Capture", keys: ["Space"], description: "Start or stop capture", code: "Space" },

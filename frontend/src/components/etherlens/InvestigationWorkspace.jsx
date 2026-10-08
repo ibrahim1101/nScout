@@ -28,6 +28,7 @@ export default function InvestigationWorkspace({
   hosts = [],
   findings = [],
   onOpenPacket,
+  targetInvestigationId = "",
 }) {
   const [cases, setCases] = useState([]);
   const [activeId, setActiveId] = useState("");
@@ -93,6 +94,12 @@ export default function InvestigationWorkspace({
       setError(message(err, "Could not open the investigation."));
     }
   };
+
+  useEffect(() => {
+    if (targetInvestigationId && targetInvestigationId !== activeId && cases.some((item) => item.id === targetInvestigationId))
+      selectCase(targetInvestigationId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetInvestigationId, activeId, cases]);
 
   const createCase = async (event) => {
     event.preventDefault();
