@@ -246,9 +246,10 @@ The development branch currently includes:
 - A dedicated Live Hosts investigation view with passive Active/Recently Seen/Inactive semantics, persistent analyst aliases and watchlists, bounded activity history, host search and packet drill-down.
 - Global Investigation Search across live packet/host/connection/DNS/finding/timeline metadata and saved cases, notes and evidence, with direct navigation back to the matching workspace. Raw payload and hex content are deliberately excluded from this index.
 - Investigation Report 2.0 exports PDF, HTML, JSON, CSV, XLSX and XML from live analysis or a saved case, including hosts, timeline, evidence, notes and finding states. Optional deterministic redaction aliases IP addresses, MAC addresses and domains consistently across every format; packet payloads and evidence snapshot bodies are excluded.
+- PCAP Comparison analyzes a baseline and current PCAP/PCAPNG side by side without replacing the active capture. It reports bounded packet/byte/duration, protocol, service-port, host, domain, connection, finding and TCP-health changes; records source hashes and truncation state; and exports the comparison as JSON.
 - Packet timestamps preserve canonical UTC/epoch evidence while displaying in the user's system-local timezone across desktop platforms.
 
-Remaining preference wiring, workspace recovery, PCAP comparison, baselines
+Remaining preference wiring, workspace recovery, baselines
 and further map/UI improvements remain under development.
 See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, the [cross-platform desktop packaging guide](docs/cross-platform-desktop.md) for development builds and release gates, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for Windows capture validation.
 Full AI Analyst remains planned for v0.5; Sensor Mode and threat-intelligence integrations are later milestones.
@@ -267,7 +268,7 @@ provider selection. See the guide for optional authentication and data-directory
 
 ### Validation status
 
-The current v0.4 development implementation has **119 passing focused backend regression tests**.
+The current v0.4 development suite contains **123 focused backend regression tests**; GitHub Actions is the authoritative validation environment for capture-dependent tests.
 The branch is protected by Docker smoke testing, the existing Windows
 PyInstaller/Inno gate and development Tauri package builds for Windows, Linux
 and macOS. Package construction is not equivalent to clean-system support.

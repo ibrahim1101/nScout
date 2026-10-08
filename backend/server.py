@@ -23,6 +23,7 @@ from etherlens.investigation_workspace import EvidenceItem
 from etherlens.investigation_store import InvestigationNotFound,InvestigationStore
 from etherlens.host_profiles import HostProfileStore
 from etherlens.global_search import search_investigation_data
+from etherlens.pcap_compare import MAX_PCAP_BYTES,compare_pcap_bytes
 ROOT_DIR=Path(__file__).parent; load_dotenv(ROOT_DIR/".env"); logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s - %(message)s"); logger=logging.getLogger("nscout")
 mongo_url=os.environ.get("MONGO_URL","mongodb://127.0.0.1:27017"); db_name=os.environ.get("DB_NAME","nscout"); client=AsyncIOMotorClient(mongo_url,serverSelectionTimeoutMS=1500,connectTimeoutMS=1500); db=client[db_name]; settings_col=db.etherlens_settings; mongo_available=False; session=CaptureSession(); app=FastAPI(title="nScout"); api=APIRouter(prefix="/api")
 DATA_DIR=Path(os.environ.get("NSCOUT_DATA_DIR", str(Path.home()/".nscout")))
@@ -32,6 +33,7 @@ _capture_session_store=LocalCaptureSessionStore(DATA_DIR/"capture-sessions")
 _host_profile_store=HostProfileStore(DATA_DIR/"host-profiles.json")
 _ai_settings=ai_provider.load_settings(AI_SETTINGS_PATH)
 _ai_lock=asyncio.Lock()
+_pcap_compare_lock=asyncio.Lock()
 @api.get("/settings/ai")
 async def get_ai_settings():return _ai_settings.model_dump()
 @api.post("/settings/ai")
@@ -286,6 +288,15 @@ async def upload_pcap(file:UploadFile=File(...)):
  try:n=session.ingest_pcap_bytes(data)
  except Exception as e:raise HTTPException(status_code=400,detail=f"Invalid pcap: {e}") from e
  return {"status":"parsed","packets":n,"stats":session.stats(),"investigation":intelligence.investigation_summary(list(session.packets),session.list_threats())}
+@api.post("/pcap/compare")
+async def compare_pcaps(baseline:UploadFile=File(...),current:UploadFile=File(...)):
+ baseline_data,current_data=await baseline.read(),await current.read()
+ if not baseline_data or not current_data:raise HTTPException(status_code=400,detail="Both PCAP files are required")
+ if len(baseline_data)>MAX_PCAP_BYTES or len(current_data)>MAX_PCAP_BYTES:raise HTTPException(status_code=413,detail="Each PCAP must be 50 MB or smaller")
+ if _pcap_compare_lock.locked():raise HTTPException(status_code=429,detail="Another PCAP comparison is already running")
+ try:
+  async with _pcap_compare_lock:return await asyncio.to_thread(compare_pcap_bytes,baseline_data,current_data,baseline.filename or "baseline.pcap",current.filename or "current.pcap")
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
 @api.get("/pcap/export")
 async def export_pcap():
  pkts=list(session.packets)
