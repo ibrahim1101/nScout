@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "./lib";
+import ReportExports from "./ReportExports";
 
 const ACTIVE_CASE_KEY = "nscout.activeInvestigation";
 const FINDING_STATES = [
@@ -275,6 +276,8 @@ export default function InvestigationWorkspace({
               text
             />
           </section>
+
+          <ReportExports workspaceId={workspace.id} />
 
           <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <Panel

@@ -11,7 +11,7 @@ from pydantic import BaseModel,Field
 from starlette.middleware.cors import CORSMiddleware
 from etherlens import analysis,geo,webhooks,intelligence,ai_provider
 from etherlens.filters import FilterSyntaxError,filter_packets,validate_filter
-from etherlens.reports import json_report,html_report,pdf_report
+from etherlens.reports import csv_report,html_report,json_report,pdf_report,xlsx_report,xml_report
 from etherlens.protocol_intelligence import tls_intelligence,packet_timeline,packet_ascii
 from etherlens.explanations import explain_connection
 from etherlens.connection_selection import select_connection
@@ -253,18 +253,23 @@ async def investigations_add_note(workspace_id:str,body:InvestigationNoteRequest
 async def investigations_set_finding_state(workspace_id:str,finding_id:str,body:FindingStateRequest):
  workspace=await _workspace_mutate(workspace_id,lambda item:item.set_finding_state(finding_id,body.state,body.note))
  return _workspace_result(workspace)
-@api.get("/investigation/report.json")
-async def investigation_report_json():
+_REPORT_EXPORTERS={
+ "json":(json_report,"application/json"),"html":(html_report,"text/html; charset=utf-8"),
+ "pdf":(pdf_report,"application/pdf"),"csv":(csv_report,"text/csv; charset=utf-8"),
+ "xlsx":(xlsx_report,"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+ "xml":(xml_report,"application/xml"),
+}
+@api.get("/investigation/report.{report_format}")
+async def investigation_report_export(report_format:str,workspace_id:Optional[str]=None,redact:bool=False):
+ exporter=_REPORT_EXPORTERS.get(report_format.lower())
+ if not exporter:raise HTTPException(status_code=404,detail="Unsupported report format")
  summary=intelligence.investigation_summary(list(session.packets),session.list_threats())
- return Response(content=json_report(summary),media_type="application/json",headers={"Content-Disposition":'attachment; filename="nscout-investigation.json"'})
-@api.get("/investigation/report.html")
-async def investigation_report_html():
- summary=intelligence.investigation_summary(list(session.packets),session.list_threats())
- return Response(content=html_report(summary),media_type="text/html; charset=utf-8",headers={"Content-Disposition":'attachment; filename="nscout-investigation.html"'})
-@api.get("/investigation/report.pdf")
-async def investigation_report_pdf():
- summary=intelligence.investigation_summary(list(session.packets),session.list_threats())
- return Response(content=pdf_report(summary),media_type="application/pdf",headers={"Content-Disposition":'attachment; filename="nscout-investigation.pdf"'})
+ try:summary["hosts"]=await asyncio.to_thread(_host_profile_store.enrich,summary.get("hosts",[]))
+ except ValueError as exc:logger.warning("Host profile persistence unavailable during report export: %s",exc)
+ workspace=(await _workspace_get(workspace_id)).to_dict() if workspace_id else None
+ content=await asyncio.to_thread(exporter[0],summary,workspace,redact)
+ suffix="-redacted" if redact else ""
+ return Response(content=content,media_type=exporter[1],headers={"Content-Disposition":f'attachment; filename="nscout-investigation{suffix}.{report_format.lower()}"',"X-nScout-Report-Schema":"2"})
 @api.get("/topology")
 async def topology(enrich:bool=False):
  data=session.topology()

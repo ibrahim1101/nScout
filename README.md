@@ -245,11 +245,11 @@ The development branch currently includes:
 - Searchable in-app Keyboard Shortcuts help sourced from the same definitions as the implemented global shortcuts.
 - A dedicated Live Hosts investigation view with passive Active/Recently Seen/Inactive semantics, persistent analyst aliases and watchlists, bounded activity history, host search and packet drill-down.
 - Global Investigation Search across live packet/host/connection/DNS/finding/timeline metadata and saved cases, notes and evidence, with direct navigation back to the matching workspace. Raw payload and hex content are deliberately excluded from this index.
+- Investigation Report 2.0 exports PDF, HTML, JSON, CSV, XLSX and XML from live analysis or a saved case, including hosts, timeline, evidence, notes and finding states. Optional deterministic redaction aliases IP addresses, MAC addresses and domains consistently across every format; packet payloads and evidence snapshot bodies are excluded.
 - Packet timestamps preserve canonical UTC/epoch evidence while displaying in the user's system-local timezone across desktop platforms.
 
-Capture preference wiring, workspace recovery, investigation notes/bookmarks,
-PCAP comparison, baselines,
-expanded exports/redaction and further map/UI improvements remain under development.
+Remaining preference wiring, workspace recovery, PCAP comparison, baselines
+and further map/UI improvements remain under development.
 See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, the [cross-platform desktop packaging guide](docs/cross-platform-desktop.md) for development builds and release gates, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for Windows capture validation.
 Full AI Analyst remains planned for v0.5; Sensor Mode and threat-intelligence integrations are later milestones.
 
@@ -267,7 +267,7 @@ provider selection. See the guide for optional authentication and data-directory
 
 ### Validation status
 
-The current v0.4 development implementation has **115 passing focused backend regression tests**.
+The current v0.4 development implementation has **119 passing focused backend regression tests**.
 The branch is protected by Docker smoke testing, the existing Windows
 PyInstaller/Inno gate and development Tauri package builds for Windows, Linux
 and macOS. Package construction is not equivalent to clean-system support.
