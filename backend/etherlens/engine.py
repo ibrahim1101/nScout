@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Deque, Dict, List, Optional
 from scapy.all import Ether, IP, IPv6, TCP, UDP, ICMP, ARP, DNS, Raw, Packet, rdpcap
 from scapy.layers.http import HTTPRequest, HTTPResponse
+from .protocol_intelligence import decode_tls_payload
 
 APP_PORTS={80:"HTTP",8080:"HTTP",443:"HTTPS",8443:"HTTPS",53:"DNS",22:"SSH",21:"FTP",25:"SMTP",587:"SMTP",465:"SMTPS",110:"POP3",143:"IMAP",993:"IMAPS",995:"POP3S",3306:"MySQL",5432:"PostgreSQL",6379:"Redis",27017:"MongoDB",3389:"RDP",5900:"VNC",123:"NTP",161:"SNMP",1883:"MQTT",5060:"SIP",67:"DHCP",68:"DHCP",69:"TFTP",179:"BGP",389:"LDAP",636:"LDAPS",445:"SMB",139:"NetBIOS"}
 
@@ -63,6 +64,12 @@ def dissect_packet(pkt:Packet,number:int,ts:float)->Dict[str,Any]:
         elif HTTPResponse in pkt:
             h=pkt[HTTPResponse]; protocol="HTTP"; code=_decode(h.Status_Code); reason=_decode(h.Reason_Phrase); info=f"HTTP {code} {reason}"; layers.append({"name":"Hypertext Transfer Protocol","fields":{"Status":f"{code} {reason}","Status Code":code,"Server":_decode(h.Server),"Content-Type":_decode(getattr(h,"Content_Type",b"")),"Content-Length":_decode(getattr(h,"Content_Length",b""))}})
     except Exception: pass
+    if TCP in pkt and Raw in pkt:
+        tls_fields=decode_tls_payload(bytes(pkt[Raw].load))
+        if tls_fields:
+            protocol="TLS"; server=tls_fields.get("SNI",""); handshake=tls_fields.get("Handshake","TLS handshake")
+            info=f"{handshake}{f' SNI={server}' if server else ''}"
+            layers.append({"name":"Transport Layer Security","fields":tls_fields})
     return {"id":str(uuid.uuid4()),"number":number,"timestamp":ts,"timestamp_iso":timestamp_iso,"time_str":captured_at.strftime("%H:%M:%S.%f")[:-3]+"Z","src_ip":src_ip,"dst_ip":dst_ip,"src_port":src_port,"dst_port":dst_port,"protocol":protocol,"length":len(raw),"payload_size":payload_size,"info":info or pkt.summary(),"layers":layers,"hex":raw.hex(),"flags":_tcp_flags(int(pkt[TCP].flags)) if TCP in pkt else ""}
 
 @dataclass

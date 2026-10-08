@@ -248,10 +248,11 @@ The development branch currently includes:
 - Investigation Report 2.0 exports PDF, HTML, JSON, CSV, XLSX and XML from live analysis or a saved case, including hosts, timeline, evidence, notes and finding states. Optional deterministic redaction aliases IP addresses, MAC addresses and domains consistently across every format; packet payloads and evidence snapshot bodies are excluded.
 - PCAP Comparison analyzes a baseline and current PCAP/PCAPNG side by side without replacing the active capture. It reports bounded packet/byte/duration, protocol, service-port, host, domain, connection, finding and TCP-health changes; records source hashes and truncation state; and exports the comparison as JSON.
 - Network Baselines save bounded metadata-only profiles from the active capture and compare later traffic using explicit rules for new hosts/domains/service ports, protocol-share shifts, traffic-rate changes, findings and TCP-health signals. Every deviation exposes its observed value, baseline value, threshold and score; results are analyst leads from one saved sample, not proof of compromise or a learned normal model.
+- TLS intelligence now decodes bounded, visible ClientHello and ServerHello metadata directly from captured TLS handshake records: SNI, ALPN, offered/selected versions, cipher suites and JA3/JA3S-style fingerprints. The searchable TLS view also identifies legacy versions and certificate expiry, not-yet-valid and self-signed metadata warnings when those certificate fields are observable. Encrypted application payload remains encrypted.
 - Packet timestamps preserve canonical UTC/epoch evidence while displaying in the user's system-local timezone across desktop platforms.
 
-Remaining preference wiring, workspace recovery, TLS intelligence
-and further map/UI improvements remain under development.
+Remaining preference wiring, workspace recovery and further map/UI improvements
+remain under development.
 See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, the [cross-platform desktop packaging guide](docs/cross-platform-desktop.md) for development builds and release gates, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for Windows capture validation.
 Full AI Analyst remains planned for v0.5; Sensor Mode and threat-intelligence integrations are later milestones.
 
@@ -269,7 +270,7 @@ provider selection. See the guide for optional authentication and data-directory
 
 ### Validation status
 
-The current v0.4 development suite contains **129 focused backend regression tests**; GitHub Actions is the authoritative validation environment for capture-dependent tests.
+The current v0.4 development suite contains **134 focused backend regression tests**; GitHub Actions is the authoritative validation environment for capture-dependent tests.
 The branch is protected by Docker smoke testing, the existing Windows
 PyInstaller/Inno gate and development Tauri package builds for Windows, Linux
 and macOS. Package construction is not equivalent to clean-system support.
