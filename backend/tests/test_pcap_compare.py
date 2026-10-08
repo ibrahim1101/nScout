@@ -1,4 +1,5 @@
-import io
+import os
+import tempfile
 
 import pytest
 from scapy.all import DNS, DNSQR, Ether, IP, TCP, UDP, wrpcap  # type: ignore
@@ -23,9 +24,14 @@ def _summary(packets, bytes_, protocols, hosts, domains=(), findings=()):
 
 
 def _pcap_bytes(packets):
-    buffer = io.BytesIO()
-    wrpcap(buffer, packets)
-    return buffer.getvalue()
+    with tempfile.NamedTemporaryFile(suffix=".pcap", delete=False) as handle:
+        path = handle.name
+    try:
+        wrpcap(path, packets)
+        with open(path, "rb") as handle:
+            return handle.read()
+    finally:
+        os.unlink(path)
 
 
 def test_compare_summaries_reports_deltas_and_added_removed_entities():
