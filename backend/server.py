@@ -24,6 +24,7 @@ from etherlens.investigation_store import InvestigationNotFound,InvestigationSto
 from etherlens.host_profiles import HostProfileStore
 from etherlens.global_search import search_investigation_data
 from etherlens.pcap_compare import MAX_PCAP_BYTES,compare_pcap_bytes
+from etherlens.baselines import BaselineNotFound,BaselineStore,build_profile,compare_profile
 ROOT_DIR=Path(__file__).parent; load_dotenv(ROOT_DIR/".env"); logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s - %(message)s"); logger=logging.getLogger("nscout")
 mongo_url=os.environ.get("MONGO_URL","mongodb://127.0.0.1:27017"); db_name=os.environ.get("DB_NAME","nscout"); client=AsyncIOMotorClient(mongo_url,serverSelectionTimeoutMS=1500,connectTimeoutMS=1500); db=client[db_name]; settings_col=db.etherlens_settings; mongo_available=False; session=CaptureSession(); app=FastAPI(title="nScout"); api=APIRouter(prefix="/api")
 DATA_DIR=Path(os.environ.get("NSCOUT_DATA_DIR", str(Path.home()/".nscout")))
@@ -31,6 +32,7 @@ AI_SETTINGS_PATH=DATA_DIR/"ai-settings.json"
 _investigation_store=InvestigationStore(DATA_DIR/"investigations")
 _capture_session_store=LocalCaptureSessionStore(DATA_DIR/"capture-sessions")
 _host_profile_store=HostProfileStore(DATA_DIR/"host-profiles.json")
+_baseline_store=BaselineStore(DATA_DIR/"baselines")
 _ai_settings=ai_provider.load_settings(AI_SETTINGS_PATH)
 _ai_lock=asyncio.Lock()
 _pcap_compare_lock=asyncio.Lock()
@@ -74,6 +76,7 @@ class FindingStateRequest(BaseModel):
  state:str=Field(min_length=1,max_length=32);note:str=Field(default="",max_length=4000)
 class HostProfileRequest(BaseModel):
  alias:Optional[str]=Field(default=None,max_length=120);watchlisted:Optional[bool]=None
+class CreateBaselineRequest(BaseModel):name:str=Field(min_length=1,max_length=160)
 _webhook_cache={"slack_url":"","discord_url":"","min_severity":"high"}; _SEV_RANK={"low":1,"medium":2,"high":3,"critical":4}
 _capture_control_lock=asyncio.Lock()
 async def _load_settings():
@@ -185,6 +188,37 @@ async def investigation_timeline_view(host:str="",domain:str="",connection:str="
  return intelligence.investigation_timeline(packets,security["findings"],host=host,domain=domain,connection=connection,protocol=protocol,min_severity=min_severity,start=start,end=end,limit=limit)
 @api.get("/investigation/summary")
 async def investigation_summary():return intelligence.investigation_summary(list(session.packets),session.list_threats())
+@api.post("/baselines",status_code=201)
+async def baselines_create(body:CreateBaselineRequest):
+ packets=list(session.packets)
+ try:
+  profile=await asyncio.to_thread(build_profile,packets,session.list_threats())
+  baseline=await asyncio.to_thread(_baseline_store.create,body.name,profile)
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ except OSError as exc:raise HTTPException(status_code=500,detail="Could not save network baseline") from exc
+ return {"baseline":baseline}
+@api.get("/baselines")
+async def baselines_list():return {"baselines":await asyncio.to_thread(_baseline_store.list)}
+@api.get("/baselines/{baseline_id}")
+async def baselines_get(baseline_id:str):
+ try:return {"baseline":await asyncio.to_thread(_baseline_store.get,baseline_id)}
+ except BaselineNotFound as exc:raise HTTPException(status_code=404,detail="Baseline not found") from exc
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+@api.delete("/baselines/{baseline_id}")
+async def baselines_delete(baseline_id:str):
+ try:await asyncio.to_thread(_baseline_store.delete,baseline_id)
+ except BaselineNotFound as exc:raise HTTPException(status_code=404,detail="Baseline not found") from exc
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ return {"status":"deleted"}
+@api.get("/baselines/{baseline_id}/compare")
+async def baselines_compare(baseline_id:str):
+ try:baseline=await asyncio.to_thread(_baseline_store.get,baseline_id)
+ except BaselineNotFound as exc:raise HTTPException(status_code=404,detail="Baseline not found") from exc
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ try:current=await asyncio.to_thread(build_profile,list(session.packets),session.list_threats())
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ comparison=await asyncio.to_thread(compare_profile,baseline["profile"],current)
+ return {"baseline":{"id":baseline["id"],"name":baseline["name"],"created_at":baseline["created_at"]},"current":current,"comparison":comparison}
 @api.get("/search")
 async def global_investigation_search(q:str="",limit:int=50):
  packets=list(session.packets);security=intelligence.security_intelligence(packets,session.list_threats())
