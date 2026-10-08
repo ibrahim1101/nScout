@@ -249,6 +249,7 @@ The development branch currently includes:
 - PCAP Comparison analyzes a baseline and current PCAP/PCAPNG side by side without replacing the active capture. It reports bounded packet/byte/duration, protocol, service-port, host, domain, connection, finding and TCP-health changes; records source hashes and truncation state; and exports the comparison as JSON.
 - Network Baselines save bounded metadata-only profiles from the active capture and compare later traffic using explicit rules for new hosts/domains/service ports, protocol-share shifts, traffic-rate changes, findings and TCP-health signals. Every deviation exposes its observed value, baseline value, threshold and score; results are analyst leads from one saved sample, not proof of compromise or a learned normal model.
 - TLS intelligence now decodes bounded, visible ClientHello and ServerHello metadata directly from captured TLS handshake records: SNI, ALPN, offered/selected versions, cipher suites and JA3/JA3S-style fingerprints. The searchable TLS view also identifies legacy versions and certificate expiry, not-yet-valid and self-signed metadata warnings when those certificate fields are observable. Encrypted application payload remains encrypted.
+- Network Map 2.0 combines Live Hosts identity and risk context with an investigation topology: search aliases, IP/MAC/hostname, domains, protocols, ports, ASN or location; filter local/external, protocol, port, traffic volume or security evidence; focus a host; freeze the live view; and drill from an aggregated host pair into its exact reconstructed flows and Connection Story.
 - Packet timestamps preserve canonical UTC/epoch evidence while displaying in the user's system-local timezone across desktop platforms.
 
 Remaining preference wiring, workspace recovery and further map/UI improvements
@@ -270,7 +271,7 @@ provider selection. See the guide for optional authentication and data-directory
 
 ### Validation status
 
-The current v0.4 development suite contains **134 focused backend regression tests**; GitHub Actions is the authoritative validation environment for capture-dependent tests.
+The current v0.4 development suite contains **138 focused backend regression tests**; GitHub Actions is the authoritative validation environment for capture-dependent tests.
 The branch is protected by Docker smoke testing, the existing Windows
 PyInstaller/Inno gate and development Tauri package builds for Windows, Linux
 and macOS. Package construction is not equivalent to clean-system support.

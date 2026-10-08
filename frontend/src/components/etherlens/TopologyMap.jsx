@@ -1,31 +1,873 @@
 import { useEffect, useMemo, useState } from "react";
 import { fmtBytes } from "./lib";
-import { Search, Pause, Play, Focus, RotateCcw, Network, List, Map as MapIcon, ScanSearch, GitBranch, ShieldAlert, Filter } from "lucide-react";
+import {
+  Search,
+  Pause,
+  Play,
+  Focus,
+  RotateCcw,
+  Network,
+  List,
+  Map as MapIcon,
+  ScanSearch,
+  GitBranch,
+  ShieldAlert,
+  Filter,
+} from "lucide-react";
 
-const threatIps=t=>[t?.src,t?.dst,t?.src_ip,t?.dst_ip].filter(Boolean).map(String);
+const threatIps = (t) =>
+  [t?.src, t?.dst, t?.src_ip, t?.dst_ip].filter(Boolean).map(String);
 
-export default function TopologyMap({ topology, threats=[], onInvestigate }) {
-  const [paused,setPaused]=useState(false),[snapshot,setSnapshot]=useState(topology||{nodes:[],edges:[]}),[selectedId,setSelectedId]=useState(null),[selectedEdge,setSelectedEdge]=useState(null),[query,setQuery]=useState(""),[view,setView]=useState("map"),[focusOnly,setFocusOnly]=useState(false),[noiseFloor,setNoiseFloor]=useState("auto"),[protocol,setProtocol]=useState("all"),[hostType,setHostType]=useState("all"),[securityOnly,setSecurityOnly]=useState(false),[port,setPort]=useState("");
-  useEffect(()=>{if(!paused)setSnapshot(topology||{nodes:[],edges:[]});},[topology,paused]);
-  const {nodes=[],edges=[]}=snapshot,selected=nodes.find(n=>n.id===selectedId)||null;
-  useEffect(()=>{if(selectedId&&!nodes.some(n=>n.id===selectedId)&&!paused){setSelectedId(null);setSelectedEdge(null);setFocusOnly(false);}},[nodes,selectedId,paused]);
-  const edgeMap=useMemo(()=>{const m=new Map();edges.forEach(e=>[e.source,e.target].forEach(id=>{if(!m.has(id))m.set(id,[]);m.get(id).push(e);}));return m;},[edges]);
-  const suspicious=useMemo(()=>{const m=new Map();threats.forEach(t=>threatIps(t).forEach(ip=>{if(!m.has(ip))m.set(ip,[]);m.get(ip).push(t);}));return m;},[threats]);
-  const protocols=useMemo(()=>Array.from(new Set(edges.flatMap(e=>e.protocols||[]))).sort(),[edges]);
-  const visible=useMemo(()=>{const q=query.trim().toLowerCase(),p=port.trim(),se=selectedId?(edgeMap.get(selectedId)||[]):[],neighbors=new Set(se.flatMap(e=>[e.source,e.target])),max=Math.max(1,...edges.map(e=>Number(e.bytes||0))),threshold=noiseFloor==="all"?0:noiseFloor==="high"?max*.05:edges.length>80?max*.01:0;let fe=edges.filter(e=>Number(e.bytes||0)>=threshold);if(protocol!=="all")fe=fe.filter(e=>(e.protocols||[]).includes(protocol));if(focusOnly&&selectedId)fe=fe.filter(e=>e.source===selectedId||e.target===selectedId);if(securityOnly)fe=fe.filter(e=>suspicious.has(String(e.source))||suspicious.has(String(e.target)));const connected=new Set(fe.flatMap(e=>[e.source,e.target]));let fn=nodes.filter(n=>connected.has(n.id)||!edges.length);if(focusOnly&&selectedId)fn=fn.filter(n=>neighbors.has(n.id));if(hostType!=="all")fn=fn.filter(n=>hostType==="local"?n.type==="local":n.type!=="local");if(p)fn=fn.filter(n=>(n.ports||[]).some(x=>String(x)===p));if(securityOnly)fn=fn.filter(n=>suspicious.has(String(n.id)));if(q)fn=fn.filter(n=>[n.id,n.hostname,n.mac,n.geo?.country,n.geo?.city,n.geo?.asname,n.geo?.org,...(n.ports||[])].some(v=>String(v||"").toLowerCase().includes(q)));const allowed=new Set(fn.map(n=>n.id));fe=fe.filter(e=>allowed.has(e.source)&&allowed.has(e.target));return{nodes:fn,edges:fe,hiddenNodes:Math.max(0,nodes.length-fn.length),hiddenEdges:Math.max(0,edges.length-fe.length)};},[nodes,edges,query,port,protocol,hostType,securityOnly,selectedId,focusOnly,noiseFloor,edgeMap,suspicious]);
-  const layout=useMemo(()=>{const w=1100,h=610,local=visible.nodes.filter(n=>n.type==="local"),ext=visible.nodes.filter(n=>n.type!=="local"),positions={};const place=(list,cx)=>list.forEach((n,i)=>{const ring=Math.floor(i/18),ri=Math.min(18,list.length-ring*18),t=((i%18)/Math.max(1,ri))*Math.PI*2,r=Math.min(245,75+ring*70+Math.min(70,ri*4));positions[n.id]={x:cx+r*Math.cos(t),y:h/2+r*Math.sin(t)};});if(focusOnly&&selected){positions[selected.id]={x:w/2,y:h/2};visible.nodes.filter(n=>n.id!==selected.id).forEach((n,i,a)=>{const t=(i/Math.max(1,a.length))*Math.PI*2;positions[n.id]={x:w/2+205*Math.cos(t),y:h/2+205*Math.sin(t)};});}else{place(local,w*.3);place(ext,w*.72);}return{positions,w,h};},[visible.nodes,focusOnly,selected]);
-  const selectedEdges=selected?(edgeMap.get(selected.id)||[]):[],maxEdge=Math.max(1,...visible.edges.map(e=>Number(e.bytes||0)));
-  const togglePause=()=>{if(paused){setSnapshot(topology||{nodes:[],edges:[]});setPaused(false);}else{setSnapshot({nodes:[...(topology?.nodes||[])],edges:[...(topology?.edges||[])]});setPaused(true);}};
-  const reset=()=>{setSelectedId(null);setSelectedEdge(null);setQuery("");setFocusOnly(false);setNoiseFloor("auto");setProtocol("all");setHostType("all");setSecurityOnly(false);setPort("");};
-  const investigate=target=>onInvestigate?.(typeof target==="string"?{source:target}:{source:target?.source,target:target?.target,edge:target});
-  const chooseEdge=e=>{setSelectedEdge(e);setSelectedId(e.source);};
-  return <div className="space-y-3" data-testid="topology-map"><div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3"><div className="flex flex-wrap gap-3 items-center justify-between"><div><div className="flex items-center gap-2"><h3 className="font-display font-bold text-sm">Network Map</h3>{paused&&<Badge text="FROZEN" cls="bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"/>}{suspicious.size>0&&<Badge text={`${suspicious.size} flagged hosts`} cls="bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"/>}</div><p className="text-xs text-slate-500">{visible.nodes.length} visible hosts · {visible.edges.length} visible connections{visible.hiddenNodes||visible.hiddenEdges?` · ${visible.hiddenNodes} hosts / ${visible.hiddenEdges} connections hidden`:""}</p></div><div className="flex flex-wrap gap-2"><button onClick={togglePause} className="tool">{paused?<Play size={14}/>:<Pause size={14}/>} {paused?"Resume live":"Freeze view"}</button><button disabled={!selected} onClick={()=>setFocusOnly(!focusOnly)} className={`tool ${focusOnly?"active":""}`}><Focus size={14}/>Focus</button><button onClick={()=>setSecurityOnly(!securityOnly)} className={`tool ${securityOnly?"danger":""}`}><ShieldAlert size={14}/>Security</button><button onClick={reset} className="tool"><RotateCcw size={14}/>Reset</button><button onClick={()=>setView(view==="map"?"list":"map")} className="tool">{view==="map"?<List size={14}/>:<MapIcon size={14}/>} {view==="map"?"List":"Map"}</button></div></div><div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,1fr)_repeat(4,auto)] gap-2 mt-3"><label className="relative"><Search size={14} className="absolute left-3 top-2.5 text-slate-400"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search IP, MAC, hostname, port, ASN or location" className="filter-control w-full pl-9"/></label><select value={protocol} onChange={e=>setProtocol(e.target.value)} className="filter-control"><option value="all">All protocols</option>{protocols.map(p=><option key={p} value={p}>{p}</option>)}</select><select value={hostType} onChange={e=>setHostType(e.target.value)} className="filter-control"><option value="all">All hosts</option><option value="local">Local only</option><option value="external">External only</option></select><input value={port} onChange={e=>setPort(e.target.value.replace(/\D/g,""))} placeholder="Port" className="filter-control w-24"/><select value={noiseFloor} onChange={e=>setNoiseFloor(e.target.value)} className="filter-control"><option value="auto">Noise: Auto</option><option value="all">All traffic</option><option value="high">High-volume</option></select></div><div className="mt-2 flex items-center gap-1 text-[10px] text-slate-500"><Filter size={11}/> Filters affect both map and list views. Security mode shows endpoints associated with current defensive findings.</div></div>
-  <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-3"><div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">{view==="map"?<div className="relative overflow-hidden" style={{height:610}}><svg viewBox={`0 0 ${layout.w} ${layout.h}`} className="w-full h-full">{visible.edges.map((e,i)=>{const a=layout.positions[e.source],b=layout.positions[e.target];if(!a||!b)return null;const width=1+(Number(e.bytes||0)/maxEdge)*5,edgeActive=selectedEdge===e,flagged=suspicious.has(String(e.source))||suspicious.has(String(e.target)),hi=edgeActive||(selected&&(e.source===selected.id||e.target===selected.id));const stroke=edgeActive?"#a855f7":flagged?"#ef4444":hi?"#2563eb":"rgba(100,116,139,.28)";return <g key={`${e.source}-${e.target}-${i}`} onClick={ev=>{ev.stopPropagation();chooseEdge(e);}} className="cursor-pointer"><line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={Math.max(12,width+8)}/><line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={stroke} strokeWidth={edgeActive?Math.max(4,width):flagged?Math.max(3,width):hi?Math.max(2,width):width}/>{!paused&&(hi||flagged)&&<circle r="3" fill={stroke}><animateMotion dur="1.5s" repeatCount="indefinite" path={`M${a.x},${a.y} L${b.x},${b.y}`}/></circle>}</g>})}{visible.nodes.map(n=>{const p=layout.positions[n.id];if(!p)return null;const active=selected?.id===n.id,flagged=suspicious.has(String(n.id)),local=n.type==="local",gateway=n.id.endsWith(".1"),r=active?19:Math.min(17,9+Math.log2(Number(n.bytes||1)+1)/2),fill=flagged?"#ef4444":gateway?"#10b981":local?"#2563eb":"#f97316";return <g key={n.id} onClick={()=>{setSelectedId(n.id);setSelectedEdge(null);}} className="cursor-pointer"><circle cx={p.x} cy={p.y} r={r+6} fill={fill} opacity={flagged ? .24 : .16}/><circle cx={p.x} cy={p.y} r={r} fill={fill} stroke={active?"#fff":flagged?"#fecaca":"rgba(255,255,255,.8)"} strokeWidth={active?4:flagged?3:2}/>{flagged&&<text x={p.x+r-2} y={p.y-r+3} fontSize="13" fill="#ef4444">!</text>}<text x={p.x} y={p.y+r+15} textAnchor="middle" fontSize="10" fill="currentColor" className="font-mono-code pointer-events-none">{n.id}</text></g>})}</svg>{!visible.nodes.length&&<Empty text={securityOnly?"No flagged endpoints match the current filters.":"No endpoints match the current filters."}/>}<div className="absolute bottom-3 left-3 flex flex-wrap gap-3 text-[10px] bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2"><Legend color="#2563eb" text="Local"/><Legend color="#10b981" text="Gateway"/><Legend color="#f97316" text="External"/><Legend color="#ef4444" text="Security finding"/><Legend color="#a855f7" text="Selected connection"/></div></div>:<NodeList nodes={visible.nodes} selectedId={selectedId} suspicious={suspicious} onSelect={id=>{setSelectedId(id);setSelectedEdge(null);}}/>}</div><Inspector node={selected} edges={selectedEdges} selectedEdge={selectedEdge} findings={selected?suspicious.get(String(selected.id))||[]:[]} onSelectEdge={chooseEdge} onFocus={()=>setFocusOnly(true)} focusOnly={focusOnly} onInvestigate={investigate}/></div><style>{`.tool{display:inline-flex;align-items:center;gap:.35rem;padding:.45rem .65rem;border-radius:.5rem;font-size:.75rem;font-weight:600;background:rgb(241 245 249)}.dark .tool{background:rgb(30 41 59)}.tool:disabled{opacity:.4}.tool.active{background:#2563eb;color:white}.tool.danger{background:#dc2626;color:white}.filter-control{border:1px solid rgb(226 232 240);border-radius:.5rem;background:transparent;padding:.5rem .7rem;font-size:.75rem}.dark .filter-control{border-color:rgb(51 65 85);background:rgb(15 23 42)}`}</style></div>;
+export default function TopologyMap({ topology, threats = [], onInvestigate }) {
+  const [paused, setPaused] = useState(false),
+    [snapshot, setSnapshot] = useState(topology || { nodes: [], edges: [] }),
+    [selectedId, setSelectedId] = useState(null),
+    [selectedEdge, setSelectedEdge] = useState(null),
+    [query, setQuery] = useState(""),
+    [view, setView] = useState("map"),
+    [focusOnly, setFocusOnly] = useState(false),
+    [noiseFloor, setNoiseFloor] = useState("auto"),
+    [protocol, setProtocol] = useState("all"),
+    [hostType, setHostType] = useState("all"),
+    [securityOnly, setSecurityOnly] = useState(false),
+    [port, setPort] = useState("");
+  useEffect(() => {
+    if (!paused) setSnapshot(topology || { nodes: [], edges: [] });
+  }, [topology, paused]);
+  const { nodes = [], edges = [] } = snapshot,
+    selected = nodes.find((n) => n.id === selectedId) || null;
+  useEffect(() => {
+    if (selectedId && !nodes.some((n) => n.id === selectedId) && !paused) {
+      setSelectedId(null);
+      setSelectedEdge(null);
+      setFocusOnly(false);
+    }
+  }, [nodes, selectedId, paused]);
+  const edgeMap = useMemo(() => {
+    const m = new Map();
+    edges.forEach((e) =>
+      [e.source, e.target].forEach((id) => {
+        if (!m.has(id)) m.set(id, []);
+        m.get(id).push(e);
+      }),
+    );
+    return m;
+  }, [edges]);
+  const suspicious = useMemo(() => {
+    const m = new Map();
+    threats.forEach((t) =>
+      threatIps(t).forEach((ip) => {
+        if (!m.has(ip)) m.set(ip, []);
+        m.get(ip).push(t);
+      }),
+    );
+    return m;
+  }, [threats]);
+  const flaggedIds = useMemo(() => {
+    const ids = new Set(suspicious.keys());
+    nodes.forEach((node) => {
+      if (
+        Number(node.risk?.score || 0) > 0 ||
+        Number(node.finding_count || 0) > 0
+      )
+        ids.add(String(node.id));
+    });
+    return ids;
+  }, [nodes, suspicious]);
+  const protocols = useMemo(
+    () => Array.from(new Set(edges.flatMap((e) => e.protocols || []))).sort(),
+    [edges],
+  );
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase(),
+      p = port.trim(),
+      se = selectedId ? edgeMap.get(selectedId) || [] : [],
+      neighbors = new Set(se.flatMap((e) => [e.source, e.target])),
+      max = Math.max(1, ...edges.map((e) => Number(e.bytes || 0))),
+      threshold =
+        noiseFloor === "all"
+          ? 0
+          : noiseFloor === "high"
+            ? max * 0.05
+            : edges.length > 80
+              ? max * 0.01
+              : 0;
+    let fe = edges.filter((e) => Number(e.bytes || 0) >= threshold);
+    if (protocol !== "all")
+      fe = fe.filter((e) => (e.protocols || []).includes(protocol));
+    if (focusOnly && selectedId)
+      fe = fe.filter((e) => e.source === selectedId || e.target === selectedId);
+    if (securityOnly)
+      fe = fe.filter(
+        (e) =>
+          flaggedIds.has(String(e.source)) || flaggedIds.has(String(e.target)),
+      );
+    const connected = new Set(fe.flatMap((e) => [e.source, e.target]));
+    let fn = nodes.filter((n) => connected.has(n.id) || !edges.length);
+    if (focusOnly && selectedId) fn = fn.filter((n) => neighbors.has(n.id));
+    if (hostType !== "all")
+      fn = fn.filter((n) =>
+        hostType === "local" ? n.type === "local" : n.type !== "local",
+      );
+    if (p) fn = fn.filter((n) => (n.ports || []).some((x) => String(x) === p));
+    if (securityOnly) fn = fn.filter((n) => flaggedIds.has(String(n.id)));
+    if (q)
+      fn = fn.filter((n) =>
+        [
+          n.id,
+          n.alias,
+          n.hostname,
+          n.mac,
+          n.activity_state,
+          n.risk?.level,
+          n.geo?.country,
+          n.geo?.city,
+          n.geo?.asname,
+          n.geo?.org,
+          ...(n.ports || []),
+          ...(n.protocols || []),
+          ...(n.domains || []),
+        ].some((v) =>
+          String(v || "")
+            .toLowerCase()
+            .includes(q),
+        ),
+      );
+    const allowed = new Set(fn.map((n) => n.id));
+    fe = fe.filter((e) => allowed.has(e.source) && allowed.has(e.target));
+    return {
+      nodes: fn,
+      edges: fe,
+      hiddenNodes: Math.max(0, nodes.length - fn.length),
+      hiddenEdges: Math.max(0, edges.length - fe.length),
+    };
+  }, [
+    nodes,
+    edges,
+    query,
+    port,
+    protocol,
+    hostType,
+    securityOnly,
+    selectedId,
+    focusOnly,
+    noiseFloor,
+    edgeMap,
+    flaggedIds,
+  ]);
+  const layout = useMemo(() => {
+    const w = 1100,
+      h = 610,
+      local = visible.nodes.filter((n) => n.type === "local"),
+      ext = visible.nodes.filter((n) => n.type !== "local"),
+      positions = {};
+    const place = (list, cx) =>
+      list.forEach((n, i) => {
+        const ring = Math.floor(i / 18),
+          ri = Math.min(18, list.length - ring * 18),
+          t = ((i % 18) / Math.max(1, ri)) * Math.PI * 2,
+          r = Math.min(245, 75 + ring * 70 + Math.min(70, ri * 4));
+        positions[n.id] = {
+          x: cx + r * Math.cos(t),
+          y: h / 2 + r * Math.sin(t),
+        };
+      });
+    if (focusOnly && selected) {
+      positions[selected.id] = { x: w / 2, y: h / 2 };
+      visible.nodes
+        .filter((n) => n.id !== selected.id)
+        .forEach((n, i, a) => {
+          const t = (i / Math.max(1, a.length)) * Math.PI * 2;
+          positions[n.id] = {
+            x: w / 2 + 205 * Math.cos(t),
+            y: h / 2 + 205 * Math.sin(t),
+          };
+        });
+    } else {
+      place(local, w * 0.3);
+      place(ext, w * 0.72);
+    }
+    return { positions, w, h };
+  }, [visible.nodes, focusOnly, selected]);
+  const selectedEdges = selected ? edgeMap.get(selected.id) || [] : [],
+    maxEdge = Math.max(1, ...visible.edges.map((e) => Number(e.bytes || 0)));
+  const togglePause = () => {
+    if (paused) {
+      setSnapshot(topology || { nodes: [], edges: [] });
+      setPaused(false);
+    } else {
+      setSnapshot({
+        nodes: [...(topology?.nodes || [])],
+        edges: [...(topology?.edges || [])],
+        summary: { ...(topology?.summary || {}) },
+      });
+      setPaused(true);
+    }
+  };
+  const reset = () => {
+    setSelectedId(null);
+    setSelectedEdge(null);
+    setQuery("");
+    setFocusOnly(false);
+    setNoiseFloor("auto");
+    setProtocol("all");
+    setHostType("all");
+    setSecurityOnly(false);
+    setPort("");
+  };
+  const investigate = (target) =>
+    onInvestigate?.(
+      typeof target === "string"
+        ? { source: target }
+        : { source: target?.source, target: target?.target, edge: target },
+    );
+  const chooseEdge = (e) => {
+    setSelectedEdge(e);
+    setSelectedId(e.source);
+  };
+  return (
+    <div className="space-y-3" data-testid="topology-map">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3">
+        <div className="flex flex-wrap gap-3 items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-display font-bold text-sm">
+                Network Map 2.0
+              </h3>
+              {paused && (
+                <Badge
+                  text="FROZEN"
+                  cls="bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+                />
+              )}
+              {flaggedIds.size > 0 && (
+                <Badge
+                  text={`${flaggedIds.size} flagged hosts`}
+                  cls="bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"
+                />
+              )}
+            </div>
+            <p className="text-xs text-slate-500">
+              {visible.nodes.length} visible hosts · {visible.edges.length}{" "}
+              visible connections
+              {visible.hiddenNodes || visible.hiddenEdges
+                ? ` · ${visible.hiddenNodes} hosts / ${visible.hiddenEdges} connections hidden`
+                : ""}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={togglePause} className="tool">
+              {paused ? <Play size={14} /> : <Pause size={14} />}{" "}
+              {paused ? "Resume live" : "Freeze view"}
+            </button>
+            <button
+              disabled={!selected}
+              onClick={() => setFocusOnly(!focusOnly)}
+              className={`tool ${focusOnly ? "active" : ""}`}
+            >
+              <Focus size={14} />
+              Focus
+            </button>
+            <button
+              onClick={() => setSecurityOnly(!securityOnly)}
+              className={`tool ${securityOnly ? "danger" : ""}`}
+            >
+              <ShieldAlert size={14} />
+              Security
+            </button>
+            <button onClick={reset} className="tool">
+              <RotateCcw size={14} />
+              Reset
+            </button>
+            <button
+              onClick={() => setView(view === "map" ? "list" : "map")}
+              className="tool"
+            >
+              {view === "map" ? <List size={14} /> : <MapIcon size={14} />}{" "}
+              {view === "map" ? "List" : "Map"}
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,1fr)_repeat(4,auto)] gap-2 mt-3">
+          <label className="relative">
+            <Search
+              size={14}
+              className="absolute left-3 top-2.5 text-slate-400"
+            />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search IP, alias, hostname, MAC, domain, protocol or location"
+              className="filter-control w-full pl-9"
+            />
+          </label>
+          <select
+            value={protocol}
+            onChange={(e) => setProtocol(e.target.value)}
+            className="filter-control"
+          >
+            <option value="all">All protocols</option>
+            {protocols.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+          <select
+            value={hostType}
+            onChange={(e) => setHostType(e.target.value)}
+            className="filter-control"
+          >
+            <option value="all">All hosts</option>
+            <option value="local">Local only</option>
+            <option value="external">External only</option>
+          </select>
+          <input
+            value={port}
+            onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))}
+            placeholder="Port"
+            className="filter-control w-24"
+          />
+          <select
+            value={noiseFloor}
+            onChange={(e) => setNoiseFloor(e.target.value)}
+            className="filter-control"
+          >
+            <option value="auto">Noise: Auto</option>
+            <option value="all">All traffic</option>
+            <option value="high">High-volume</option>
+          </select>
+        </div>
+        <div className="mt-2 flex items-center gap-1 text-[10px] text-slate-500">
+          <Filter size={11} /> Filters affect both map and list views. Security
+          mode shows endpoints associated with current defensive findings.
+        </div>
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-3">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          {view === "map" ? (
+            <div className="relative overflow-hidden" style={{ height: 610 }}>
+              <svg
+                viewBox={`0 0 ${layout.w} ${layout.h}`}
+                className="w-full h-full"
+              >
+                {visible.edges.map((e, i) => {
+                  const a = layout.positions[e.source],
+                    b = layout.positions[e.target];
+                  if (!a || !b) return null;
+                  const width = 1 + (Number(e.bytes || 0) / maxEdge) * 5,
+                    edgeActive = selectedEdge === e,
+                    flagged =
+                      flaggedIds.has(String(e.source)) ||
+                      flaggedIds.has(String(e.target)),
+                    hi =
+                      edgeActive ||
+                      (selected &&
+                        (e.source === selected.id || e.target === selected.id));
+                  const stroke = edgeActive
+                    ? "#a855f7"
+                    : flagged
+                      ? "#ef4444"
+                      : hi
+                        ? "#2563eb"
+                        : "rgba(100,116,139,.28)";
+                  return (
+                    <g
+                      key={`${e.source}-${e.target}-${i}`}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        chooseEdge(e);
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <line
+                        x1={a.x}
+                        y1={a.y}
+                        x2={b.x}
+                        y2={b.y}
+                        stroke="transparent"
+                        strokeWidth={Math.max(12, width + 8)}
+                      />
+                      <line
+                        x1={a.x}
+                        y1={a.y}
+                        x2={b.x}
+                        y2={b.y}
+                        stroke={stroke}
+                        strokeWidth={
+                          edgeActive
+                            ? Math.max(4, width)
+                            : flagged
+                              ? Math.max(3, width)
+                              : hi
+                                ? Math.max(2, width)
+                                : width
+                        }
+                      />
+                      {!paused && (hi || flagged) && (
+                        <circle r="3" fill={stroke}>
+                          <animateMotion
+                            dur="1.5s"
+                            repeatCount="indefinite"
+                            path={`M${a.x},${a.y} L${b.x},${b.y}`}
+                          />
+                        </circle>
+                      )}
+                    </g>
+                  );
+                })}
+                {visible.nodes.map((n) => {
+                  const p = layout.positions[n.id];
+                  if (!p) return null;
+                  const active = selected?.id === n.id,
+                    flagged = flaggedIds.has(String(n.id)),
+                    local = n.type === "local",
+                    gateway = n.id.endsWith(".1"),
+                    r = active
+                      ? 19
+                      : Math.min(
+                          17,
+                          9 + Math.log2(Number(n.bytes || 1) + 1) / 2,
+                        ),
+                    fill = flagged
+                      ? "#ef4444"
+                      : gateway
+                        ? "#10b981"
+                        : local
+                          ? "#2563eb"
+                          : "#f97316";
+                  return (
+                    <g
+                      key={n.id}
+                      onClick={() => {
+                        setSelectedId(n.id);
+                        setSelectedEdge(null);
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <circle
+                        cx={p.x}
+                        cy={p.y}
+                        r={r + 6}
+                        fill={fill}
+                        opacity={flagged ? 0.24 : 0.16}
+                      />
+                      <circle
+                        cx={p.x}
+                        cy={p.y}
+                        r={r}
+                        fill={fill}
+                        stroke={
+                          active
+                            ? "#fff"
+                            : flagged
+                              ? "#fecaca"
+                              : "rgba(255,255,255,.8)"
+                        }
+                        strokeWidth={active ? 4 : flagged ? 3 : 2}
+                      />
+                      {flagged && (
+                        <text
+                          x={p.x + r - 2}
+                          y={p.y - r + 3}
+                          fontSize="13"
+                          fill="#ef4444"
+                        >
+                          !
+                        </text>
+                      )}
+                      <text
+                        x={p.x}
+                        y={p.y + r + 15}
+                        textAnchor="middle"
+                        fontSize="10"
+                        fill="currentColor"
+                        className="font-mono-code pointer-events-none"
+                      >
+                        {n.id}
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+              {!visible.nodes.length && (
+                <Empty
+                  text={
+                    securityOnly
+                      ? "No flagged endpoints match the current filters."
+                      : "No endpoints match the current filters."
+                  }
+                />
+              )}
+              <div className="absolute bottom-3 left-3 flex flex-wrap gap-3 text-[10px] bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+                <Legend color="#2563eb" text="Local" />
+                <Legend color="#10b981" text="Gateway" />
+                <Legend color="#f97316" text="External" />
+                <Legend color="#ef4444" text="Security finding" />
+                <Legend color="#a855f7" text="Selected connection" />
+              </div>
+            </div>
+          ) : (
+            <NodeList
+              nodes={visible.nodes}
+              selectedId={selectedId}
+              suspicious={flaggedIds}
+              onSelect={(id) => {
+                setSelectedId(id);
+                setSelectedEdge(null);
+              }}
+            />
+          )}
+        </div>
+        <Inspector
+          node={selected}
+          edges={selectedEdges}
+          selectedEdge={selectedEdge}
+          findings={selected ? suspicious.get(String(selected.id)) || [] : []}
+          onSelectEdge={chooseEdge}
+          onFocus={() => setFocusOnly(true)}
+          focusOnly={focusOnly}
+          onInvestigate={investigate}
+        />
+      </div>
+      <style>{`.tool{display:inline-flex;align-items:center;gap:.35rem;padding:.45rem .65rem;border-radius:.5rem;font-size:.75rem;font-weight:600;background:rgb(241 245 249)}.dark .tool{background:rgb(30 41 59)}.tool:disabled{opacity:.4}.tool.active{background:#2563eb;color:white}.tool.danger{background:#dc2626;color:white}.filter-control{border:1px solid rgb(226 232 240);border-radius:.5rem;background:transparent;padding:.5rem .7rem;font-size:.75rem}.dark .filter-control{border-color:rgb(51 65 85);background:rgb(15 23 42)}`}</style>
+    </div>
+  );
 }
-function Inspector({node,edges,selectedEdge,findings,onSelectEdge,onFocus,focusOnly,onInvestigate}){if(selectedEdge)return <ConnectionInspector edge={selectedEdge} onInvestigate={onInvestigate}/>;if(!node)return <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col items-center justify-center text-center min-h-64"><Network size={28} className="text-slate-400"/><div className="font-semibold text-sm mt-3">Select a host or connection</div><p className="text-xs text-slate-500 mt-1">Click a node for host details or a connection line for direct drill-down.</p></div>;const peers=edges.map(e=>({edge:e,id:e.source===node.id?e.target:e.source})).sort((a,b)=>Number(b.edge.bytes||0)-Number(a.edge.bytes||0));return <div className={`bg-white dark:bg-slate-900 rounded-xl border overflow-hidden ${findings.length?"border-red-300 dark:border-red-900":"border-slate-200 dark:border-slate-800"}`}><div className="p-4 border-b border-slate-200 dark:border-slate-800"><div className="flex justify-between gap-2"><div><div className="text-[10px] uppercase tracking-wider text-slate-500">Selected host</div><div className="font-mono-code font-bold mt-1 break-all">{node.id}</div></div>{findings.length>0&&<Badge text={`${findings.length} findings`} cls="bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"/>}</div><div className="text-xs text-slate-500 mt-1">{node.type==="local"?"Local host":node.geo?.country||"External endpoint"}</div><div className="flex flex-wrap gap-2 mt-3"><button onClick={onFocus} disabled={focusOnly} className="tool"><Focus size={14}/>{focusOnly?"Focused":"Focus"}</button><button onClick={()=>onInvestigate(node.id)} disabled={!onInvestigate} className="tool active"><ScanSearch size={14}/>Investigate</button></div></div><div className="grid grid-cols-2 gap-2 p-3"><Stat label="Packets" value={Number(node.packets||0).toLocaleString()}/><Stat label="Traffic" value={fmtBytes(node.bytes||0)}/><Stat label="Connections" value={edges.length}/><Stat label="Ports" value={(node.ports||[]).length}/></div>{findings.length>0&&<div className="px-4 pb-3"><div className="text-[10px] uppercase tracking-wider text-red-500 mb-1">Defensive findings</div><div className="space-y-1">{findings.slice(0,4).map((f,i)=><div key={i} className="text-[11px] bg-red-50 dark:bg-red-500/5 rounded p-2"><span className="font-semibold">{f.type||f.title||"Finding"}</span>{f.severity&&<span className="ml-2 uppercase text-[9px] text-red-500">{f.severity}</span>}</div>)}</div></div>}<div className="border-t border-slate-200 dark:border-slate-800"><div className="px-4 py-2 text-[10px] uppercase tracking-wider text-slate-500">Top connections</div>{peers.slice(0,12).map(({edge,id},i)=><button key={`${id}-${i}`} onClick={()=>onSelectEdge(edge)} className="w-full text-left px-4 py-2 border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60"><div className="flex justify-between gap-2"><span className="font-mono-code text-xs truncate">{id}</span><span className="text-[10px] text-slate-500">{fmtBytes(edge.bytes||0)}</span></div><div className="text-[10px] text-slate-500">{edge.packets||0} pkts · {(edge.protocols||[]).join(", ")||"Unknown"}</div></button>)}</div></div>}
-function ConnectionInspector({edge,onInvestigate}){return <div className="bg-white dark:bg-slate-900 rounded-xl border border-purple-200 dark:border-purple-900 overflow-hidden"><div className="p-4 border-b border-slate-200 dark:border-slate-800"><div className="flex items-center gap-2 text-purple-600"><GitBranch size={16}/><span className="text-[10px] uppercase tracking-wider font-semibold">Selected connection</span></div><div className="font-mono-code text-xs mt-2 break-all">{edge.source} ↔ {edge.target}</div><div className="flex flex-wrap gap-2 mt-3"><button onClick={()=>onInvestigate(edge)} disabled={!onInvestigate} className="tool active"><ScanSearch size={14}/>Open Connection Story</button></div></div><div className="grid grid-cols-2 gap-2 p-3"><Stat label="Packets" value={Number(edge.packets||0).toLocaleString()}/><Stat label="Traffic" value={fmtBytes(edge.bytes||0)}/></div><div className="px-4 pb-4"><div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Protocols</div><div className="flex flex-wrap gap-1">{(edge.protocols||[]).map(p=><Badge key={p} text={p} cls="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"/>)}{!(edge.protocols||[]).length&&<span className="text-xs text-slate-400">Unknown</span>}</div><p className="text-[10px] text-slate-500 mt-3">Connection Story resolves this edge against reconstructed packet, TCP, DNS and TLS context.</p></div></div>}
-function NodeList({nodes,selectedId,suspicious,onSelect}){return <div className="max-h-[610px] overflow-auto divide-y divide-slate-100 dark:divide-slate-800">{nodes.map(n=><button key={n.id} onClick={()=>onSelect(n.id)} className={`w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 ${selectedId===n.id?"bg-blue-50 dark:bg-blue-500/5":""}`}><div className="flex justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-2"><span className="font-mono-code text-xs truncate">{n.id}</span>{suspicious.has(String(n.id))&&<ShieldAlert size={13} className="text-red-500"/>}</div><div className="text-[10px] text-slate-500 mt-1">{n.hostname||n.mac||n.geo?.asname||n.geo?.country||"Unresolved endpoint"}</div></div><div className="text-right text-[10px] text-slate-500 shrink-0"><div>{fmtBytes(n.bytes||0)}</div><div>{n.packets||0} pkts</div></div></div></button>)}{!nodes.length&&<Empty text="No endpoints match the current filters."/>}</div>}
-function Stat({label,value}){return <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2"><div className="text-[9px] uppercase tracking-wider text-slate-400">{label}</div><div className="font-mono-code text-xs font-semibold mt-1">{value}</div></div>}
-function Badge({text,cls}){return <span className={`inline-flex px-2 py-1 rounded-full text-[9px] font-bold ${cls}`}>{text}</span>}
-function Legend({color,text}){return <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{background:color}}/>{text}</span>}
-function Empty({text}){return <div className="p-8 text-center text-xs text-slate-400">{text}</div>}
+function Inspector({
+  node,
+  edges,
+  selectedEdge,
+  findings,
+  onSelectEdge,
+  onFocus,
+  focusOnly,
+  onInvestigate,
+}) {
+  if (selectedEdge)
+    return (
+      <ConnectionInspector edge={selectedEdge} onInvestigate={onInvestigate} />
+    );
+  if (!node)
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col items-center justify-center text-center min-h-64">
+        <Network size={28} className="text-slate-400" />
+        <div className="font-semibold text-sm mt-3">
+          Select a host or connection
+        </div>
+        <p className="text-xs text-slate-500 mt-1">
+          Click a node for host details or a connection line for direct
+          drill-down.
+        </p>
+      </div>
+    );
+  const peers = edges
+    .map((e) => ({ edge: e, id: e.source === node.id ? e.target : e.source }))
+    .sort((a, b) => Number(b.edge.bytes || 0) - Number(a.edge.bytes || 0));
+  return (
+    <div
+      className={`bg-white dark:bg-slate-900 rounded-xl border overflow-hidden ${findings.length ? "border-red-300 dark:border-red-900" : "border-slate-200 dark:border-slate-800"}`}
+    >
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex justify-between gap-2">
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500">
+              Selected host
+            </div>
+            {node.alias && (
+              <div className="font-display font-bold mt-1">{node.alias}</div>
+            )}
+            <div className="font-mono-code font-bold mt-1 break-all">
+              {node.id}
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            {node.watchlisted && (
+              <Badge
+                text="WATCHLIST"
+                cls="bg-violet-100 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300"
+              />
+            )}
+            {Number(node.risk?.score || 0) > 0 && (
+              <Badge
+                text={`${node.risk.score} ${node.risk.level || "risk"}`}
+                cls="bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300 uppercase"
+              />
+            )}
+            {findings.length > 0 && (
+              <Badge
+                text={`${findings.length} findings`}
+                cls="bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"
+              />
+            )}
+          </div>
+        </div>
+        <div className="text-xs text-slate-500 mt-1">
+          {node.type === "local"
+            ? "Local host"
+            : node.geo?.country || "External endpoint"}
+          {node.hostname ? ` · ${node.hostname}` : ""}
+          {node.mac ? ` · ${node.mac}` : ""}
+          {node.activity_state
+            ? ` · ${node.activity_state.replaceAll("_", " ")}`
+            : ""}
+        </div>
+        <div className="flex flex-wrap gap-2 mt-3">
+          <button onClick={onFocus} disabled={focusOnly} className="tool">
+            <Focus size={14} />
+            {focusOnly ? "Focused" : "Focus"}
+          </button>
+          <button
+            onClick={() => onInvestigate(node.id)}
+            disabled={!onInvestigate}
+            className="tool active"
+          >
+            <ScanSearch size={14} />
+            Investigate
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 p-3">
+        <Stat
+          label="Packets"
+          value={Number(node.packets || 0).toLocaleString()}
+        />
+        <Stat label="Traffic" value={fmtBytes(node.bytes || 0)} />
+        <Stat label="Connections" value={edges.length} />
+        <Stat label="Ports" value={(node.ports || []).length} />
+      </div>
+      {(node.protocols?.length > 0 || node.domains?.length > 0) && (
+        <div className="px-4 pb-3 text-[11px] text-slate-500 space-y-1">
+          {node.protocols?.length > 0 && (
+            <div>
+              <b>Protocols:</b> {node.protocols.join(", ")}
+            </div>
+          )}
+          {node.domains?.length > 0 && (
+            <div className="break-words">
+              <b>Domains:</b> {node.domains.slice(0, 8).join(", ")}
+            </div>
+          )}
+        </div>
+      )}
+      {findings.length > 0 && (
+        <div className="px-4 pb-3">
+          <div className="text-[10px] uppercase tracking-wider text-red-500 mb-1">
+            Defensive findings
+          </div>
+          <div className="space-y-1">
+            {findings.slice(0, 4).map((f, i) => (
+              <div
+                key={i}
+                className="text-[11px] bg-red-50 dark:bg-red-500/5 rounded p-2"
+              >
+                <span className="font-semibold">
+                  {f.type || f.title || "Finding"}
+                </span>
+                {f.severity && (
+                  <span className="ml-2 uppercase text-[9px] text-red-500">
+                    {f.severity}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="border-t border-slate-200 dark:border-slate-800">
+        <div className="px-4 py-2 text-[10px] uppercase tracking-wider text-slate-500">
+          Top connections
+        </div>
+        {peers.slice(0, 12).map(({ edge, id }, i) => (
+          <button
+            key={`${id}-${i}`}
+            onClick={() => onSelectEdge(edge)}
+            className="w-full text-left px-4 py-2 border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+          >
+            <div className="flex justify-between gap-2">
+              <span className="font-mono-code text-xs truncate">{id}</span>
+              <span className="text-[10px] text-slate-500">
+                {fmtBytes(edge.bytes || 0)}
+              </span>
+            </div>
+            <div className="text-[10px] text-slate-500">
+              {edge.packets || 0} pkts ·{" "}
+              {(edge.protocols || []).join(", ") || "Unknown"}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+function ConnectionInspector({ edge, onInvestigate }) {
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-purple-200 dark:border-purple-900 overflow-hidden">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-2 text-purple-600">
+          <GitBranch size={16} />
+          <span className="text-[10px] uppercase tracking-wider font-semibold">
+            Selected connection
+          </span>
+        </div>
+        <div className="font-mono-code text-xs mt-2 break-all">
+          {edge.source} ↔ {edge.target}
+        </div>
+        <div className="flex flex-wrap gap-2 mt-3">
+          <button
+            onClick={() => onInvestigate(edge)}
+            disabled={!onInvestigate}
+            className="tool active"
+          >
+            <ScanSearch size={14} />
+            Open Connection Story
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 p-3">
+        <Stat
+          label="Packets"
+          value={Number(edge.packets || 0).toLocaleString()}
+        />
+        <Stat label="Traffic" value={fmtBytes(edge.bytes || 0)} />
+        <Stat label="Flows" value={edge.connection_count || 0} />
+        <Stat
+          label="TCP issues"
+          value={Object.values(edge.tcp_health || {}).reduce(
+            (total, value) => total + Number(value || 0),
+            0,
+          )}
+        />
+      </div>
+      <div className="px-4 pb-4">
+        <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+          Protocols
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {(edge.protocols || []).map((p) => (
+            <Badge
+              key={p}
+              text={p}
+              cls="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            />
+          ))}
+          {!(edge.protocols || []).length && (
+            <span className="text-xs text-slate-400">Unknown</span>
+          )}
+        </div>
+        {(edge.connections || []).length > 0 && (
+          <div className="mt-4">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+              Top reconstructed flows
+            </div>
+            <div className="space-y-1 max-h-56 overflow-auto el-scroll">
+              {edge.connections.map((flow, index) => (
+                <button
+                  key={`${flow.a_ip}-${flow.a_port}-${flow.b_ip}-${flow.b_port}-${index}`}
+                  onClick={() =>
+                    onInvestigate({
+                      source: flow.a_ip,
+                      target: flow.b_ip,
+                      source_port: flow.a_port,
+                      target_port: flow.b_port,
+                    })
+                  }
+                  className="w-full rounded-md border border-slate-100 dark:border-slate-800 p-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  <div className="font-mono-code text-[10px] break-all">
+                    {flow.a_ip}:{flow.a_port || "—"} ↔ {flow.b_ip}:
+                    {flow.b_port || "—"}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1">
+                    {Number(flow.packets || 0).toLocaleString()} pkts ·{" "}
+                    {fmtBytes(flow.bytes || 0)} ·{" "}
+                    {(flow.protocols || []).join(", ") || "Unknown"} ·{" "}
+                    {flow.state || "observed"}
+                  </div>
+                </button>
+              ))}
+            </div>
+            {edge.connections_truncated && (
+              <div className="text-[10px] text-amber-600 dark:text-amber-300 mt-2">
+                Showing the 25 highest-volume flows for this host pair.
+              </div>
+            )}
+          </div>
+        )}
+        <p className="text-[10px] text-slate-500 mt-3">
+          Connection Story resolves this edge against reconstructed packet, TCP,
+          DNS and TLS context.
+        </p>
+      </div>
+    </div>
+  );
+}
+function NodeList({ nodes, selectedId, suspicious, onSelect }) {
+  return (
+    <div className="max-h-[610px] overflow-auto divide-y divide-slate-100 dark:divide-slate-800">
+      {nodes.map((n) => (
+        <button
+          key={n.id}
+          onClick={() => onSelect(n.id)}
+          className={`w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 ${selectedId === n.id ? "bg-blue-50 dark:bg-blue-500/5" : ""}`}
+        >
+          <div className="flex justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-mono-code text-xs truncate">{n.id}</span>
+                {suspicious.has(String(n.id)) && (
+                  <ShieldAlert size={13} className="text-red-500" />
+                )}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1">
+                {n.alias ||
+                  n.hostname ||
+                  n.mac ||
+                  n.geo?.asname ||
+                  n.geo?.country ||
+                  "Unresolved endpoint"}
+              </div>
+            </div>
+            <div className="text-right text-[10px] text-slate-500 shrink-0">
+              <div>{fmtBytes(n.bytes || 0)}</div>
+              <div>{n.packets || 0} pkts</div>
+            </div>
+          </div>
+        </button>
+      ))}
+      {!nodes.length && (
+        <Empty text="No endpoints match the current filters." />
+      )}
+    </div>
+  );
+}
+function Stat({ label, value }) {
+  return (
+    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2">
+      <div className="text-[9px] uppercase tracking-wider text-slate-400">
+        {label}
+      </div>
+      <div className="font-mono-code text-xs font-semibold mt-1">{value}</div>
+    </div>
+  );
+}
+function Badge({ text, cls }) {
+  return (
+    <span
+      className={`inline-flex px-2 py-1 rounded-full text-[9px] font-bold ${cls}`}
+    >
+      {text}
+    </span>
+  );
+}
+function Legend({ color, text }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+      {text}
+    </span>
+  );
+}
+function Empty({ text }) {
+  return <div className="p-8 text-center text-xs text-slate-400">{text}</div>;
+}

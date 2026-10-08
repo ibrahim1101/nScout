@@ -25,6 +25,7 @@ from etherlens.host_profiles import HostProfileStore
 from etherlens.global_search import search_investigation_data
 from etherlens.pcap_compare import MAX_PCAP_BYTES,compare_pcap_bytes
 from etherlens.baselines import BaselineNotFound,BaselineStore,build_profile,compare_profile
+from etherlens.topology import build_topology
 ROOT_DIR=Path(__file__).parent; load_dotenv(ROOT_DIR/".env"); logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s - %(message)s"); logger=logging.getLogger("nscout")
 mongo_url=os.environ.get("MONGO_URL","mongodb://127.0.0.1:27017"); db_name=os.environ.get("DB_NAME","nscout"); client=AsyncIOMotorClient(mongo_url,serverSelectionTimeoutMS=1500,connectTimeoutMS=1500); db=client[db_name]; settings_col=db.etherlens_settings; mongo_available=False; session=CaptureSession(); app=FastAPI(title="nScout"); api=APIRouter(prefix="/api")
 DATA_DIR=Path(os.environ.get("NSCOUT_DATA_DIR", str(Path.home()/".nscout")))
@@ -308,7 +309,11 @@ async def investigation_report_export(report_format:str,workspace_id:Optional[st
  return Response(content=content,media_type=exporter[1],headers={"Content-Disposition":f'attachment; filename="nscout-investigation{suffix}.{report_format.lower()}"',"X-nScout-Report-Schema":"2"})
 @api.get("/topology")
 async def topology(enrich:bool=False):
- data=session.topology()
+ packets=list(session.packets);security=intelligence.security_intelligence(packets,session.list_threats())
+ hosts=intelligence.host_intelligence(packets,security["findings"])
+ try:hosts=await asyncio.to_thread(_host_profile_store.enrich,hosts)
+ except ValueError as exc:logger.warning("Host profile persistence unavailable during topology build: %s",exc)
+ data=build_topology(hosts,intelligence.connection_intelligence(packets,limit=5000))
  if enrich:
   ext=[n["id"] for n in data["nodes"] if n.get("type")!="local"]; gm=await geo.enrich(ext)
   for n in data["nodes"]:n["geo"]=gm.get(n["id"]) if n["id"] in gm else None
