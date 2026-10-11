@@ -14,6 +14,7 @@ import {
 import { api } from "./lib";
 import ReportExports from "./ReportExports";
 import { ACTIVE_INVESTIGATION_KEY as ACTIVE_CASE_KEY } from "./investigationBookmarks";
+import { describeInvestigationWorkspaceState } from "./investigationWorkspaceState";
 
 const FINDING_STATES = [
   "new",
@@ -39,41 +40,42 @@ export default function InvestigationWorkspace({
   const [hostId, setHostId] = useState("");
   const [findingId, setFindingId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const loadWorkspace = useCallback(async (id) => {
-    if (!id) {
-      setWorkspace(null);
-      return;
-    }
+    if (!id) return null;
     const response = await api.get(`/investigations/${id}`);
-    setWorkspace(response.data.investigation);
+    return response.data.investigation;
   }, []);
 
   const refreshCases = useCallback(
     async (preferredId = "") => {
       setLoading(true);
-      setError("");
+      setLoadError("");
       try {
         const response = await api.get("/investigations");
         const nextCases = response.data.investigations || [];
-        setCases(nextCases);
         const remembered = window.localStorage.getItem(ACTIVE_CASE_KEY) || "";
         const nextId =
           [preferredId, remembered, nextCases[0]?.id].find(
             (id) => id && nextCases.some((item) => item.id === id),
           ) || "";
+        const nextWorkspace = nextId ? await loadWorkspace(nextId) : null;
+        setCases(nextCases);
         setActiveId(nextId);
+        setWorkspace(nextWorkspace);
         if (nextId) {
           window.localStorage.setItem(ACTIVE_CASE_KEY, nextId);
-          await loadWorkspace(nextId);
         } else {
           window.localStorage.removeItem(ACTIVE_CASE_KEY);
-          setWorkspace(null);
         }
+        setLoaded(true);
+        setLoadError("");
       } catch (err) {
-        setError(message(err, "Could not load investigations."));
+        setLoadError(message(err, "Could not load investigations."));
       } finally {
         setLoading(false);
       }
@@ -86,13 +88,14 @@ export default function InvestigationWorkspace({
   }, [refreshCases]);
 
   const selectCase = async (id) => {
-    setActiveId(id);
-    setError("");
-    window.localStorage.setItem(ACTIVE_CASE_KEY, id);
+    setActionError("");
     try {
-      await loadWorkspace(id);
+      const nextWorkspace = await loadWorkspace(id);
+      setActiveId(id);
+      setWorkspace(nextWorkspace);
+      window.localStorage.setItem(ACTIVE_CASE_KEY, id);
     } catch (err) {
-      setError(message(err, "Could not open the investigation."));
+      setActionError(message(err, "Could not open the investigation."));
     }
   };
 
@@ -110,7 +113,7 @@ export default function InvestigationWorkspace({
     event.preventDefault();
     if (!caseName.trim()) return;
     setSaving(true);
-    setError("");
+    setActionError("");
     try {
       const response = await api.post("/investigations", {
         name: caseName.trim(),
@@ -119,7 +122,7 @@ export default function InvestigationWorkspace({
       setCaseName("");
       await refreshCases(created.id);
     } catch (err) {
-      setError(message(err, "Could not create the investigation."));
+      setActionError(message(err, "Could not create the investigation."));
     } finally {
       setSaving(false);
     }
@@ -128,7 +131,7 @@ export default function InvestigationWorkspace({
   const mutate = async (request, fallback) => {
     if (!activeId) return;
     setSaving(true);
-    setError("");
+    setActionError("");
     try {
       const response = await request();
       if (response.data.investigation)
@@ -137,7 +140,7 @@ export default function InvestigationWorkspace({
       setCases(list.data.investigations || []);
       return true;
     } catch (err) {
-      setError(message(err, fallback));
+      setActionError(message(err, fallback));
       return false;
     } finally {
       setSaving(false);
@@ -151,13 +154,16 @@ export default function InvestigationWorkspace({
     )
       return;
     setSaving(true);
-    setError("");
+    setActionError("");
     try {
       await api.delete(`/investigations/${activeId}`);
       window.localStorage.removeItem(ACTIVE_CASE_KEY);
+      setCases((current) => current.filter((item) => item.id !== activeId));
+      setActiveId("");
+      setWorkspace(null);
       await refreshCases();
     } catch (err) {
-      setError(message(err, "Could not delete the investigation."));
+      setActionError(message(err, "Could not delete the investigation."));
     } finally {
       setSaving(false);
     }
@@ -185,14 +191,31 @@ export default function InvestigationWorkspace({
       counts[item.type] = (counts[item.type] || 0) + 1;
     return counts;
   }, [workspace]);
+  const workspaceState = describeInvestigationWorkspaceState({
+    loading,
+    loaded,
+    error: loadError,
+    caseCount: cases.length,
+  });
 
-  if (loading)
+  if (workspaceState?.tone === "loading")
     return (
       <WorkspaceEmpty
         icon={RefreshCw}
-        title="Loading investigations…"
-        text="Restoring local case metadata and evidence."
+        title={workspaceState.title}
+        text={workspaceState.message}
         spinning
+      />
+    );
+
+  if (workspaceState?.tone === "error")
+    return (
+      <WorkspaceEmpty
+        icon={BriefcaseBusiness}
+        title={workspaceState.title}
+        text={workspaceState.message}
+        actionLabel="Retry"
+        onAction={refreshCases}
       />
     );
 
@@ -252,9 +275,23 @@ export default function InvestigationWorkspace({
             </button>
           )}
         </div>
-        {error && (
+        {loadError && loaded && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+            <span className="flex-1">
+              {loadError} Keeping previously loaded case data where available.
+            </span>
+            <button
+              type="button"
+              onClick={() => refreshCases(activeId)}
+              className="font-semibold underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        {actionError && (
           <div className="mt-3 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs text-red-600 dark:text-red-300">
-            {error}
+            {actionError}
           </div>
         )}
       </section>
@@ -262,8 +299,11 @@ export default function InvestigationWorkspace({
       {!workspace ? (
         <WorkspaceEmpty
           icon={BriefcaseBusiness}
-          title="Create your first investigation"
-          text="Cases are stored locally and remain available without MongoDB."
+          title={workspaceState?.title || "No investigation selected"}
+          text={
+            workspaceState?.message ||
+            "Select an available local investigation to continue."
+          }
         />
       ) : (
         <>
@@ -620,7 +660,14 @@ function Metric({ label, value, text }) {
     </div>
   );
 }
-function WorkspaceEmpty({ icon: Icon, title, text, spinning }) {
+function WorkspaceEmpty({
+  icon: Icon,
+  title,
+  text,
+  spinning,
+  actionLabel,
+  onAction,
+}) {
   return (
     <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center">
       <Icon
@@ -629,6 +676,15 @@ function WorkspaceEmpty({ icon: Icon, title, text, spinning }) {
       />
       <h2 className="font-display font-bold mt-3">{title}</h2>
       <p className="text-sm text-slate-500 mt-2">{text}</p>
+      {actionLabel && onAction && (
+        <button
+          type="button"
+          onClick={() => onAction()}
+          className="mt-4 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white"
+        >
+          {actionLabel}
+        </button>
+      )}
     </div>
   );
 }

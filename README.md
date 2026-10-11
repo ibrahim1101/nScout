@@ -258,6 +258,7 @@ The development branch currently includes:
 - Contextual evidence actions can bookmark a selected Live Host, defensive finding, reconstructed connection, correlated timeline event, or DNS/HTTP/TLS intelligence row directly into the active local investigation. If no case is active, nScout opens Investigations instead of silently dropping evidence.
 - Intelligence panels now distinguish initial loading, local-backend failures, genuine evidence-specific empty results and filters that match no loaded records. HTTP empty states explicitly preserve the encrypted-HTTPS visibility boundary.
 - Live Hosts reports initial loading and local-backend failures separately from a genuinely empty capture or filters hiding loaded hosts, and labels retained last-successful host data after a refresh failure.
+- Investigation Workspace no longer presents an unavailable local case store as an empty store. Initial failures are retryable, transient refresh failures retain the last successful case, and failed case switches cannot pair a new case ID with stale case contents.
 
 Clean-system release-gate validation remains under development.
 See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, the [cross-platform desktop packaging guide](docs/cross-platform-desktop.md) for development builds and release gates, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for Windows capture validation.
