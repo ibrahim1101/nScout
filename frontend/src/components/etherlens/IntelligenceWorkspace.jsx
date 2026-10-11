@@ -1,63 +1,1193 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./lib";
 import ReportExports from "./ReportExports";
-import { Network, Monitor, Globe2, ShieldAlert, Search, RefreshCw, LockKeyhole, RadioTower, Sparkles, Clock3 } from "lucide-react";
+import {
+  readAdvancedSearchDraft,
+  writeAdvancedSearchDraft,
+} from "./advancedSearchState";
+import {
+  Network,
+  Monitor,
+  Globe2,
+  ShieldAlert,
+  Search,
+  RefreshCw,
+  LockKeyhole,
+  RadioTower,
+  Sparkles,
+  Clock3,
+} from "lucide-react";
 
-const PANELS=[{id:"connections",label:"Connections",icon:Network},{id:"hosts",label:"Hosts",icon:Monitor},{id:"timeline",label:"Timeline",icon:Clock3},{id:"dns",label:"DNS",icon:Globe2},{id:"http",label:"HTTP",icon:RadioTower},{id:"tls",label:"TLS",icon:LockKeyhole},{id:"security",label:"Security",icon:ShieldAlert}];
-const SEVERITY_RANK={info:0,low:1,medium:2,high:3,critical:4};
+const PANELS = [
+  { id: "connections", label: "Connections", icon: Network },
+  { id: "hosts", label: "Hosts", icon: Monitor },
+  { id: "timeline", label: "Timeline", icon: Clock3 },
+  { id: "dns", label: "DNS", icon: Globe2 },
+  { id: "http", label: "HTTP", icon: RadioTower },
+  { id: "tls", label: "TLS", icon: LockKeyhole },
+  { id: "security", label: "Security", icon: ShieldAlert },
+];
+const SEVERITY_RANK = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
 
-export default function IntelligenceWorkspace({threats=[],onSelectPacket,target=null,onTargetConsumed}){
- const [panel,setPanel]=useState("connections"),[data,setData]=useState({connections:[],hosts:[],timeline:{events:[]},dns:{},http:{},tls:{},dashboard:{},summary:{}}),[selectedConnection,setSelectedConnection]=useState(null),[loading,setLoading]=useState(false),[error,setError]=useState("");
- const refresh=async()=>{setLoading(true);setError("");try{const [connections,hosts,timeline,dns,http,tls,dashboard,summary]=await Promise.all([api.get("/intelligence/connections?limit=500"),api.get("/intelligence/hosts"),api.get("/intelligence/timeline?limit=1000"),api.get("/intelligence/dns"),api.get("/intelligence/http"),api.get("/intelligence/tls"),api.get("/intelligence/dashboard"),api.get("/investigation/summary")]);setData({connections:connections.data.connections||[],hosts:hosts.data.hosts||[],timeline:timeline.data||{events:[]},dns:dns.data||{},http:http.data||{},tls:tls.data||{},dashboard:dashboard.data||{},summary:summary.data||{}});}catch(e){setError(e?.response?.data?.detail||e.message||"Unable to load intelligence data.");}finally{setLoading(false);}};
- useEffect(()=>{refresh();const id=setInterval(refresh,3000);return()=>clearInterval(id);},[]);
- useEffect(()=>{if(!target?.panel)return;setPanel(target.panel);onTargetConsumed?.();},[target,onTargetConsumed]);
- useEffect(()=>{if(!target?.source||!data.connections.length)return;const source=String(target.source),destination=target.target?String(target.target):null,edge=target.edge||{},edgePorts=[edge.source_port,edge.src_port,edge.target_port,edge.dst_port].filter(v=>v!==undefined&&v!==null).map(Number);const candidates=data.connections.filter(c=>destination?([String(c.a_ip),String(c.b_ip)].includes(source)&&[String(c.a_ip),String(c.b_ip)].includes(destination)):[String(c.a_ip),String(c.b_ip)].includes(source));const match=edgePorts.length?candidates.find(c=>edgePorts.every(p=>[Number(c.a_port),Number(c.b_port)].includes(p)))||candidates[0]:candidates[0];setPanel("connections");if(match){setSelectedConnection(match);setError("");}else setError(destination?`No reconstructed connection found for ${source} ↔ ${destination}.`:`No reconstructed connection found for ${source}.`);onTargetConsumed?.();},[target,data.connections,onTargetConsumed]);
- const securityRows=mergeFindings(data.summary?.security?.findings||[],threats);
- return <div className="space-y-4">
-  {error&&<div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-4 py-2 text-xs text-red-600 dark:text-red-300">{error}</div>}
-  <div className="grid grid-cols-2 md:grid-cols-4 gap-3"><Metric label="Connections" value={data.connections.length}/><Metric label="Hosts" value={data.hosts.length}/><Metric label="DNS Events" value={(data.dns.events||[]).length}/><Metric label="Security Findings" value={securityRows.length} danger={securityRows.length>0}/></div>
-  <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden"><div className="p-3 border-b border-slate-200 dark:border-slate-800 flex flex-wrap gap-2 items-center justify-between"><div className="flex flex-wrap gap-1">{PANELS.map(({id,label,icon:Icon})=><button key={id} onClick={()=>setPanel(id)} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold ${panel===id?"bg-blue-600 text-white":"bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}><Icon size={13}/>{label}</button>)}</div><button onClick={refresh} className="inline-flex items-center gap-1 text-xs text-slate-500"><RefreshCw size={13} className={loading?"animate-spin":""}/> refresh</button></div>{panel==="connections"&&<Connections rows={data.connections} selected={selectedConnection} onSelect={setSelectedConnection}/>} {panel==="hosts"&&<Hosts rows={data.hosts}/>} {panel==="timeline"&&<Timeline data={data.timeline} onSelectPacket={onSelectPacket}/>} {panel==="dns"&&<DNS data={data.dns}/>} {panel==="http"&&<HTTP data={data.http}/>} {panel==="tls"&&<TLS data={data.tls} onSelectPacket={onSelectPacket}/>} {panel==="security"&&<Security rows={securityRows} onSelectPacket={onSelectPacket}/>}</div>
-  {panel==="connections"&&selectedConnection&&<ConnectionStory connection={selectedConnection} dns={data.dns} tls={data.tls} onSelectPacket={onSelectPacket}/>}
-  <div className="grid grid-cols-1 xl:grid-cols-3 gap-4"><SearchWorkspace onSelectPacket={onSelectPacket}/><ReportExports/></div>
- </div>;
+export default function IntelligenceWorkspace({
+  threats = [],
+  onSelectPacket,
+  target = null,
+  onTargetConsumed,
+}) {
+  const [panel, setPanel] = useState("connections"),
+    [data, setData] = useState({
+      connections: [],
+      hosts: [],
+      timeline: { events: [] },
+      dns: {},
+      http: {},
+      tls: {},
+      dashboard: {},
+      summary: {},
+    }),
+    [selectedConnection, setSelectedConnection] = useState(null),
+    [loading, setLoading] = useState(false),
+    [error, setError] = useState("");
+  const refresh = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [connections, hosts, timeline, dns, http, tls, dashboard, summary] =
+        await Promise.all([
+          api.get("/intelligence/connections?limit=500"),
+          api.get("/intelligence/hosts"),
+          api.get("/intelligence/timeline?limit=1000"),
+          api.get("/intelligence/dns"),
+          api.get("/intelligence/http"),
+          api.get("/intelligence/tls"),
+          api.get("/intelligence/dashboard"),
+          api.get("/investigation/summary"),
+        ]);
+      setData({
+        connections: connections.data.connections || [],
+        hosts: hosts.data.hosts || [],
+        timeline: timeline.data || { events: [] },
+        dns: dns.data || {},
+        http: http.data || {},
+        tls: tls.data || {},
+        dashboard: dashboard.data || {},
+        summary: summary.data || {},
+      });
+    } catch (e) {
+      setError(
+        e?.response?.data?.detail ||
+          e.message ||
+          "Unable to load intelligence data.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    refresh();
+    const id = setInterval(refresh, 3000);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => {
+    if (!target?.panel) return;
+    setPanel(target.panel);
+    onTargetConsumed?.();
+  }, [target, onTargetConsumed]);
+  useEffect(() => {
+    if (!target?.source || !data.connections.length) return;
+    const source = String(target.source),
+      destination = target.target ? String(target.target) : null,
+      edge = target.edge || {},
+      edgePorts = [
+        edge.source_port,
+        edge.src_port,
+        edge.target_port,
+        edge.dst_port,
+      ]
+        .filter((v) => v !== undefined && v !== null)
+        .map(Number);
+    const candidates = data.connections.filter((c) =>
+      destination
+        ? [String(c.a_ip), String(c.b_ip)].includes(source) &&
+          [String(c.a_ip), String(c.b_ip)].includes(destination)
+        : [String(c.a_ip), String(c.b_ip)].includes(source),
+    );
+    const match = edgePorts.length
+      ? candidates.find((c) =>
+          edgePorts.every((p) =>
+            [Number(c.a_port), Number(c.b_port)].includes(p),
+          ),
+        ) || candidates[0]
+      : candidates[0];
+    setPanel("connections");
+    if (match) {
+      setSelectedConnection(match);
+      setError("");
+    } else
+      setError(
+        destination
+          ? `No reconstructed connection found for ${source} ↔ ${destination}.`
+          : `No reconstructed connection found for ${source}.`,
+      );
+    onTargetConsumed?.();
+  }, [target, data.connections, onTargetConsumed]);
+  const securityRows = mergeFindings(
+    data.summary?.security?.findings || [],
+    threats,
+  );
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-4 py-2 text-xs text-red-600 dark:text-red-300">
+          {error}
+        </div>
+      )}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Metric label="Connections" value={data.connections.length} />
+        <Metric label="Hosts" value={data.hosts.length} />
+        <Metric label="DNS Events" value={(data.dns.events || []).length} />
+        <Metric
+          label="Security Findings"
+          value={securityRows.length}
+          danger={securityRows.length > 0}
+        />
+      </div>
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex flex-wrap gap-2 items-center justify-between">
+          <div className="flex flex-wrap gap-1">
+            {PANELS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setPanel(id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold ${panel === id ? "bg-blue-600 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}
+              >
+                <Icon size={13} />
+                {label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={refresh}
+            className="inline-flex items-center gap-1 text-xs text-slate-500"
+          >
+            <RefreshCw size={13} className={loading ? "animate-spin" : ""} />{" "}
+            refresh
+          </button>
+        </div>
+        {panel === "connections" && (
+          <Connections
+            rows={data.connections}
+            selected={selectedConnection}
+            onSelect={setSelectedConnection}
+          />
+        )}{" "}
+        {panel === "hosts" && <Hosts rows={data.hosts} />}{" "}
+        {panel === "timeline" && (
+          <Timeline data={data.timeline} onSelectPacket={onSelectPacket} />
+        )}{" "}
+        {panel === "dns" && <DNS data={data.dns} />}{" "}
+        {panel === "http" && <HTTP data={data.http} />}{" "}
+        {panel === "tls" && (
+          <TLS data={data.tls} onSelectPacket={onSelectPacket} />
+        )}{" "}
+        {panel === "security" && (
+          <Security rows={securityRows} onSelectPacket={onSelectPacket} />
+        )}
+      </div>
+      {panel === "connections" && selectedConnection && (
+        <ConnectionStory
+          connection={selectedConnection}
+          dns={data.dns}
+          tls={data.tls}
+          onSelectPacket={onSelectPacket}
+        />
+      )}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <SearchWorkspace onSelectPacket={onSelectPacket} />
+        <ReportExports />
+      </div>
+    </div>
+  );
 }
 
-function Metric({label,value,danger}){return <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4"><div className="text-[11px] uppercase tracking-wider text-slate-500">{label}</div><div className={`mt-1 text-2xl font-bold ${danger?"text-red-500":""}`}>{Number(value||0).toLocaleString()}</div></div>}
-function Table({headers,children,empty}){return <div className="overflow-auto el-scroll"><table className="w-full text-xs"><thead><tr className="text-left text-slate-500 border-b border-slate-100 dark:border-slate-800">{headers.map(h=><th key={h} className="px-4 py-2">{h}</th>)}</tr></thead><tbody>{children}</tbody></table>{empty&&<div className="p-8 text-center text-slate-400 text-sm">No data yet.</div>}</div>}
-function storedFilters(key){if(typeof window==="undefined")return [];try{const value=JSON.parse(window.localStorage.getItem(key)||"[]");return Array.isArray(value)?value:[]}catch(_){return []}}
-function SearchWorkspace({onSelectPacket}){const [expression,setExpression]=useState(""),[results,setResults]=useState([]),[searchError,setSearchError]=useState(""),[searched,setSearched]=useState(false),[history,setHistory]=useState(()=>storedFilters("nscout.filterHistory")),[saved,setSaved]=useState(()=>storedFilters("nscout.savedFilters"));const persist=(key,rows,setter)=>{setter(rows);window.localStorage.setItem(key,JSON.stringify(rows));};const search=async e=>{e?.preventDefault();const query=expression.trim();if(!query){setResults([]);setSearched(false);return;}try{const r=await api.get("/packets/search",{params:{expression:query,limit:500}});setResults(r.data.packets||[]);setSearchError("");setSearched(true);persist("nscout.filterHistory",[query,...history.filter(item=>item!==query)].slice(0,12),setHistory);}catch(err){setResults([]);setSearched(true);setSearchError(err?.response?.data?.detail||"Invalid search expression.");}};const save=()=>{const query=expression.trim();if(query&&!saved.includes(query))persist("nscout.savedFilters",[query,...saved].slice(0,20),setSaved);};const remove=value=>persist("nscout.savedFilters",saved.filter(item=>item!==value),setSaved);const examples=["protocol == DNS","(port == 443 OR port == 8443) AND NOT tcp.reset","domain contains example.com","severity >= high"];return <div className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4"><div className="flex flex-wrap items-center gap-2 mb-3"><Search size={15}/><h3 className="font-display font-bold text-sm">Advanced Packet Search</h3><span className="text-[10px] text-slate-500">AND · OR · NOT · ( ) · comparisons</span>{history.length>0&&<select defaultValue="" onChange={e=>{setExpression(e.target.value);e.target.value=""}} className="ml-auto filter-control text-[11px]"><option value="" disabled>Recent filters</option>{history.map(item=><option key={item} value={item}>{item}</option>)}</select>}</div><form onSubmit={search} className="flex gap-2"><input value={expression} onChange={e=>setExpression(e.target.value)} placeholder="(protocol == DNS OR port == 443) AND bytes > 500" className="flex-1 rounded-md border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-2 text-xs font-mono-code"/><button type="button" onClick={save} disabled={!expression.trim()} className="px-3 py-2 rounded-md bg-slate-100 dark:bg-slate-800 text-xs font-semibold disabled:opacity-40">Save</button><button className="px-3 py-2 rounded-md bg-blue-600 text-white text-xs font-semibold">Search</button></form><div className="flex flex-wrap gap-1 mt-2">{examples.map(item=><button key={item} onClick={()=>setExpression(item)} className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-1 text-[10px] font-mono-code text-slate-500">{item}</button>)}</div>{saved.length>0&&<div className="flex flex-wrap items-center gap-1 mt-2"><span className="text-[10px] uppercase text-slate-400 mr-1">Saved</span>{saved.map(item=><span key={item} className="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 text-[10px]"><button onClick={()=>setExpression(item)} className="px-2 py-1 font-mono-code max-w-[260px] truncate">{item}</button><button onClick={()=>remove(item)} className="px-1.5 text-slate-400" aria-label={`Remove ${item}`}>×</button></span>)}</div>}{searchError&&<div className="mt-3 rounded border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs text-red-600 dark:text-red-300">{searchError}</div>}<div className="mt-3 max-h-56 overflow-auto el-scroll text-xs font-mono-code">{results.map(p=><button key={p.id} onClick={()=>onSelectPacket?.(p)} className="w-full text-left px-2 py-1.5 border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"><span className="text-slate-400 mr-2">#{p.number}</span>{p.src_ip} → {p.dst_ip} <span className="ml-2 text-blue-500">{p.protocol}</span> <span className="ml-2 text-slate-500">{p.info}</span></button>)}{searched&&!searchError&&!results.length&&<div className="text-slate-400 py-3">No matching packets.</div>}</div></div>}
-function Connections({rows,selected,onSelect}){return <Table headers={["Endpoint A","Endpoint B","State","Packets","Bytes","Retrans","Resets"]} empty={!rows.length}>{rows.map((r,i)=><tr key={i} onClick={()=>onSelect(r)} className={`border-t border-slate-100 dark:border-slate-800 font-mono-code cursor-pointer ${selected===r?"bg-blue-50 dark:bg-blue-950/20":"hover:bg-slate-50 dark:hover:bg-slate-800"}`}><td className="px-4 py-2">{r.a_ip}:{r.a_port}</td><td className="px-4 py-2">{r.b_ip}:{r.b_port}</td><td className="px-4 py-2">{r.state}</td><td className="px-4 py-2">{r.packets}</td><td className="px-4 py-2">{fmt(r.bytes)}</td><td className="px-4 py-2">{r.retransmissions||0}</td><td className="px-4 py-2">{r.resets||0}</td></tr>)}</Table>}
+function Metric({ label, value, danger }) {
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+      <div className="text-[11px] uppercase tracking-wider text-slate-500">
+        {label}
+      </div>
+      <div
+        className={`mt-1 text-2xl font-bold ${danger ? "text-red-500" : ""}`}
+      >
+        {Number(value || 0).toLocaleString()}
+      </div>
+    </div>
+  );
+}
+function Table({ headers, children, empty }) {
+  return (
+    <div className="overflow-auto el-scroll">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-left text-slate-500 border-b border-slate-100 dark:border-slate-800">
+            {headers.map((h) => (
+              <th key={h} className="px-4 py-2">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+      {empty && (
+        <div className="p-8 text-center text-slate-400 text-sm">
+          No data yet.
+        </div>
+      )}
+    </div>
+  );
+}
+function storedFilters(key) {
+  if (typeof window === "undefined") return [];
+  try {
+    const value = JSON.parse(window.localStorage.getItem(key) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch (_) {
+    return [];
+  }
+}
+function SearchWorkspace({ onSelectPacket }) {
+  const [expression, setExpression] = useState(() => readAdvancedSearchDraft()),
+    [results, setResults] = useState([]),
+    [searchError, setSearchError] = useState(""),
+    [searched, setSearched] = useState(false),
+    [history, setHistory] = useState(() =>
+      storedFilters("nscout.filterHistory"),
+    ),
+    [saved, setSaved] = useState(() => storedFilters("nscout.savedFilters"));
+  const updateExpression = (value) =>
+    setExpression(writeAdvancedSearchDraft(value));
+  const persist = (key, rows, setter) => {
+    setter(rows);
+    window.localStorage.setItem(key, JSON.stringify(rows));
+  };
+  const search = async (e) => {
+    e?.preventDefault();
+    const query = expression.trim();
+    if (!query) {
+      setResults([]);
+      setSearched(false);
+      return;
+    }
+    try {
+      const r = await api.get("/packets/search", {
+        params: { expression: query, limit: 500 },
+      });
+      setResults(r.data.packets || []);
+      setSearchError("");
+      setSearched(true);
+      persist(
+        "nscout.filterHistory",
+        [query, ...history.filter((item) => item !== query)].slice(0, 12),
+        setHistory,
+      );
+    } catch (err) {
+      setResults([]);
+      setSearched(true);
+      setSearchError(
+        err?.response?.data?.detail || "Invalid search expression.",
+      );
+    }
+  };
+  const save = () => {
+    const query = expression.trim();
+    if (query && !saved.includes(query))
+      persist("nscout.savedFilters", [query, ...saved].slice(0, 20), setSaved);
+  };
+  const remove = (value) =>
+    persist(
+      "nscout.savedFilters",
+      saved.filter((item) => item !== value),
+      setSaved,
+    );
+  const examples = [
+    "protocol == DNS",
+    "(port == 443 OR port == 8443) AND NOT tcp.reset",
+    "domain contains example.com",
+    "severity >= high",
+  ];
+  return (
+    <div className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <Search size={15} />
+        <h3 className="font-display font-bold text-sm">
+          Advanced Packet Search
+        </h3>
+        <span className="text-[10px] text-slate-500">
+          AND · OR · NOT · ( ) · comparisons
+        </span>
+        {history.length > 0 && (
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              updateExpression(e.target.value);
+              e.target.value = "";
+            }}
+            className="ml-auto filter-control text-[11px]"
+          >
+            <option value="" disabled>
+              Recent filters
+            </option>
+            {history.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      <form onSubmit={search} className="flex gap-2">
+        <input
+          value={expression}
+          maxLength={2048}
+          onChange={(e) => updateExpression(e.target.value)}
+          placeholder="(protocol == DNS OR port == 443) AND bytes > 500"
+          className="flex-1 rounded-md border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-2 text-xs font-mono-code"
+        />
+        <button
+          type="button"
+          onClick={save}
+          disabled={!expression.trim()}
+          className="px-3 py-2 rounded-md bg-slate-100 dark:bg-slate-800 text-xs font-semibold disabled:opacity-40"
+        >
+          Save
+        </button>
+        <button className="px-3 py-2 rounded-md bg-blue-600 text-white text-xs font-semibold">
+          Search
+        </button>
+      </form>
+      <div className="mt-1 text-[10px] text-slate-400">
+        Draft stays in this window across workspace changes; packet results are
+        never stored.
+      </div>
+      <div className="flex flex-wrap gap-1 mt-2">
+        {examples.map((item) => (
+          <button
+            key={item}
+            onClick={() => updateExpression(item)}
+            className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-1 text-[10px] font-mono-code text-slate-500"
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+      {saved.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1 mt-2">
+          <span className="text-[10px] uppercase text-slate-400 mr-1">
+            Saved
+          </span>
+          {saved.map((item) => (
+            <span
+              key={item}
+              className="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 text-[10px]"
+            >
+              <button
+                onClick={() => updateExpression(item)}
+                className="px-2 py-1 font-mono-code max-w-[260px] truncate"
+              >
+                {item}
+              </button>
+              <button
+                onClick={() => remove(item)}
+                className="px-1.5 text-slate-400"
+                aria-label={`Remove ${item}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {searchError && (
+        <div className="mt-3 rounded border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+          {searchError}
+        </div>
+      )}
+      <div className="mt-3 max-h-56 overflow-auto el-scroll text-xs font-mono-code">
+        {results.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => onSelectPacket?.(p)}
+            className="w-full text-left px-2 py-1.5 border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            <span className="text-slate-400 mr-2">#{p.number}</span>
+            {p.src_ip} → {p.dst_ip}{" "}
+            <span className="ml-2 text-blue-500">{p.protocol}</span>{" "}
+            <span className="ml-2 text-slate-500">{p.info}</span>
+          </button>
+        ))}
+        {searched && !searchError && !results.length && (
+          <div className="text-slate-400 py-3">No matching packets.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+function Connections({ rows, selected, onSelect }) {
+  return (
+    <Table
+      headers={[
+        "Endpoint A",
+        "Endpoint B",
+        "State",
+        "Packets",
+        "Bytes",
+        "Retrans",
+        "Resets",
+      ]}
+      empty={!rows.length}
+    >
+      {rows.map((r, i) => (
+        <tr
+          key={i}
+          onClick={() => onSelect(r)}
+          className={`border-t border-slate-100 dark:border-slate-800 font-mono-code cursor-pointer ${selected === r ? "bg-blue-50 dark:bg-blue-950/20" : "hover:bg-slate-50 dark:hover:bg-slate-800"}`}
+        >
+          <td className="px-4 py-2">
+            {r.a_ip}:{r.a_port}
+          </td>
+          <td className="px-4 py-2">
+            {r.b_ip}:{r.b_port}
+          </td>
+          <td className="px-4 py-2">{r.state}</td>
+          <td className="px-4 py-2">{r.packets}</td>
+          <td className="px-4 py-2">{fmt(r.bytes)}</td>
+          <td className="px-4 py-2">{r.retransmissions || 0}</td>
+          <td className="px-4 py-2">{r.resets || 0}</td>
+        </tr>
+      ))}
+    </Table>
+  );
+}
 
-function ConnectionStory({connection:r,dns,tls,onSelectPacket}){
- const relatedDns=(dns.events||[]).filter(e=>[r.a_ip,r.b_ip].includes(e.src_ip)||[r.a_ip,r.b_ip].includes(e.dst_ip)),tlsEvents=(tls.events||tls.connections||[]).filter(e=>[r.a_ip,r.b_ip].includes(e.src_ip)||[r.a_ip,r.b_ip].includes(e.dst_ip)),health=(r.retransmissions||0)+(r.duplicate_acks||0)+(r.out_of_order||0)+(r.zero_windows||0)+(r.resets||0);
- const [explanation,setExplanation]=useState(null),[explainLoading,setExplainLoading]=useState(false),[explainError,setExplainError]=useState("");
- useEffect(()=>{setExplanation(null);setExplainError("");},[r.a_ip,r.a_port,r.b_ip,r.b_port]);
- const findPackets=async()=>{try{const response=await api.get("/packets/search",{params:{expression:`ip:${r.a_ip} ip:${r.b_ip}`,limit:500}}),matches=(response.data.packets||[]).filter(p=>{const forward=p.src_ip===r.a_ip&&p.dst_ip===r.b_ip,reverse=p.src_ip===r.b_ip&&p.dst_ip===r.a_ip;if(!forward&&!reverse)return false;if(r.a_port==null||r.b_port==null)return true;return forward?(Number(p.src_port)===Number(r.a_port)&&Number(p.dst_port)===Number(r.b_port)):(Number(p.src_port)===Number(r.b_port)&&Number(p.dst_port)===Number(r.a_port));});if(matches[0])onSelectPacket?.(matches[0]);}catch(_){}};
- const explain=async()=>{setExplainLoading(true);setExplainError("");try{const response=await api.get("/intelligence/connections/explain",{params:{a_ip:r.a_ip,b_ip:r.b_ip,a_port:r.a_port,b_port:r.b_port}});setExplanation(response.data.explanation||null);}catch(err){setExplanation(null);setExplainError(err?.response?.data?.detail||"Unable to explain this connection.");}finally{setExplainLoading(false);}};
- return <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-display font-bold text-sm">Connection Story</h3><p className="text-xs text-slate-500 mt-1 font-mono-code">{r.a_ip}:{r.a_port} ↔ {r.b_ip}:{r.b_port}</p></div><div className="flex flex-wrap gap-2"><span className="text-xs font-semibold px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.state}</span><button onClick={findPackets} className="text-xs font-semibold px-2 py-1 rounded bg-blue-600 text-white">View packets</button><button onClick={explain} disabled={explainLoading} className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded bg-violet-600 text-white disabled:opacity-60"><Sparkles size={12}/>{explainLoading?"Explaining…":"Explain Connection"}</button></div></div><div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4"><Story label="Duration" value={`${r.duration_ms||0} ms`}/><Story label="Traffic" value={fmt(r.bytes)}/><Story label="A → B" value={fmt(r.a_to_b_bytes)}/><Story label="B → A" value={fmt(r.b_to_a_bytes)}/><Story label="TCP Issues" value={health}/></div><div className="mt-4 text-xs space-y-2"><div><b>TCP health:</b> {r.retransmissions||0} retransmissions · {r.duplicate_acks||0} duplicate ACKs · {r.out_of_order||0} out-of-order · {r.zero_windows||0} zero-window · {r.resets||0} resets</div><div><b>Protocols:</b> {(r.protocols||[]).join(" → ")||"Unknown"}</div><div><b>DNS context:</b> {relatedDns.length?`${relatedDns.length} related DNS event(s)` : "No directly correlated DNS event observed."}</div><div><b>TLS context:</b> {tlsEvents.length?`${tlsEvents.length} related TLS event(s)` : "No directly correlated TLS metadata observed."}</div>{tlsEvents.slice(0,3).map((t,i)=><div key={i} className="rounded bg-slate-50 dark:bg-slate-800 p-2"><b>TLS:</b> {t.sni||"unknown SNI"} · {t.version||"version unknown"}{t.alpn?` · ALPN ${t.alpn}`:""}{t.cipher?` · ${t.cipher}`:""}</div>)}<div className="text-slate-500">Story is reconstructed only from observed packet metadata; encrypted application payload is not decrypted.</div></div>{explainError&&<div className="mt-4 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-3 text-xs text-red-600 dark:text-red-300">{explainError}</div>}{explanation&&<ConnectionExplanation data={explanation}/>}</div>;
+function ConnectionStory({ connection: r, dns, tls, onSelectPacket }) {
+  const relatedDns = (dns.events || []).filter(
+      (e) =>
+        [r.a_ip, r.b_ip].includes(e.src_ip) ||
+        [r.a_ip, r.b_ip].includes(e.dst_ip),
+    ),
+    tlsEvents = (tls.events || tls.connections || []).filter(
+      (e) =>
+        [r.a_ip, r.b_ip].includes(e.src_ip) ||
+        [r.a_ip, r.b_ip].includes(e.dst_ip),
+    ),
+    health =
+      (r.retransmissions || 0) +
+      (r.duplicate_acks || 0) +
+      (r.out_of_order || 0) +
+      (r.zero_windows || 0) +
+      (r.resets || 0);
+  const [explanation, setExplanation] = useState(null),
+    [explainLoading, setExplainLoading] = useState(false),
+    [explainError, setExplainError] = useState("");
+  useEffect(() => {
+    setExplanation(null);
+    setExplainError("");
+  }, [r.a_ip, r.a_port, r.b_ip, r.b_port]);
+  const findPackets = async () => {
+    try {
+      const response = await api.get("/packets/search", {
+          params: { expression: `ip:${r.a_ip} ip:${r.b_ip}`, limit: 500 },
+        }),
+        matches = (response.data.packets || []).filter((p) => {
+          const forward = p.src_ip === r.a_ip && p.dst_ip === r.b_ip,
+            reverse = p.src_ip === r.b_ip && p.dst_ip === r.a_ip;
+          if (!forward && !reverse) return false;
+          if (r.a_port == null || r.b_port == null) return true;
+          return forward
+            ? Number(p.src_port) === Number(r.a_port) &&
+                Number(p.dst_port) === Number(r.b_port)
+            : Number(p.src_port) === Number(r.b_port) &&
+                Number(p.dst_port) === Number(r.a_port);
+        });
+      if (matches[0]) onSelectPacket?.(matches[0]);
+    } catch (_) {}
+  };
+  const explain = async () => {
+    setExplainLoading(true);
+    setExplainError("");
+    try {
+      const response = await api.get("/intelligence/connections/explain", {
+        params: {
+          a_ip: r.a_ip,
+          b_ip: r.b_ip,
+          a_port: r.a_port,
+          b_port: r.b_port,
+        },
+      });
+      setExplanation(response.data.explanation || null);
+    } catch (err) {
+      setExplanation(null);
+      setExplainError(
+        err?.response?.data?.detail || "Unable to explain this connection.",
+      );
+    } finally {
+      setExplainLoading(false);
+    }
+  };
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="font-display font-bold text-sm">Connection Story</h3>
+          <p className="text-xs text-slate-500 mt-1 font-mono-code">
+            {r.a_ip}:{r.a_port} ↔ {r.b_ip}:{r.b_port}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <span className="text-xs font-semibold px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">
+            {r.state}
+          </span>
+          <button
+            onClick={findPackets}
+            className="text-xs font-semibold px-2 py-1 rounded bg-blue-600 text-white"
+          >
+            View packets
+          </button>
+          <button
+            onClick={explain}
+            disabled={explainLoading}
+            className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded bg-violet-600 text-white disabled:opacity-60"
+          >
+            <Sparkles size={12} />
+            {explainLoading ? "Explaining…" : "Explain Connection"}
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
+        <Story label="Duration" value={`${r.duration_ms || 0} ms`} />
+        <Story label="Traffic" value={fmt(r.bytes)} />
+        <Story label="A → B" value={fmt(r.a_to_b_bytes)} />
+        <Story label="B → A" value={fmt(r.b_to_a_bytes)} />
+        <Story label="TCP Issues" value={health} />
+      </div>
+      <div className="mt-4 text-xs space-y-2">
+        <div>
+          <b>TCP health:</b> {r.retransmissions || 0} retransmissions ·{" "}
+          {r.duplicate_acks || 0} duplicate ACKs · {r.out_of_order || 0}{" "}
+          out-of-order · {r.zero_windows || 0} zero-window · {r.resets || 0}{" "}
+          resets
+        </div>
+        <div>
+          <b>Protocols:</b> {(r.protocols || []).join(" → ") || "Unknown"}
+        </div>
+        <div>
+          <b>DNS context:</b>{" "}
+          {relatedDns.length
+            ? `${relatedDns.length} related DNS event(s)`
+            : "No directly correlated DNS event observed."}
+        </div>
+        <div>
+          <b>TLS context:</b>{" "}
+          {tlsEvents.length
+            ? `${tlsEvents.length} related TLS event(s)`
+            : "No directly correlated TLS metadata observed."}
+        </div>
+        {tlsEvents.slice(0, 3).map((t, i) => (
+          <div key={i} className="rounded bg-slate-50 dark:bg-slate-800 p-2">
+            <b>TLS:</b> {t.sni || "unknown SNI"} ·{" "}
+            {t.version || "version unknown"}
+            {t.alpn ? ` · ALPN ${t.alpn}` : ""}
+            {t.cipher ? ` · ${t.cipher}` : ""}
+          </div>
+        ))}
+        <div className="text-slate-500">
+          Story is reconstructed only from observed packet metadata; encrypted
+          application payload is not decrypted.
+        </div>
+      </div>
+      {explainError && (
+        <div className="mt-4 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-3 text-xs text-red-600 dark:text-red-300">
+          {explainError}
+        </div>
+      )}
+      {explanation && <ConnectionExplanation data={explanation} />}
+    </div>
+  );
 }
-function ConnectionExplanation({data}){return <div className="mt-4 rounded-xl border border-violet-200 dark:border-violet-900 bg-violet-50/60 dark:bg-violet-950/20 p-4 text-xs"><div className="flex items-center gap-2"><Sparkles size={14}/><h4 className="font-display font-bold text-sm">Connection Explanation</h4><span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${data.appears_normal?"bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300":"bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>{data.appears_normal?"No TCP warning evident":"Review recommended"}</span></div><p className="mt-3 font-semibold">{data.summary}</p><p className="mt-1 text-slate-600 dark:text-slate-300">{data.assessment}</p><div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4"><ExplainList title="Observed evidence" rows={data.observations}/><ExplainList title="Next investigation steps" rows={data.next_steps}/></div><div className="mt-3 text-[11px] text-slate-500">{data.visibility_note}</div></div>}
-function ExplainList({title,rows=[]}){return <div><div className="font-semibold mb-1">{title}</div><ul className="space-y-1 text-slate-600 dark:text-slate-300">{rows.map((row,i)=><li key={i}>• {row}</li>)}</ul></div>}
-function Story({label,value}){return <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-3"><div className="text-[10px] uppercase text-slate-500">{label}</div><div className="mt-1 text-sm font-semibold">{value}</div></div>}
-function Hosts({rows}){return <Table headers={["Risk","Host","MAC","Traffic","Protocols / Services","Domains","Findings"]} empty={!rows.length}>{rows.map((r,i)=><tr key={r.ip||i} className="border-t border-slate-100 dark:border-slate-800 align-top"><td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${riskClass(r.risk?.level)}`}>{r.risk?.score||0} {r.risk?.level||"none"}</span></td><td className="px-4 py-2"><div className="font-mono-code font-semibold">{r.ip}</div><div className="text-slate-500 mt-1">{r.hostname|| (r.is_local?"Local host":"External host")}</div></td><td className="px-4 py-2 font-mono-code">{r.mac||"—"}</td><td className="px-4 py-2 whitespace-nowrap">{fmt(r.total_bytes)}<div className="text-slate-500 mt-1">↑ {fmt(r.bytes_sent)} · ↓ {fmt(r.bytes_received)}</div></td><td className="px-4 py-2"><div>{(r.protocols||[]).join(", ")||"—"}</div><div className="text-slate-500 mt-1">{(r.services||[]).slice(0,5).map(s=>`${s.port}/${s.protocol}`).join(", ")||"No observed service"}</div></td><td className="px-4 py-2 max-w-xs">{(r.domains||[]).slice(0,4).map(d=>d.domain).join(", ")||"—"}</td><td className="px-4 py-2">{r.finding_count||0}<div className="text-slate-500 mt-1">{(r.connections||[]).length} peer(s)</div></td></tr>)}</Table>}
-function riskClass(level){if(level==="critical")return "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300";if(level==="high")return "bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300";if(level==="medium")return "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300";if(level==="low")return "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300";return "bg-slate-100 text-slate-500 dark:bg-slate-800"}
-function Timeline({data,onSelectPacket}){const [filters,setFilters]=useState({host:"",domain:"",connection:"",protocol:"",severity:"info",start:"",end:""}),rows=useMemo(()=>{const start=filters.start?Date.parse(filters.start)/1000:null,end=filters.end?Date.parse(filters.end)/1000:null;return (data.events||[]).filter(r=>(!filters.host||[r.src_ip,r.dst_ip].some(v=>String(v||"").includes(filters.host)))&&(!filters.domain||String(r.domain||"").toLowerCase().includes(filters.domain.toLowerCase()))&&(!filters.connection||String(r.connection_id||"").toLowerCase().includes(filters.connection.toLowerCase()))&&(!filters.protocol||[r.protocol,r.category].some(v=>String(v||"").toLowerCase().includes(filters.protocol.toLowerCase())))&&(SEVERITY_RANK[r.severity||"info"]>=SEVERITY_RANK[filters.severity])&&(start===null||r.timestamp>=start)&&(end===null||r.timestamp<=end));},[data.events,filters]);const set=(key,value)=>setFilters(f=>({...f,[key]:value}));return <div><div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-7 gap-2 p-3 border-b border-slate-100 dark:border-slate-800"><input value={filters.host} onChange={e=>set("host",e.target.value)} placeholder="Host IP" className="filter-control"/><input value={filters.domain} onChange={e=>set("domain",e.target.value)} placeholder="Domain" className="filter-control"/><input value={filters.connection} onChange={e=>set("connection",e.target.value)} placeholder="Connection / port" className="filter-control"/><input value={filters.protocol} onChange={e=>set("protocol",e.target.value)} placeholder="Protocol" className="filter-control"/><select value={filters.severity} onChange={e=>set("severity",e.target.value)} className="filter-control"><option value="info">All severities</option><option value="low">Low+</option><option value="medium">Medium+</option><option value="high">High+</option><option value="critical">Critical</option></select><input type="datetime-local" value={filters.start} onChange={e=>set("start",e.target.value)} className="filter-control"/><input type="datetime-local" value={filters.end} onChange={e=>set("end",e.target.value)} className="filter-control"/></div><div className="px-4 py-2 text-[11px] text-slate-500 border-b border-slate-100 dark:border-slate-800">{rows.length} correlated event(s): DNS → connection → TLS/HTTP → security finding. Select an event to inspect its packet.</div><div className="max-h-[520px] overflow-auto el-scroll">{rows.map((r,i)=><button key={`${r.timestamp}-${r.event_type}-${r.packet_id||i}`} onClick={()=>r.packet_id&&onSelectPacket?.({id:r.packet_id})} className="w-full grid grid-cols-[110px_110px_minmax(0,1fr)] gap-3 text-left px-4 py-3 border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"><span className="font-mono-code text-[11px] text-slate-500">{timelineTime(r.timestamp)}</span><span className={`self-start rounded-full px-2 py-0.5 text-[10px] font-bold uppercase text-center ${riskClass(r.severity)}`}>{r.category}</span><span><span className="font-semibold text-xs">{r.title}</span><span className="block text-[11px] text-slate-500 mt-1">{r.src_ip||"—"}{r.src_port?`:${r.src_port}`:""} → {r.dst_ip||"—"}{r.dst_port?`:${r.dst_port}`:""}{r.domain?` · ${r.domain}`:""}</span>{r.detail&&<span className="block text-[11px] text-slate-500 mt-1">{r.detail}</span>}</span></button>)}{!rows.length&&<div className="p-8 text-center text-slate-400 text-sm">No timeline events match these filters.</div>}</div></div>}
-function timelineTime(value){const d=new Date(Number(value||0)*1000);return Number.isNaN(d.getTime())?"—":d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"})}
-function DNS({data}){const rows=data.events||[];return <Table headers={["Time","Type","Domain","Answers","RCODE","TTL"]} empty={!rows.length}>{rows.map((r,i)=><tr key={i} className="border-t border-slate-100 dark:border-slate-800"><td className="px-4 py-2">{r.timestamp||"—"}</td><td className="px-4 py-2">{r.response?"Response":"Query"}</td><td className="px-4 py-2 font-mono-code">{r.query||"—"}</td><td className="px-4 py-2 font-mono-code">{Array.isArray(r.answers)?r.answers.join(", "):"—"}</td><td className="px-4 py-2">{r.response_code??"—"}</td><td className="px-4 py-2">{r.ttl??"—"}</td></tr>)}</Table>}
-function HTTP({data}){const rows=data.events||[];return <Table headers={["Time","Method","Host","Path","Status","User Agent"]} empty={!rows.length}>{rows.map((r,i)=><tr key={i} className="border-t border-slate-100 dark:border-slate-800"><td className="px-4 py-2">{r.timestamp||"—"}</td><td className="px-4 py-2 font-semibold">{r.method||"—"}</td><td className="px-4 py-2 font-mono-code">{r.host||"—"}</td><td className="px-4 py-2 font-mono-code">{r.path||"—"}</td><td className="px-4 py-2">{r.status||"—"}</td><td className="px-4 py-2 truncate max-w-xs">{r.user_agent||"—"}</td></tr>)}</Table>}
-function TLS({data,onSelectPacket}){
- const [query,setQuery]=useState("");
- const warnings=data.warnings||[],warningByPacket=new Map();
- warnings.forEach(w=>{const key=String(w.packet_id),rows=warningByPacket.get(key)||[];rows.push(w);warningByPacket.set(key,rows);});
- const rows=(data.events||[]).filter(row=>!query||[row.src_ip,row.dst_ip,row.sni,row.version,row.alpn,row.cipher,row.ja3,row.ja3s,row.certificate_subject,row.certificate_issuer].some(value=>String(value||"").toLowerCase().includes(query.toLowerCase())));
- return <div>
-  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 p-3 border-b border-slate-100 dark:border-slate-800"><Mini label="Observed TLS/HTTPS" value={(data.events||[]).length}/><Mini label="Decoded metadata" value={data.decoded_events||0}/><Mini label="Metadata only" value={data.metadata_only_events||0}/><Mini label="Fingerprints" value={(data.fingerprints||[]).length}/><Mini label="Warnings" value={warnings.length} danger={warnings.length>0}/></div>
-  <div className="flex flex-wrap gap-3 items-center px-4 py-2 border-b border-slate-100 dark:border-slate-800"><p className="text-[11px] text-slate-500 flex-1 min-w-[260px]">{data.note||"TLS view shows observable handshake/record metadata only. Encrypted application payload is not decrypted."}</p><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search TLS metadata" className="filter-control w-full sm:w-64"/></div>
-  {(data.fingerprints||[]).length>0&&<div className="flex flex-wrap gap-1.5 px-4 py-2 border-b border-slate-100 dark:border-slate-800"><span className="text-[10px] uppercase tracking-wider text-slate-400 mr-1 self-center">Visible fingerprints</span>{(data.fingerprints||[]).slice(0,8).map(row=><button key={row.fingerprint} onClick={()=>setQuery(row.fingerprint.split(":")[1])} className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-1 text-[10px] font-mono-code">{row.fingerprint} · {row.packets}</button>)}</div>}
-  <Table headers={["Visibility","Endpoints","Version / Handshake","SNI / ALPN","Cipher / Fingerprint","Certificate","Warnings"]} empty={!rows.length}>{rows.map((r,i)=>{const packetWarnings=warningByPacket.get(String(r.packet_id))||[];return <tr key={r.packet_id||i} onClick={()=>r.packet_id&&onSelectPacket?.({id:r.packet_id})} className="border-t border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 align-top"><td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${r.decoded?"bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300":"bg-slate-100 dark:bg-slate-800 text-slate-500"}`}>{r.decoded?"Decoded metadata":"Port/context only"}</span></td><td className="px-4 py-2 font-mono-code whitespace-nowrap">{r.src_ip||"—"}:{r.src_port||"—"}<br/><span className="text-slate-400">→</span> {r.dst_ip||"—"}:{r.dst_port||"—"}</td><td className="px-4 py-2"><b>{r.version||"—"}</b><div className="text-slate-500 mt-1">{r.handshake||"Handshake unknown"}</div>{r.offered_versions?.length>0&&<div className="text-[10px] text-slate-400 mt-1">Offered: {r.offered_versions.join(", ")}</div>}</td><td className="px-4 py-2"><div className="font-mono-code">{r.sni||"—"}</div><div className="text-slate-500 mt-1">{r.alpn?`ALPN ${Array.isArray(r.alpn)?r.alpn.join(", "):r.alpn}`:"ALPN —"}</div></td><td className="px-4 py-2 font-mono-code max-w-[240px] break-words"><div>{r.cipher||r.offered_ciphers?.slice(0,4).join(", ")||"—"}</div>{(r.ja3||r.ja3s)&&<div className="text-[10px] text-slate-500 mt-1 break-all">{r.ja3?`JA3 ${r.ja3}`:`JA3S ${r.ja3s}`}</div>}</td><td className="px-4 py-2 max-w-[260px]"><div className="font-medium break-words">{r.certificate_subject||"—"}</div>{r.certificate_issuer&&<div className="text-slate-500 mt-1 break-words">Issuer: {r.certificate_issuer}</div>}{r.certificate_not_before&&<div className="text-slate-500 mt-1">Valid from: {r.certificate_not_before}</div>}{r.certificate_expiry&&<div className="text-slate-500 mt-1">Expires: {r.certificate_expiry}</div>}</td><td className={`px-4 py-2 ${packetWarnings.length?"text-amber-600 dark:text-amber-300 font-semibold":"text-slate-400"}`}>{packetWarnings.length?packetWarnings.map(w=><div key={`${w.type}-${w.detail}`}>{w.type.replaceAll("_"," ")}: {w.detail||"review metadata"}</div>):"—"}</td></tr>})}</Table>
- </div>
+function ConnectionExplanation({ data }) {
+  return (
+    <div className="mt-4 rounded-xl border border-violet-200 dark:border-violet-900 bg-violet-50/60 dark:bg-violet-950/20 p-4 text-xs">
+      <div className="flex items-center gap-2">
+        <Sparkles size={14} />
+        <h4 className="font-display font-bold text-sm">
+          Connection Explanation
+        </h4>
+        <span
+          className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${data.appears_normal ? "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}
+        >
+          {data.appears_normal
+            ? "No TCP warning evident"
+            : "Review recommended"}
+        </span>
+      </div>
+      <p className="mt-3 font-semibold">{data.summary}</p>
+      <p className="mt-1 text-slate-600 dark:text-slate-300">
+        {data.assessment}
+      </p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        <ExplainList title="Observed evidence" rows={data.observations} />
+        <ExplainList title="Next investigation steps" rows={data.next_steps} />
+      </div>
+      <div className="mt-3 text-[11px] text-slate-500">
+        {data.visibility_note}
+      </div>
+    </div>
+  );
 }
-function Mini({label,value,danger}){return <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-2"><div className="text-[9px] uppercase tracking-wider text-slate-500">{label}</div><div className={`font-bold mt-1 ${danger?"text-amber-500":""}`}>{Number(value||0).toLocaleString()}</div></div>}
-function Security({rows,onSelectPacket}){return <div><div className="px-4 py-2 text-[11px] text-slate-500 border-b border-slate-100 dark:border-slate-800">Defensive findings are investigation leads derived from observed traffic and heuristics. They are not proof of compromise.</div><Table headers={["Severity","Finding","Source","Destination","Evidence / Details"]} empty={!rows.length}>{rows.map((r,i)=><tr key={r.id||`${r.type}-${i}`} onClick={()=>r.packet_id&&onSelectPacket?.({id:r.packet_id})} className="border-t border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"><td className="px-4 py-2 font-semibold uppercase text-[10px]">{r.severity||"info"}</td><td className="px-4 py-2 font-semibold">{r.title||r.type||"Investigation lead"}</td><td className="px-4 py-2 font-mono-code">{r.src||r.src_ip||"—"}</td><td className="px-4 py-2 font-mono-code">{r.dst||r.dst_ip||"—"}</td><td className="px-4 py-2 text-slate-500 max-w-xl">{r.description||r.detail||r.evidence||"Review correlated packet evidence."}</td></tr>)}</Table></div>}
-function mergeFindings(defensive,live){const seen=new Set(),out=[];[...(defensive||[]),...(live||[])].forEach((r,i)=>{const key=[r.id,r.type,r.packet_id,r.src||r.src_ip,r.dst||r.dst_ip,r.title,r.description||r.detail].filter(Boolean).join("|")||`finding-${i}`;if(!seen.has(key)){seen.add(key);out.push(r);}});return out}
-function fmt(n){const v=Number(n||0);if(v>=1048576)return `${(v/1048576).toFixed(1)} MB`;if(v>=1024)return `${(v/1024).toFixed(1)} KB`;return `${v} B`}
+function ExplainList({ title, rows = [] }) {
+  return (
+    <div>
+      <div className="font-semibold mb-1">{title}</div>
+      <ul className="space-y-1 text-slate-600 dark:text-slate-300">
+        {rows.map((row, i) => (
+          <li key={i}>• {row}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+function Story({ label, value }) {
+  return (
+    <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-3">
+      <div className="text-[10px] uppercase text-slate-500">{label}</div>
+      <div className="mt-1 text-sm font-semibold">{value}</div>
+    </div>
+  );
+}
+function Hosts({ rows }) {
+  return (
+    <Table
+      headers={[
+        "Risk",
+        "Host",
+        "MAC",
+        "Traffic",
+        "Protocols / Services",
+        "Domains",
+        "Findings",
+      ]}
+      empty={!rows.length}
+    >
+      {rows.map((r, i) => (
+        <tr
+          key={r.ip || i}
+          className="border-t border-slate-100 dark:border-slate-800 align-top"
+        >
+          <td className="px-4 py-2">
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${riskClass(r.risk?.level)}`}
+            >
+              {r.risk?.score || 0} {r.risk?.level || "none"}
+            </span>
+          </td>
+          <td className="px-4 py-2">
+            <div className="font-mono-code font-semibold">{r.ip}</div>
+            <div className="text-slate-500 mt-1">
+              {r.hostname || (r.is_local ? "Local host" : "External host")}
+            </div>
+          </td>
+          <td className="px-4 py-2 font-mono-code">{r.mac || "—"}</td>
+          <td className="px-4 py-2 whitespace-nowrap">
+            {fmt(r.total_bytes)}
+            <div className="text-slate-500 mt-1">
+              ↑ {fmt(r.bytes_sent)} · ↓ {fmt(r.bytes_received)}
+            </div>
+          </td>
+          <td className="px-4 py-2">
+            <div>{(r.protocols || []).join(", ") || "—"}</div>
+            <div className="text-slate-500 mt-1">
+              {(r.services || [])
+                .slice(0, 5)
+                .map((s) => `${s.port}/${s.protocol}`)
+                .join(", ") || "No observed service"}
+            </div>
+          </td>
+          <td className="px-4 py-2 max-w-xs">
+            {(r.domains || [])
+              .slice(0, 4)
+              .map((d) => d.domain)
+              .join(", ") || "—"}
+          </td>
+          <td className="px-4 py-2">
+            {r.finding_count || 0}
+            <div className="text-slate-500 mt-1">
+              {(r.connections || []).length} peer(s)
+            </div>
+          </td>
+        </tr>
+      ))}
+    </Table>
+  );
+}
+function riskClass(level) {
+  if (level === "critical")
+    return "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300";
+  if (level === "high")
+    return "bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300";
+  if (level === "medium")
+    return "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300";
+  if (level === "low")
+    return "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300";
+  return "bg-slate-100 text-slate-500 dark:bg-slate-800";
+}
+function Timeline({ data, onSelectPacket }) {
+  const [filters, setFilters] = useState({
+      host: "",
+      domain: "",
+      connection: "",
+      protocol: "",
+      severity: "info",
+      start: "",
+      end: "",
+    }),
+    rows = useMemo(() => {
+      const start = filters.start ? Date.parse(filters.start) / 1000 : null,
+        end = filters.end ? Date.parse(filters.end) / 1000 : null;
+      return (data.events || []).filter(
+        (r) =>
+          (!filters.host ||
+            [r.src_ip, r.dst_ip].some((v) =>
+              String(v || "").includes(filters.host),
+            )) &&
+          (!filters.domain ||
+            String(r.domain || "")
+              .toLowerCase()
+              .includes(filters.domain.toLowerCase())) &&
+          (!filters.connection ||
+            String(r.connection_id || "")
+              .toLowerCase()
+              .includes(filters.connection.toLowerCase())) &&
+          (!filters.protocol ||
+            [r.protocol, r.category].some((v) =>
+              String(v || "")
+                .toLowerCase()
+                .includes(filters.protocol.toLowerCase()),
+            )) &&
+          SEVERITY_RANK[r.severity || "info"] >=
+            SEVERITY_RANK[filters.severity] &&
+          (start === null || r.timestamp >= start) &&
+          (end === null || r.timestamp <= end),
+      );
+    }, [data.events, filters]);
+  const set = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
+  return (
+    <div>
+      <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-7 gap-2 p-3 border-b border-slate-100 dark:border-slate-800">
+        <input
+          value={filters.host}
+          onChange={(e) => set("host", e.target.value)}
+          placeholder="Host IP"
+          className="filter-control"
+        />
+        <input
+          value={filters.domain}
+          onChange={(e) => set("domain", e.target.value)}
+          placeholder="Domain"
+          className="filter-control"
+        />
+        <input
+          value={filters.connection}
+          onChange={(e) => set("connection", e.target.value)}
+          placeholder="Connection / port"
+          className="filter-control"
+        />
+        <input
+          value={filters.protocol}
+          onChange={(e) => set("protocol", e.target.value)}
+          placeholder="Protocol"
+          className="filter-control"
+        />
+        <select
+          value={filters.severity}
+          onChange={(e) => set("severity", e.target.value)}
+          className="filter-control"
+        >
+          <option value="info">All severities</option>
+          <option value="low">Low+</option>
+          <option value="medium">Medium+</option>
+          <option value="high">High+</option>
+          <option value="critical">Critical</option>
+        </select>
+        <input
+          type="datetime-local"
+          value={filters.start}
+          onChange={(e) => set("start", e.target.value)}
+          className="filter-control"
+        />
+        <input
+          type="datetime-local"
+          value={filters.end}
+          onChange={(e) => set("end", e.target.value)}
+          className="filter-control"
+        />
+      </div>
+      <div className="px-4 py-2 text-[11px] text-slate-500 border-b border-slate-100 dark:border-slate-800">
+        {rows.length} correlated event(s): DNS → connection → TLS/HTTP →
+        security finding. Select an event to inspect its packet.
+      </div>
+      <div className="max-h-[520px] overflow-auto el-scroll">
+        {rows.map((r, i) => (
+          <button
+            key={`${r.timestamp}-${r.event_type}-${r.packet_id || i}`}
+            onClick={() => r.packet_id && onSelectPacket?.({ id: r.packet_id })}
+            className="w-full grid grid-cols-[110px_110px_minmax(0,1fr)] gap-3 text-left px-4 py-3 border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            <span className="font-mono-code text-[11px] text-slate-500">
+              {timelineTime(r.timestamp)}
+            </span>
+            <span
+              className={`self-start rounded-full px-2 py-0.5 text-[10px] font-bold uppercase text-center ${riskClass(r.severity)}`}
+            >
+              {r.category}
+            </span>
+            <span>
+              <span className="font-semibold text-xs">{r.title}</span>
+              <span className="block text-[11px] text-slate-500 mt-1">
+                {r.src_ip || "—"}
+                {r.src_port ? `:${r.src_port}` : ""} → {r.dst_ip || "—"}
+                {r.dst_port ? `:${r.dst_port}` : ""}
+                {r.domain ? ` · ${r.domain}` : ""}
+              </span>
+              {r.detail && (
+                <span className="block text-[11px] text-slate-500 mt-1">
+                  {r.detail}
+                </span>
+              )}
+            </span>
+          </button>
+        ))}
+        {!rows.length && (
+          <div className="p-8 text-center text-slate-400 text-sm">
+            No timeline events match these filters.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+function timelineTime(value) {
+  const d = new Date(Number(value || 0) * 1000);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+}
+function DNS({ data }) {
+  const rows = data.events || [];
+  return (
+    <Table
+      headers={["Time", "Type", "Domain", "Answers", "RCODE", "TTL"]}
+      empty={!rows.length}
+    >
+      {rows.map((r, i) => (
+        <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+          <td className="px-4 py-2">{r.timestamp || "—"}</td>
+          <td className="px-4 py-2">{r.response ? "Response" : "Query"}</td>
+          <td className="px-4 py-2 font-mono-code">{r.query || "—"}</td>
+          <td className="px-4 py-2 font-mono-code">
+            {Array.isArray(r.answers) ? r.answers.join(", ") : "—"}
+          </td>
+          <td className="px-4 py-2">{r.response_code ?? "—"}</td>
+          <td className="px-4 py-2">{r.ttl ?? "—"}</td>
+        </tr>
+      ))}
+    </Table>
+  );
+}
+function HTTP({ data }) {
+  const rows = data.events || [];
+  return (
+    <Table
+      headers={["Time", "Method", "Host", "Path", "Status", "User Agent"]}
+      empty={!rows.length}
+    >
+      {rows.map((r, i) => (
+        <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+          <td className="px-4 py-2">{r.timestamp || "—"}</td>
+          <td className="px-4 py-2 font-semibold">{r.method || "—"}</td>
+          <td className="px-4 py-2 font-mono-code">{r.host || "—"}</td>
+          <td className="px-4 py-2 font-mono-code">{r.path || "—"}</td>
+          <td className="px-4 py-2">{r.status || "—"}</td>
+          <td className="px-4 py-2 truncate max-w-xs">{r.user_agent || "—"}</td>
+        </tr>
+      ))}
+    </Table>
+  );
+}
+function TLS({ data, onSelectPacket }) {
+  const [query, setQuery] = useState("");
+  const warnings = data.warnings || [],
+    warningByPacket = new Map();
+  warnings.forEach((w) => {
+    const key = String(w.packet_id),
+      rows = warningByPacket.get(key) || [];
+    rows.push(w);
+    warningByPacket.set(key, rows);
+  });
+  const rows = (data.events || []).filter(
+    (row) =>
+      !query ||
+      [
+        row.src_ip,
+        row.dst_ip,
+        row.sni,
+        row.version,
+        row.alpn,
+        row.cipher,
+        row.ja3,
+        row.ja3s,
+        row.certificate_subject,
+        row.certificate_issuer,
+      ].some((value) =>
+        String(value || "")
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+      ),
+  );
+  return (
+    <div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 p-3 border-b border-slate-100 dark:border-slate-800">
+        <Mini label="Observed TLS/HTTPS" value={(data.events || []).length} />
+        <Mini label="Decoded metadata" value={data.decoded_events || 0} />
+        <Mini label="Metadata only" value={data.metadata_only_events || 0} />
+        <Mini label="Fingerprints" value={(data.fingerprints || []).length} />
+        <Mini
+          label="Warnings"
+          value={warnings.length}
+          danger={warnings.length > 0}
+        />
+      </div>
+      <div className="flex flex-wrap gap-3 items-center px-4 py-2 border-b border-slate-100 dark:border-slate-800">
+        <p className="text-[11px] text-slate-500 flex-1 min-w-[260px]">
+          {data.note ||
+            "TLS view shows observable handshake/record metadata only. Encrypted application payload is not decrypted."}
+        </p>
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search TLS metadata"
+          className="filter-control w-full sm:w-64"
+        />
+      </div>
+      {(data.fingerprints || []).length > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-4 py-2 border-b border-slate-100 dark:border-slate-800">
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 mr-1 self-center">
+            Visible fingerprints
+          </span>
+          {(data.fingerprints || []).slice(0, 8).map((row) => (
+            <button
+              key={row.fingerprint}
+              onClick={() => setQuery(row.fingerprint.split(":")[1])}
+              className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-1 text-[10px] font-mono-code"
+            >
+              {row.fingerprint} · {row.packets}
+            </button>
+          ))}
+        </div>
+      )}
+      <Table
+        headers={[
+          "Visibility",
+          "Endpoints",
+          "Version / Handshake",
+          "SNI / ALPN",
+          "Cipher / Fingerprint",
+          "Certificate",
+          "Warnings",
+        ]}
+        empty={!rows.length}
+      >
+        {rows.map((r, i) => {
+          const packetWarnings = warningByPacket.get(String(r.packet_id)) || [];
+          return (
+            <tr
+              key={r.packet_id || i}
+              onClick={() =>
+                r.packet_id && onSelectPacket?.({ id: r.packet_id })
+              }
+              className="border-t border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 align-top"
+            >
+              <td className="px-4 py-2">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${r.decoded ? "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-slate-100 dark:bg-slate-800 text-slate-500"}`}
+                >
+                  {r.decoded ? "Decoded metadata" : "Port/context only"}
+                </span>
+              </td>
+              <td className="px-4 py-2 font-mono-code whitespace-nowrap">
+                {r.src_ip || "—"}:{r.src_port || "—"}
+                <br />
+                <span className="text-slate-400">→</span> {r.dst_ip || "—"}:
+                {r.dst_port || "—"}
+              </td>
+              <td className="px-4 py-2">
+                <b>{r.version || "—"}</b>
+                <div className="text-slate-500 mt-1">
+                  {r.handshake || "Handshake unknown"}
+                </div>
+                {r.offered_versions?.length > 0 && (
+                  <div className="text-[10px] text-slate-400 mt-1">
+                    Offered: {r.offered_versions.join(", ")}
+                  </div>
+                )}
+              </td>
+              <td className="px-4 py-2">
+                <div className="font-mono-code">{r.sni || "—"}</div>
+                <div className="text-slate-500 mt-1">
+                  {r.alpn
+                    ? `ALPN ${Array.isArray(r.alpn) ? r.alpn.join(", ") : r.alpn}`
+                    : "ALPN —"}
+                </div>
+              </td>
+              <td className="px-4 py-2 font-mono-code max-w-[240px] break-words">
+                <div>
+                  {r.cipher || r.offered_ciphers?.slice(0, 4).join(", ") || "—"}
+                </div>
+                {(r.ja3 || r.ja3s) && (
+                  <div className="text-[10px] text-slate-500 mt-1 break-all">
+                    {r.ja3 ? `JA3 ${r.ja3}` : `JA3S ${r.ja3s}`}
+                  </div>
+                )}
+              </td>
+              <td className="px-4 py-2 max-w-[260px]">
+                <div className="font-medium break-words">
+                  {r.certificate_subject || "—"}
+                </div>
+                {r.certificate_issuer && (
+                  <div className="text-slate-500 mt-1 break-words">
+                    Issuer: {r.certificate_issuer}
+                  </div>
+                )}
+                {r.certificate_not_before && (
+                  <div className="text-slate-500 mt-1">
+                    Valid from: {r.certificate_not_before}
+                  </div>
+                )}
+                {r.certificate_expiry && (
+                  <div className="text-slate-500 mt-1">
+                    Expires: {r.certificate_expiry}
+                  </div>
+                )}
+              </td>
+              <td
+                className={`px-4 py-2 ${packetWarnings.length ? "text-amber-600 dark:text-amber-300 font-semibold" : "text-slate-400"}`}
+              >
+                {packetWarnings.length
+                  ? packetWarnings.map((w) => (
+                      <div key={`${w.type}-${w.detail}`}>
+                        {w.type.replaceAll("_", " ")}:{" "}
+                        {w.detail || "review metadata"}
+                      </div>
+                    ))
+                  : "—"}
+              </td>
+            </tr>
+          );
+        })}
+      </Table>
+    </div>
+  );
+}
+function Mini({ label, value, danger }) {
+  return (
+    <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-2">
+      <div className="text-[9px] uppercase tracking-wider text-slate-500">
+        {label}
+      </div>
+      <div className={`font-bold mt-1 ${danger ? "text-amber-500" : ""}`}>
+        {Number(value || 0).toLocaleString()}
+      </div>
+    </div>
+  );
+}
+function Security({ rows, onSelectPacket }) {
+  return (
+    <div>
+      <div className="px-4 py-2 text-[11px] text-slate-500 border-b border-slate-100 dark:border-slate-800">
+        Defensive findings are investigation leads derived from observed traffic
+        and heuristics. They are not proof of compromise.
+      </div>
+      <Table
+        headers={[
+          "Severity",
+          "Finding",
+          "Source",
+          "Destination",
+          "Evidence / Details",
+        ]}
+        empty={!rows.length}
+      >
+        {rows.map((r, i) => (
+          <tr
+            key={r.id || `${r.type}-${i}`}
+            onClick={() => r.packet_id && onSelectPacket?.({ id: r.packet_id })}
+            className="border-t border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            <td className="px-4 py-2 font-semibold uppercase text-[10px]">
+              {r.severity || "info"}
+            </td>
+            <td className="px-4 py-2 font-semibold">
+              {r.title || r.type || "Investigation lead"}
+            </td>
+            <td className="px-4 py-2 font-mono-code">
+              {r.src || r.src_ip || "—"}
+            </td>
+            <td className="px-4 py-2 font-mono-code">
+              {r.dst || r.dst_ip || "—"}
+            </td>
+            <td className="px-4 py-2 text-slate-500 max-w-xl">
+              {r.description ||
+                r.detail ||
+                r.evidence ||
+                "Review correlated packet evidence."}
+            </td>
+          </tr>
+        ))}
+      </Table>
+    </div>
+  );
+}
+function mergeFindings(defensive, live) {
+  const seen = new Set(),
+    out = [];
+  [...(defensive || []), ...(live || [])].forEach((r, i) => {
+    const key =
+      [
+        r.id,
+        r.type,
+        r.packet_id,
+        r.src || r.src_ip,
+        r.dst || r.dst_ip,
+        r.title,
+        r.description || r.detail,
+      ]
+        .filter(Boolean)
+        .join("|") || `finding-${i}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push(r);
+    }
+  });
+  return out;
+}
+function fmt(n) {
+  const v = Number(n || 0);
+  if (v >= 1048576) return `${(v / 1048576).toFixed(1)} MB`;
+  if (v >= 1024) return `${(v / 1024).toFixed(1)} KB`;
+  return `${v} B`;
+}
