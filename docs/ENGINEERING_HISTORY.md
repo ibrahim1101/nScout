@@ -173,3 +173,17 @@ Add a dated entry for **every significant success, failure, debugging attempt, b
 - Remaining blockers / next step: inspect CI, then implement honest capture empty/error states without synthetic fallback claims.
 - Docs/README/roadmap updates: recovery scope, expiry, validation and evidence boundaries documented.
 
+### 2026-10-11 12:00 IST — Honest live-capture startup failure
+- Branch / before SHA / implementation SHA: `v0.4-investigation-platform` / `535dd13ac012c8966b0301dc176614ddad9ea331` / `3b9f7b39903e9905fb5236ba71a69f1f10965706`.
+- Objective and why: remove the misleading production behavior that generated synthetic packets after a requested live interface failed to start, while preserving explicitly selected simulation for deterministic tests and demos.
+- Files changed / implementation: added a bounded live-sniffer readiness handshake, explicit capture-start error state, HTTP 503 propagation for start/switch failures, detailed frontend notification, updated capture documentation and regression coverage.
+- Commands actually executed: `python -m py_compile backend/etherlens/engine.py backend/server.py`; `python -m pytest -q tests/test_capture_controls.py`; `python -m pytest -q --ignore=tests/backend_test.py --ignore=tests/test_v2_features.py --ignore=tests/test_v3_features.py`; `npx prettier --write src/components/etherlens/Dashboard.jsx`; `CI=true npm run build`; `git diff --check`.
+- Environment: Linux automation runner, Python 3.12 with pinned backend requirements, React/CRACO production build.
+- Tests: 8/8 capture-control tests passed, including zero synthetic packets after failed live startup; the full focused backend suite passed 143 tests; optimized React build compiled successfully.
+- CI: pending GitHub Actions after push.
+- Failure symptoms / log excerpt: the first test attempt used the repository root and could not import `etherlens`; rerunning from `backend/` exercised the configured package path. The next focused run exposed two pre-existing tests that attempted real adapter capture; they now use deterministic ready-sniffer doubles and no longer require capture privileges.
+- Root cause / fix / verification: `AsyncSniffer.start()` returns before its worker confirms socket readiness, and the old exception path changed `mode` to `simulated`. Startup now waits up to three seconds for Scapy's `started_callback`; synchronous failure or readiness timeout leaves capture stopped in `error`, broadcasts metadata-only failure context and raises `CaptureUnavailableError`. Explicit `simulated` selection is unchanged.
+- Security, compatibility and migration impact: capture failures can no longer be mistaken for observed network evidence. Error text identifies only the selected interface and exception class; packet/evidence content is not logged. Npcap/libpcap and platform permission requirements are unchanged.
+- Remaining blockers / next step: inspect CI, continue remaining honest empty/error states, then address detection-preset preference wiring and clean-system release gates.
+- Docs/README/roadmap updates: capture-health behavior now distinguishes explicit simulation from failed live capture and documents the HTTP 503 diagnostic path.
+
