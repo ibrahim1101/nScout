@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { api } from "./lib";
 import { hostBookmark } from "./investigationBookmarks";
+import { describeLiveHostsState } from "./liveHostsState";
 
 const STATES = {
   active: {
@@ -29,6 +30,7 @@ const STATES = {
 
 export default function LiveHostsWorkspace({
   hosts = [],
+  status = {},
   onRefresh,
   onInspectTraffic,
   onBookmark,
@@ -92,12 +94,36 @@ export default function LiveHostsWorkspace({
       hosts.filter((host) => host.activity_state === key).length,
     ]),
   );
+  const filtersActive = Boolean(query.trim() || state !== "all" || watchOnly);
+  const emptyState = describeLiveHostsState({
+    hostCount: hosts.length,
+    visibleCount: rows.length,
+    filtersActive,
+    ...status,
+  });
   return (
     <div
       className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,.7fr)] gap-4"
       data-testid="live-hosts-workspace"
     >
       <section className="space-y-3">
+        {status.error && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-4 py-2 text-xs text-red-600 dark:text-red-300">
+            <span className="flex-1">
+              {status.error}
+              {status.loaded
+                ? " Showing the last successfully loaded host inventory."
+                : ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => onRefresh?.()}
+              className="font-semibold underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Metric
             icon={Wifi}
@@ -212,7 +238,10 @@ export default function LiveHostsWorkspace({
             {!rows.length && (
               <div className="p-10 text-center text-sm text-slate-400">
                 <Eye size={24} className="mx-auto mb-2" />
-                No observed hosts match these filters.
+                <div className="font-semibold text-slate-500 dark:text-slate-300">
+                  {emptyState.title}
+                </div>
+                <div className="mt-1 text-xs">{emptyState.message}</div>
               </div>
             )}
           </div>
@@ -220,6 +249,7 @@ export default function LiveHostsWorkspace({
       </section>
       <HostInspector
         host={selected}
+        emptyState={emptyState}
         alias={alias}
         setAlias={setAlias}
         saving={saving}
@@ -235,6 +265,7 @@ export default function LiveHostsWorkspace({
 
 function HostInspector({
   host,
+  emptyState,
   alias,
   setAlias,
   saving,
@@ -248,7 +279,10 @@ function HostInspector({
     return (
       <aside className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-8 text-center text-sm text-slate-400">
         <Monitor size={28} className="mx-auto mb-3" />
-        Select a host to investigate its identity and activity.
+        <div className="font-semibold text-slate-500 dark:text-slate-300">
+          {emptyState.title}
+        </div>
+        <div className="mt-1 text-xs">{emptyState.message}</div>
       </aside>
     );
   return (

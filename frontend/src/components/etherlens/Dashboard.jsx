@@ -76,6 +76,11 @@ export default function Dashboard({ theme, setTheme }) {
     [timeline, setTimeline] = useState([]),
     [topTalkers, setTopTalkers] = useState([]),
     [hostProfiles, setHostProfiles] = useState([]),
+    [hostStatus, setHostStatus] = useState({
+      loading: false,
+      loaded: false,
+      error: "",
+    }),
     [topology, setTopology] = useState({ nodes: [], edges: [] }),
     [flows, setFlows] = useState([]),
     [activeFlow, setActiveFlow] = useState(null),
@@ -166,10 +171,21 @@ export default function Dashboard({ theme, setTheme }) {
     return () => clearInterval(id);
   }, []);
   const refreshHosts = useCallback(async () => {
+    setHostStatus((current) => ({ ...current, loading: true }));
     try {
       const response = await api.get("/intelligence/hosts");
       setHostProfiles(response.data.hosts || []);
-    } catch (_) {}
+      setHostStatus({ loading: false, loaded: true, error: "" });
+    } catch (error) {
+      setHostStatus((current) => ({
+        ...current,
+        loading: false,
+        error:
+          error?.response?.data?.detail ||
+          error.message ||
+          "Could not load observed hosts.",
+      }));
+    }
   }, []);
   useEffect(() => {
     if (!["analytics", "investigations", "hosts"].includes(tab)) return;
@@ -498,6 +514,7 @@ export default function Dashboard({ theme, setTheme }) {
         {tab === "hosts" && (
           <LiveHostsWorkspace
             hosts={hostProfiles}
+            status={hostStatus}
             onRefresh={refreshHosts}
             onBookmark={bookmarkEvidence}
             onInspectTraffic={(host) => {
