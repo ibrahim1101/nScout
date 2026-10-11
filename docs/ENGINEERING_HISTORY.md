@@ -105,7 +105,7 @@ For build/test commands, use **the actual current README, workflow YAML and proj
 
 ## 5. Current gaps and release gates
 
-- Local nScout profiles; workspace crash recovery; sticky Advanced Packet Search; detection presets and settings integration; contextual bookmarks; better empty/error states.
+- Workspace crash recovery; sticky Advanced Packet Search; detection presets and settings integration; contextual bookmarks; better empty/error states.
 - Implement and test NEO shared tokens/components, per-page migration, scalable topology, and isolated pixel-cat loading state.
 - Audit and remove production simulated-traffic paths without regressing legitimate live capture, PCAP replay or deterministic automated tests.
 - Windows/Linux/macOS clean-machine Tauri install/launch/backend readiness/shutdown, capture permissions and interface enumeration, evidence persistence and export checks.
@@ -142,3 +142,19 @@ Add a dated entry for **every significant success, failure, debugging attempt, b
 4. Append truthful detailed results **including failed attempts** to this journal. Keep README and roadmap consistent.
 5. Never treat mockup telemetry as live data, simulation as live capture, a successful package build as platform acceptance, or a planned feature as implemented.
 6. Keep `main`/v0.3.0 stable; do not merge/release without explicit approval.
+
+
+### 2026-10-11 10:00 IST — Local nScout preference profiles
+- Branch / before SHA / implementation SHA: `v0.4-investigation-platform` / `871ee3972611553d15869903443ea68867dd0270` / `dc770472694ce394432bbfd29b7fb7e79304e1c9`.
+- Objective and why: implement the next unfinished v0.4 priority as reusable local preference profiles without requiring a cloud account.
+- Files changed / implementation: added an atomic JSON preference-profile store, bounded create/list/delete API, Settings controls to save/load/delete profiles, four regression tests, and README/roadmap documentation.
+- Commands actually executed: `python -m py_compile backend/etherlens/preference_profiles.py backend/server.py`; `python -m pytest -q tests/test_preference_profiles.py`; `python -m pytest -q --ignore=tests/backend_test.py --ignore=tests/test_v2_features.py --ignore=tests/test_v3_features.py`; `npx prettier --write src/components/etherlens/SettingsDrawer.jsx`; `npm run build`; `git diff --check`.
+- Environment: Linux automation runner, Python 3.12, pinned backend requirements, React production build through the repository npm script.
+- Tests: 4 new profile tests passed; full focused backend suite passed 142 tests; optimized React build compiled successfully.
+- CI: pending GitHub Actions after push.
+- Failure symptoms / log excerpt: initial pytest attempt failed because the runner lacked `pytest` and `python-dotenv`; pinned `backend/requirements.txt` and `backend/requirements-dev.txt` were installed, after which the real tests passed. An initial `yarn build` attempt failed because Yarn was unavailable; the repository's `npm run build` succeeded.
+- Root cause / fix / verification: missing local runner dependencies/tools, not a source defect. Installed pinned Python dependencies and used the available npm build path.
+- Security, compatibility and migration impact: profiles contain only allow-listed non-secret preferences. Webhook URLs, AI provider details/models, credentials, packet data and investigation evidence are excluded. Storage is capped at 50 profiles and written atomically under `NSCOUT_DATA_DIR`.
+- Remaining blockers / next step: verify GitHub CI, then implement bounded workspace crash recovery and honest capture empty/error states.
+- Docs/README/roadmap updates: local-profile behavior, storage path and exclusions documented.
+
