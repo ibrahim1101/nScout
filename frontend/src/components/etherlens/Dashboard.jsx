@@ -24,6 +24,10 @@ import {
   shortcutMatches,
 } from "./keyboardShortcuts";
 import {
+  BookmarkError,
+  bookmarkActiveInvestigation,
+} from "./investigationBookmarks";
+import {
   Activity,
   Network,
   ShieldAlert,
@@ -374,6 +378,30 @@ export default function Dashboard({ theme, setTheme }) {
     }
     if (target.packet_id) openPacket(target.packet_id);
   };
+  const bookmarkEvidence = useCallback(async (evidence) => {
+    try {
+      const saved = await bookmarkActiveInvestigation(api, evidence);
+      setNotice(
+        `Bookmarked ${saved.payload.title || saved.payload.type} to the active investigation.`,
+      );
+      setTimeout(() => setNotice(""), 5000);
+      return true;
+    } catch (error) {
+      if (
+        error instanceof BookmarkError &&
+        error.code === "no_active_investigation"
+      ) {
+        setNotice(error.message);
+        setTab("investigations");
+      } else {
+        setNotice(
+          `Could not bookmark evidence: ${error?.response?.data?.detail || error.message || "unknown error"}`,
+        );
+      }
+      setTimeout(() => setNotice(""), 6000);
+      return false;
+    }
+  }, []);
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#090D16] text-slate-900 dark:text-slate-100">
       <HeaderNav
@@ -462,6 +490,7 @@ export default function Dashboard({ theme, setTheme }) {
           <IntelligenceWorkspace
             threats={threats}
             onSelectPacket={openPacket}
+            onBookmark={bookmarkEvidence}
             target={intelligenceTarget}
             onTargetConsumed={() => setIntelligenceTarget(null)}
           />
@@ -470,6 +499,7 @@ export default function Dashboard({ theme, setTheme }) {
           <LiveHostsWorkspace
             hosts={hostProfiles}
             onRefresh={refreshHosts}
+            onBookmark={bookmarkEvidence}
             onInspectTraffic={(host) => {
               setFilter(host);
               setTab("analyzer");

@@ -5,6 +5,7 @@ import {
   readAdvancedSearchDraft,
   writeAdvancedSearchDraft,
 } from "./advancedSearchState";
+import { findingBookmark } from "./investigationBookmarks";
 import {
   Network,
   Monitor,
@@ -16,6 +17,7 @@ import {
   RadioTower,
   Sparkles,
   Clock3,
+  BookmarkPlus,
 } from "lucide-react";
 
 const PANELS = [
@@ -32,6 +34,7 @@ const SEVERITY_RANK = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
 export default function IntelligenceWorkspace({
   threats = [],
   onSelectPacket,
+  onBookmark,
   target = null,
   onTargetConsumed,
 }) {
@@ -192,7 +195,11 @@ export default function IntelligenceWorkspace({
           <TLS data={data.tls} onSelectPacket={onSelectPacket} />
         )}{" "}
         {panel === "security" && (
-          <Security rows={securityRows} onSelectPacket={onSelectPacket} />
+          <Security
+            rows={securityRows}
+            onSelectPacket={onSelectPacket}
+            onBookmark={onBookmark}
+          />
         )}
       </div>
       {panel === "connections" && selectedConnection && (
@@ -1115,7 +1122,7 @@ function Mini({ label, value, danger }) {
     </div>
   );
 }
-function Security({ rows, onSelectPacket }) {
+function Security({ rows, onSelectPacket, onBookmark }) {
   return (
     <div>
       <div className="px-4 py-2 text-[11px] text-slate-500 border-b border-slate-100 dark:border-slate-800">
@@ -1129,6 +1136,7 @@ function Security({ rows, onSelectPacket }) {
           "Source",
           "Destination",
           "Evidence / Details",
+          "Action",
         ]}
         empty={!rows.length}
       >
@@ -1155,6 +1163,19 @@ function Security({ rows, onSelectPacket }) {
                 r.detail ||
                 r.evidence ||
                 "Review correlated packet evidence."}
+            </td>
+            <td className="px-4 py-2">
+              <button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onBookmark?.(findingBookmark(r, i));
+                }}
+                className="tool whitespace-nowrap"
+                aria-label={`Bookmark ${r.title || r.type || "finding"}`}
+              >
+                <BookmarkPlus size={13} />
+                Bookmark
+              </button>
             </td>
           </tr>
         ))}

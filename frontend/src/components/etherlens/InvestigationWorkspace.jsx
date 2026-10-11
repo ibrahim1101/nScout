@@ -13,8 +13,8 @@ import {
 } from "lucide-react";
 import { api } from "./lib";
 import ReportExports from "./ReportExports";
+import { ACTIVE_INVESTIGATION_KEY as ACTIVE_CASE_KEY } from "./investigationBookmarks";
 
-const ACTIVE_CASE_KEY = "nscout.activeInvestigation";
 const FINDING_STATES = [
   "new",
   "investigating",
@@ -97,7 +97,11 @@ export default function InvestigationWorkspace({
   };
 
   useEffect(() => {
-    if (targetInvestigationId && targetInvestigationId !== activeId && cases.some((item) => item.id === targetInvestigationId))
+    if (
+      targetInvestigationId &&
+      targetInvestigationId !== activeId &&
+      cases.some((item) => item.id === targetInvestigationId)
+    )
       selectCase(targetInvestigationId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetInvestigationId, activeId, cases]);
