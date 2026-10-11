@@ -67,8 +67,8 @@
 | Early GitHub Actions troubleshooting | Conversation record; outcome unverified | Build #8/#9 were monitored for completion/artifact creation; backfill exact failure steps from archived Actions before making claims. |
 | Network Map search overlap | Verified v0.4 roadmap | Search icon/placeholder overlap was fixed during Network Map 2.0. Add visual regression coverage when practical. |
 | Timestamp display | Conversation record / roadmap | Local-time display correction introduced; preserve UTC evidence semantics separately. |
-| Capture backend fallback | Verified roadmap | Capture health and fallback visibility added; new policy requires **no fake production traffic** on capture failure. |
-| Durable workspace | Verified roadmap | Atomic JSON local persistence independent of MongoDB; crash recovery still incomplete. |
+| Capture backend failure | Verified roadmap | Failed live startup now stops in an explicit error state; no fake production traffic is generated as fallback. |
+| Durable workspace | Verified roadmap | Atomic JSON local persistence plus bounded seven-day navigation/filter recovery are implemented; clean-system crash recovery still needs release-gate validation. |
 | Report export safety | Verified roadmap | Redaction and spreadsheet formula-injection defense added; regression-test all export types. |
 | Desktop packaging | CI success at checkpoint | Windows/Linux/macOS development packaging passes workflow checks; physical clean-install and capture fidelity unverified. |
 | Native Windows capture | Prototype/research only | Pktmon-to-PCAPNG feasibility is not live capture parity; retain Npcap until complete comparisons pass. |
@@ -105,9 +105,9 @@ For build/test commands, use **the actual current README, workflow YAML and proj
 
 ## 5. Current gaps and release gates
 
-- Workspace crash recovery; sticky Advanced Packet Search; detection presets and settings integration; contextual bookmarks; better empty/error states.
+- Sticky Advanced Packet Search; detection presets and settings integration; contextual bookmarks; remaining empty/error states.
 - Implement and test NEO shared tokens/components, per-page migration, scalable topology, and isolated pixel-cat loading state.
-- Audit and remove production simulated-traffic paths without regressing legitimate live capture, PCAP replay or deterministic automated tests.
+- Audit remaining production simulation entry points while preserving explicitly selected demos and deterministic automated tests.
 - Windows/Linux/macOS clean-machine Tauri install/launch/backend readiness/shutdown, capture permissions and interface enumeration, evidence persistence and export checks.
 - Windows native Pktmon/WFP fidelity parity against Npcap (packets, protocol fields, DNS/HTTP/TLS, TCP health, interface reliability); do not remove Npcap prematurely.
 - Real local LLM server tests; macOS signing/notarization; full regression and user acceptance.
@@ -180,10 +180,24 @@ Add a dated entry for **every significant success, failure, debugging attempt, b
 - Commands actually executed: `python -m py_compile backend/etherlens/engine.py backend/server.py`; `python -m pytest -q tests/test_capture_controls.py`; `python -m pytest -q --ignore=tests/backend_test.py --ignore=tests/test_v2_features.py --ignore=tests/test_v3_features.py`; `npx prettier --write src/components/etherlens/Dashboard.jsx`; `CI=true npm run build`; `git diff --check`.
 - Environment: Linux automation runner, Python 3.12 with pinned backend requirements, React/CRACO production build.
 - Tests: 8/8 capture-control tests passed, including zero synthetic packets after failed live startup; the full focused backend suite passed 143 tests; optimized React build compiled successfully.
-- CI: pending GitHub Actions after push.
+- CI: GitHub Actions runs 38118569501 (focused regression and conventional Windows), 38118569587 (Docker/API) and 38118569547 (Windows/Linux/macOS desktop) all completed successfully at implementation head `3b9f7b39903e9905fb5236ba71a69f1f10965706`.
 - Failure symptoms / log excerpt: the first test attempt used the repository root and could not import `etherlens`; rerunning from `backend/` exercised the configured package path. The next focused run exposed two pre-existing tests that attempted real adapter capture; they now use deterministic ready-sniffer doubles and no longer require capture privileges.
 - Root cause / fix / verification: `AsyncSniffer.start()` returns before its worker confirms socket readiness, and the old exception path changed `mode` to `simulated`. Startup now waits up to three seconds for Scapy's `started_callback`; synchronous failure or readiness timeout leaves capture stopped in `error`, broadcasts metadata-only failure context and raises `CaptureUnavailableError`. Explicit `simulated` selection is unchanged.
 - Security, compatibility and migration impact: capture failures can no longer be mistaken for observed network evidence. Error text identifies only the selected interface and exception class; packet/evidence content is not logged. Npcap/libpcap and platform permission requirements are unchanged.
 - Remaining blockers / next step: inspect CI, continue remaining honest empty/error states, then address detection-preset preference wiring and clean-system release gates.
 - Docs/README/roadmap updates: capture-health behavior now distinguishes explicit simulation from failed live capture and documents the HTTP 503 diagnostic path.
+
+### 2026-10-11 13:00 IST — Context-aware packet-stream empty states
+- Branch / before SHA / implementation SHA: `v0.4-investigation-platform` / `fe4a7faae3233a3958f12c46ddd58129dab9c43c` / `c2320355b134f2b1f5b1c56c99f608194f142316`.
+- Objective and why: ensure analysts can distinguish a capture failure, quiet live interface, filtered result set, empty imported capture and idle workspace instead of seeing one ambiguous “no packets” message.
+- Files changed / implementation: added a pure capture-empty-state classifier, wired it into the existing Packet Analyzer table and documented the evidence semantics without changing the NEO visual design.
+- Commands actually executed: `npx prettier --write src/components/etherlens/PacketAnalyzer.jsx src/components/etherlens/captureEmptyState.js src/components/etherlens/captureEmptyState.test.js`; `CI=true npm test -- --watchAll=false --runInBand src/components/etherlens/captureEmptyState.test.js`; `CI=true npm test -- --watchAll=false --runInBand`; `CI=true npm run build`; `git diff --check`.
+- Environment: Linux automation runner, repository React/CRACO toolchain.
+- Tests: 5/5 focused empty-state tests passed; the complete frontend suite passed 8/8 tests; optimized React build compiled successfully.
+- CI: pending GitHub Actions after push.
+- Failure symptoms / log excerpt: none in source validation. npm emitted its existing `http-proxy` configuration warning and Node emitted the existing `fs.F_OK` deprecation warning; neither failed tests or build.
+- Root cause / fix / verification: Packet Analyzer previously rendered one hard-coded empty row for every zero-row condition. The classifier prioritizes backend error evidence, then retained-but-filtered packets, running capture diagnostics, empty offline capture, and idle state; regression tests cover each branch.
+- Security, compatibility and migration impact: backend-provided error reasons are displayed without inventing packet evidence. The helper uses aggregate status only and does not store or expose packet payloads. Existing packet rows and capture controls are unchanged.
+- Remaining blockers / next step: inspect CI, continue detection-preset preference wiring and remaining release-gate validation.
+- Docs/README/roadmap updates: documented the five distinct packet-stream empty states and refreshed completed recovery/fallback journal status.
 
