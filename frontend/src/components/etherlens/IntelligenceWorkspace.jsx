@@ -5,6 +5,7 @@ import {
   readAdvancedSearchDraft,
   writeAdvancedSearchDraft,
 } from "./advancedSearchState";
+import { describeIntelligenceEmptyState } from "./intelligenceEmptyState";
 import {
   connectionBookmark,
   dnsBookmark,
@@ -58,10 +59,12 @@ export default function IntelligenceWorkspace({
     }),
     [selectedConnection, setSelectedConnection] = useState(null),
     [loading, setLoading] = useState(false),
-    [error, setError] = useState("");
+    [loaded, setLoaded] = useState(false),
+    [loadError, setLoadError] = useState(""),
+    [navigationError, setNavigationError] = useState("");
   const refresh = async () => {
     setLoading(true);
-    setError("");
+    setLoadError("");
     try {
       const [connections, hosts, timeline, dns, http, tls, dashboard, summary] =
         await Promise.all([
@@ -84,8 +87,9 @@ export default function IntelligenceWorkspace({
         dashboard: dashboard.data || {},
         summary: summary.data || {},
       });
+      setLoaded(true);
     } catch (e) {
-      setError(
+      setLoadError(
         e?.response?.data?.detail ||
           e.message ||
           "Unable to load intelligence data.",
@@ -133,9 +137,9 @@ export default function IntelligenceWorkspace({
     setPanel("connections");
     if (match) {
       setSelectedConnection(match);
-      setError("");
+      setNavigationError("");
     } else
-      setError(
+      setNavigationError(
         destination
           ? `No reconstructed connection found for ${source} ↔ ${destination}.`
           : `No reconstructed connection found for ${source}.`,
@@ -146,11 +150,29 @@ export default function IntelligenceWorkspace({
     data.summary?.security?.findings || [],
     threats,
   );
+  const intelligenceStatus = { loading, loaded, error: loadError };
   return (
     <div className="space-y-4">
-      {error && (
-        <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-4 py-2 text-xs text-red-600 dark:text-red-300">
-          {error}
+      {loadError && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-4 py-2 text-xs text-red-600 dark:text-red-300">
+          <span className="flex-1">
+            {loadError}
+            {loaded
+              ? " Showing the last successfully loaded intelligence."
+              : ""}
+          </span>
+          <button
+            type="button"
+            onClick={refresh}
+            className="font-semibold underline"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+      {navigationError && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 px-4 py-2 text-xs text-amber-700 dark:text-amber-300">
+          {navigationError}
         </div>
       )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -190,23 +212,40 @@ export default function IntelligenceWorkspace({
             rows={data.connections}
             selected={selectedConnection}
             onSelect={setSelectedConnection}
+            status={intelligenceStatus}
           />
         )}{" "}
-        {panel === "hosts" && <Hosts rows={data.hosts} />}{" "}
+        {panel === "hosts" && (
+          <Hosts rows={data.hosts} status={intelligenceStatus} />
+        )}{" "}
         {panel === "timeline" && (
           <Timeline
             data={data.timeline}
             onSelectPacket={onSelectPacket}
             onBookmark={onBookmark}
+            status={intelligenceStatus}
           />
         )}{" "}
-        {panel === "dns" && <DNS data={data.dns} onBookmark={onBookmark} />}{" "}
-        {panel === "http" && <HTTP data={data.http} onBookmark={onBookmark} />}{" "}
+        {panel === "dns" && (
+          <DNS
+            data={data.dns}
+            onBookmark={onBookmark}
+            status={intelligenceStatus}
+          />
+        )}{" "}
+        {panel === "http" && (
+          <HTTP
+            data={data.http}
+            onBookmark={onBookmark}
+            status={intelligenceStatus}
+          />
+        )}{" "}
         {panel === "tls" && (
           <TLS
             data={data.tls}
             onSelectPacket={onSelectPacket}
             onBookmark={onBookmark}
+            status={intelligenceStatus}
           />
         )}{" "}
         {panel === "security" && (
@@ -214,6 +253,7 @@ export default function IntelligenceWorkspace({
             rows={securityRows}
             onSelectPacket={onSelectPacket}
             onBookmark={onBookmark}
+            status={intelligenceStatus}
           />
         )}
       </div>
@@ -248,7 +288,7 @@ function Metric({ label, value, danger }) {
     </div>
   );
 }
-function Table({ headers, children, empty }) {
+function Table({ headers, children, emptyState }) {
   return (
     <div className="overflow-auto el-scroll">
       <table className="w-full text-xs">
@@ -263,11 +303,17 @@ function Table({ headers, children, empty }) {
         </thead>
         <tbody>{children}</tbody>
       </table>
-      {empty && (
-        <div className="p-8 text-center text-slate-400 text-sm">
-          No data yet.
-        </div>
-      )}
+      {emptyState && <EmptyPanel state={emptyState} />}
+    </div>
+  );
+}
+function EmptyPanel({ state }) {
+  return (
+    <div className="p-8 text-center text-slate-400 text-sm">
+      <div className="font-semibold text-slate-500 dark:text-slate-300">
+        {state.title}
+      </div>
+      <div className="mt-1 text-xs">{state.message}</div>
     </div>
   );
 }
@@ -457,7 +503,7 @@ function SearchWorkspace({ onSelectPacket }) {
     </div>
   );
 }
-function Connections({ rows, selected, onSelect }) {
+function Connections({ rows, selected, onSelect, status }) {
   return (
     <Table
       headers={[
@@ -469,7 +515,11 @@ function Connections({ rows, selected, onSelect }) {
         "Retrans",
         "Resets",
       ]}
-      empty={!rows.length}
+      emptyState={
+        !rows.length
+          ? describeIntelligenceEmptyState({ panel: "connections", ...status })
+          : null
+      }
     >
       {rows.map((r, i) => (
         <tr
@@ -703,7 +753,7 @@ function Story({ label, value }) {
     </div>
   );
 }
-function Hosts({ rows }) {
+function Hosts({ rows, status }) {
   return (
     <Table
       headers={[
@@ -715,7 +765,11 @@ function Hosts({ rows }) {
         "Domains",
         "Findings",
       ]}
-      empty={!rows.length}
+      emptyState={
+        !rows.length
+          ? describeIntelligenceEmptyState({ panel: "hosts", ...status })
+          : null
+      }
     >
       {rows.map((r, i) => (
         <tr
@@ -779,7 +833,7 @@ function riskClass(level) {
     return "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300";
   return "bg-slate-100 text-slate-500 dark:bg-slate-800";
 }
-function Timeline({ data, onSelectPacket, onBookmark }) {
+function Timeline({ data, onSelectPacket, onBookmark, status }) {
   const [filters, setFilters] = useState({
       host: "",
       domain: "",
@@ -921,9 +975,13 @@ function Timeline({ data, onSelectPacket, onBookmark }) {
           </div>
         ))}
         {!rows.length && (
-          <div className="p-8 text-center text-slate-400 text-sm">
-            No timeline events match these filters.
-          </div>
+          <EmptyPanel
+            state={describeIntelligenceEmptyState({
+              panel: "timeline",
+              ...status,
+              filtered: (data.events || []).length > 0,
+            })}
+          />
         )}
       </div>
     </div>
@@ -939,12 +997,16 @@ function timelineTime(value) {
         second: "2-digit",
       });
 }
-function DNS({ data, onBookmark }) {
+function DNS({ data, onBookmark, status }) {
   const rows = data.events || [];
   return (
     <Table
       headers={["Time", "Type", "Domain", "Answers", "RCODE", "TTL", "Action"]}
-      empty={!rows.length}
+      emptyState={
+        !rows.length
+          ? describeIntelligenceEmptyState({ panel: "dns", ...status })
+          : null
+      }
     >
       {rows.map((r, i) => (
         <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
@@ -972,7 +1034,7 @@ function DNS({ data, onBookmark }) {
     </Table>
   );
 }
-function HTTP({ data, onBookmark }) {
+function HTTP({ data, onBookmark, status }) {
   const rows = data.events || [];
   return (
     <Table
@@ -985,7 +1047,11 @@ function HTTP({ data, onBookmark }) {
         "User Agent",
         "Action",
       ]}
-      empty={!rows.length}
+      emptyState={
+        !rows.length
+          ? describeIntelligenceEmptyState({ panel: "http", ...status })
+          : null
+      }
     >
       {rows.map((r, i) => (
         <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
@@ -1011,7 +1077,7 @@ function HTTP({ data, onBookmark }) {
     </Table>
   );
 }
-function TLS({ data, onSelectPacket, onBookmark }) {
+function TLS({ data, onSelectPacket, onBookmark, status }) {
   const [query, setQuery] = useState("");
   const warnings = data.warnings || [],
     warningByPacket = new Map();
@@ -1093,7 +1159,15 @@ function TLS({ data, onSelectPacket, onBookmark }) {
           "Warnings",
           "Action",
         ]}
-        empty={!rows.length}
+        emptyState={
+          !rows.length
+            ? describeIntelligenceEmptyState({
+                panel: "tls",
+                ...status,
+                filtered: (data.events || []).length > 0,
+              })
+            : null
+        }
       >
         {rows.map((r, i) => {
           const packetWarnings = warningByPacket.get(String(r.packet_id)) || [];
@@ -1212,7 +1286,7 @@ function Mini({ label, value, danger }) {
     </div>
   );
 }
-function Security({ rows, onSelectPacket, onBookmark }) {
+function Security({ rows, onSelectPacket, onBookmark, status }) {
   return (
     <div>
       <div className="px-4 py-2 text-[11px] text-slate-500 border-b border-slate-100 dark:border-slate-800">
@@ -1228,7 +1302,11 @@ function Security({ rows, onSelectPacket, onBookmark }) {
           "Evidence / Details",
           "Action",
         ]}
-        empty={!rows.length}
+        emptyState={
+          !rows.length
+            ? describeIntelligenceEmptyState({ panel: "security", ...status })
+            : null
+        }
       >
         {rows.map((r, i) => (
           <tr

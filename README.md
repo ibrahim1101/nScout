@@ -256,6 +256,7 @@ The development branch currently includes:
 - Detection sensitivity now applies to backend analysis, not only the Settings UI: conservative, balanced (default) and sensitive presets persist atomically and publish the exact thresholds used with each security-intelligence result.
 - Advanced Packet Search keeps its bounded draft while the analyst moves between workspaces in the same app window. Search results and packet evidence are never written to browser storage.
 - Contextual evidence actions can bookmark a selected Live Host, defensive finding, reconstructed connection, correlated timeline event, or DNS/HTTP/TLS intelligence row directly into the active local investigation. If no case is active, nScout opens Investigations instead of silently dropping evidence.
+- Intelligence panels now distinguish initial loading, local-backend failures, genuine evidence-specific empty results and filters that match no loaded records. HTTP empty states explicitly preserve the encrypted-HTTPS visibility boundary.
 
 Clean-system release-gate validation remains under development.
 See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, the [cross-platform desktop packaging guide](docs/cross-platform-desktop.md) for development builds and release gates, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for Windows capture validation.
