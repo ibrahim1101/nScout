@@ -1,6 +1,7 @@
 import { AreaChart, Area, PieChart, Pie, Cell, Tooltip, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
 import { fmtBytes, fmtBps, PROTO_COLOR } from "./lib";
 import { Activity, AlertTriangle, ArrowRight, Clock3, Radar, Server, Shield, Zap } from "lucide-react";
+import NetworkBaselinePanel from "./NetworkBaselinePanel";
 
 const SEVERITIES = ["critical", "high", "medium", "low", "info"];
 const SEVERITY_STYLES = {
@@ -34,6 +35,8 @@ export default function AnalyticsDashboard({ status, timeline = [], topTalkers =
   return (
     <div className="space-y-4">
       <PostureBanner posture={posture} prioritized={prioritized} total={totalFindings} running={status.running} mode={status.mode} onOpenThreats={onOpenThreats} />
+
+      <NetworkBaselinePanel capturePacketCount={Number(status.total_packets || 0)} />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <KPI testId="kpi-total-packets" icon={<Activity size={16} />} label="Total Packets" value={(status.total_packets || 0).toLocaleString()} tone="blue" />

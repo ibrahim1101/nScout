@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "nScout",
+  "version": "0.4.0-dev.1",
+  "identifier": "io.nscout.desktop",
+  "build": {
+    "frontendDist": "../shell-ui"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "nScout",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 700,
+        "center": true,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "externalBin": ["binaries/nscout-backend"],
+    "icon": ["../../assets/nscout-logo.png", "../../assets/nscout.ico"],
+    "shortDescription": "Defensive network monitoring and investigation",
+    "longDescription": "nScout defensive network monitoring, packet analysis and investigation platform"
+  }
+}

@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Play, Square, Trash2, Upload, Moon, Sun, Radio, Zap, HardDrive, ShieldAlert, Search, Download, Settings, Archive } from "lucide-react";
+import { Play, Square, Trash2, Upload, Moon, Sun, Radio, Zap, HardDrive, ShieldAlert, Search, Download, Settings, Archive, Activity, CircleHelp } from "lucide-react";
 import { fmtBps, API } from "./lib";
 
 const PROTOCOLS = ["", "TCP", "UDP", "HTTPS", "HTTP", "DNS", "ICMP", "ARP", "SSH", "TLS"];
@@ -7,7 +7,7 @@ const PROTOCOLS = ["", "TCP", "UDP", "HTTPS", "HTTP", "DNS", "ICMP", "ARP", "SSH
 export default function HeaderNav({
   theme, setTheme, interfaces, iface, setIface, status,
   onStart, onStop, onClear, onUpload, filter, setFilter, protocolFilter, setProtocolFilter,
-  onOpenSettings, onOpenSessions,
+  onOpenSettings, onOpenShortcuts, onOpenSessions, onOpenGlobalSearch,
 }) {
   const fileRef = useRef(null);
 
@@ -102,10 +102,27 @@ export default function HeaderNav({
               <Archive size={14} /> Sessions
             </button>
             <button
+              data-testid="global-search-open-btn"
+              onClick={onOpenGlobalSearch}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 text-sm font-semibold text-blue-700 dark:text-blue-300 transition-colors"
+              title="Global investigation search (Ctrl / Command + Shift + K)"
+            >
+              <Search size={14} /> Search
+            </button>
+            <button
+              data-testid="shortcuts-open-btn"
+              onClick={onOpenShortcuts}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-colors"
+              title="Keyboard shortcuts (?)"
+              aria-label="Keyboard shortcuts"
+            >
+              <CircleHelp size={14} />
+            </button>
+            <button
               data-testid="settings-open-btn"
               onClick={onOpenSettings}
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-colors"
-              title="Alert settings"
+              title="Settings (Ctrl / Command + comma)"
             >
               <Settings size={14} />
             </button>
@@ -123,6 +140,7 @@ export default function HeaderNav({
             />
             <StatusPill testId="status-pps" icon={<Zap size={12} />} label={`${status.pps || 0} pps`} />
             <StatusPill testId="status-mbps" icon={<HardDrive size={12} />} label={fmtBps((status.mbps || 0) * 1_000_000)} />
+            <StatusPill testId="status-health" icon={<Activity size={12} />} label={(status.capture_health?.state || "idle").toUpperCase()} tone={["degraded","error"].includes(status.capture_health?.state)?"rose":status.capture_health?.state==="warning"?"amber":status.capture_health?.state==="healthy"?"emerald":"slate"} />
             <StatusPill testId="status-threats" icon={<ShieldAlert size={12} />} label={`${status.threats || 0} alerts`} tone={status.threats ? "rose" : "slate"} />
           </div>
 
@@ -168,6 +186,7 @@ function StatusPill({ icon, label, tone = "slate", testId }) {
     slate: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700",
     emerald: "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30",
     rose: "bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/30",
+    amber: "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30",
   };
   return (
     <span data-testid={testId} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${styles[tone]}`}>

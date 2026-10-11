@@ -2,38 +2,114 @@
 from __future__ import annotations
 import asyncio,json,logging,os
 from pathlib import Path
-from typing import List,Optional
+from typing import Any,Dict,List,Optional
 from dotenv import load_dotenv
 from fastapi import APIRouter,FastAPI,File,HTTPException,UploadFile,WebSocket,WebSocketDisconnect
 from fastapi.responses import Response,StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 from starlette.middleware.cors import CORSMiddleware
-from etherlens import analysis,geo,webhooks,intelligence
+from etherlens import analysis,geo,webhooks,intelligence,ai_provider
 from etherlens.filters import FilterSyntaxError,filter_packets,validate_filter
-from etherlens.reports import json_report,html_report,pdf_report
+from etherlens.reports import csv_report,html_report,json_report,pdf_report,xlsx_report,xml_report
 from etherlens.protocol_intelligence import tls_intelligence,packet_timeline,packet_ascii
 from etherlens.explanations import explain_connection
 from etherlens.connection_selection import select_connection
 from etherlens.ai_context import connection_context,connection_prompt
 from etherlens.engine import CaptureSession
-from etherlens.sessions import save_session,list_sessions,load_session,delete_session
+from etherlens.capture_backends import provider_inventory
+from etherlens.sessions import CaptureSessionNotFound,LocalCaptureSessionStore,delete_session,list_sessions,load_session,restore_capture_session
+from etherlens.investigation_workspace import EvidenceItem
+from etherlens.investigation_store import InvestigationNotFound,InvestigationStore
+from etherlens.host_profiles import HostProfileStore
+from etherlens.global_search import search_investigation_data
+from etherlens.pcap_compare import MAX_PCAP_BYTES,compare_pcap_bytes
+from etherlens.baselines import BaselineNotFound,BaselineStore,build_profile,compare_profile
+from etherlens.topology import build_topology
+from etherlens.preference_profiles import PreferenceProfileStore
 ROOT_DIR=Path(__file__).parent; load_dotenv(ROOT_DIR/".env"); logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s - %(message)s"); logger=logging.getLogger("nscout")
 mongo_url=os.environ.get("MONGO_URL","mongodb://127.0.0.1:27017"); db_name=os.environ.get("DB_NAME","nscout"); client=AsyncIOMotorClient(mongo_url,serverSelectionTimeoutMS=1500,connectTimeoutMS=1500); db=client[db_name]; settings_col=db.etherlens_settings; mongo_available=False; session=CaptureSession(); app=FastAPI(title="nScout"); api=APIRouter(prefix="/api")
-class StartRequest(BaseModel): interface:str="simulated"
+DATA_DIR=Path(os.environ.get("NSCOUT_DATA_DIR", str(Path.home()/".nscout")))
+AI_SETTINGS_PATH=DATA_DIR/"ai-settings.json"
+_investigation_store=InvestigationStore(DATA_DIR/"investigations")
+_capture_session_store=LocalCaptureSessionStore(DATA_DIR/"capture-sessions")
+_host_profile_store=HostProfileStore(DATA_DIR/"host-profiles.json")
+_baseline_store=BaselineStore(DATA_DIR/"baselines")
+_preference_profile_store=PreferenceProfileStore(DATA_DIR/"preference-profiles.json")
+_ai_settings=ai_provider.load_settings(AI_SETTINGS_PATH)
+_ai_lock=asyncio.Lock()
+_pcap_compare_lock=asyncio.Lock()
+@api.get("/settings/ai")
+async def get_ai_settings():return _ai_settings.model_dump()
+@api.post("/settings/ai")
+async def set_ai_settings(body:ai_provider.AISettings):
+ global _ai_settings
+ async with _ai_lock:
+  try:await asyncio.to_thread(ai_provider.save_settings,AI_SETTINGS_PATH,body)
+  except OSError as exc:raise HTTPException(status_code=500,detail="Could not save AI settings") from exc
+  _ai_settings=body
+ return {"status":"saved","settings":body.model_dump()}
+@api.post("/settings/ai/test")
+async def test_ai_settings(body:ai_provider.AISettings):
+ if body.provider=="emergent":return {"ok":bool(os.environ.get("EMERGENT_LLM_KEY")),"models":[],"message":"Cloud key configured" if os.environ.get("EMERGENT_LLM_KEY") else "Cloud key not configured"}
+ try:
+  available=await asyncio.wait_for(asyncio.to_thread(ai_provider.models,body),timeout=body.timeout_seconds+5)
+  return {"ok":True,"models":available,"message":"Connected to local model server"}
+ except (ai_provider.AIUnavailable,asyncio.TimeoutError) as exc:return {"ok":False,"models":[],"message":str(exc) or "Local AI timed out"}
+class StartRequest(BaseModel):
+ interface:str=Field(default="simulated",min_length=1,max_length=512);packet_limit:Optional[int]=Field(default=None,ge=1000,le=1000000)
+class SwitchCaptureRequest(BaseModel):
+ interface:str=Field(min_length=1,max_length=512);preserve_packets:bool=True;packet_limit:Optional[int]=Field(default=None,ge=1000,le=1000000)
+class CaptureConfigurationRequest(BaseModel):packet_limit:int=Field(ge=1000,le=1000000)
 class ExplainRequest(BaseModel):
  packet_id:Optional[str]=None; threat_id:Optional[str]=None
  a_ip:Optional[str]=None; a_port:Optional[int]=None; b_ip:Optional[str]=None; b_port:Optional[int]=None
 class WebhookSettings(BaseModel): slack_url:str=""; discord_url:str=""; min_severity:str="high"
 class WebhookTestRequest(BaseModel): url:str
 class SaveSessionRequest(BaseModel): name:str="Untitled"
+class CreateInvestigationRequest(BaseModel):
+ name:str=Field(min_length=1,max_length=160);description:str=Field(default="",max_length=2000)
+class UpdateInvestigationRequest(BaseModel):
+ name:Optional[str]=Field(default=None,min_length=1,max_length=160);description:Optional[str]=Field(default=None,max_length=2000)
+class EvidenceRequest(BaseModel):
+ type:str=Field(min_length=1,max_length=32);ref_id:str=Field(min_length=1,max_length=500);title:str=Field(default="",max_length=500);note:str=Field(default="",max_length=4000);snapshot:Dict[str,Any]=Field(default_factory=dict)
+class InvestigationNoteRequest(BaseModel):
+ text:str=Field(min_length=1,max_length=10000);author:str=Field(default="analyst",min_length=1,max_length=160)
+class FindingStateRequest(BaseModel):
+ state:str=Field(min_length=1,max_length=32);note:str=Field(default="",max_length=4000)
+class HostProfileRequest(BaseModel):
+ alias:Optional[str]=Field(default=None,max_length=120);watchlisted:Optional[bool]=None
+class CreateBaselineRequest(BaseModel):name:str=Field(min_length=1,max_length=160)
+class LocalPreferences(BaseModel):
+ preservePackets:bool=True;autoRestore:bool=True;redactReports:bool=False
+ packetLimit:int=Field(default=50000,ge=1000,le=1000000)
+ detectionPreset:str=Field(default="balanced",pattern="^(conservative|balanced|sensitive)$")
+ alertSeverity:str=Field(default="high",pattern="^(low|medium|high|critical)$")
+class CreatePreferenceProfileRequest(BaseModel):
+ name:str=Field(min_length=1,max_length=80);preferences:LocalPreferences
 _webhook_cache={"slack_url":"","discord_url":"","min_severity":"high"}; _SEV_RANK={"low":1,"medium":2,"high":3,"critical":4}
+_capture_control_lock=asyncio.Lock()
 async def _load_settings():
  global mongo_available
  try:
   await client.admin.command("ping"); mongo_available=True; doc=await settings_col.find_one({"_id":"webhooks"})
   if doc:_webhook_cache.update({k:doc.get(k,_webhook_cache[k]) for k in _webhook_cache})
- except Exception as exc: mongo_available=False; logger.warning("MongoDB unavailable; saved sessions/settings persistence disabled: %s",exc)
+ except Exception as exc: mongo_available=False; logger.warning("MongoDB unavailable; legacy sessions and webhook persistence disabled: %s",exc)
+@api.get("/settings/profiles")
+async def list_preference_profiles():
+ try:return {"profiles":await asyncio.to_thread(_preference_profile_store.list)}
+ except ValueError as exc:raise HTTPException(status_code=500,detail=str(exc)) from exc
+@api.post("/settings/profiles",status_code=201)
+async def create_preference_profile(body:CreatePreferenceProfileRequest):
+ try:profile=await asyncio.to_thread(_preference_profile_store.create,body.name,body.preferences.model_dump())
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ return {"profile":profile}
+@api.delete("/settings/profiles/{profile_id}")
+async def delete_preference_profile(profile_id:str):
+ try:await asyncio.to_thread(_preference_profile_store.delete,profile_id)
+ except KeyError as exc:raise HTTPException(status_code=404,detail="Preference profile not found") from exc
+ except ValueError as exc:raise HTTPException(status_code=500,detail=str(exc)) from exc
+ return {"status":"deleted"}
 async def _threat_hook(threat):
  if _SEV_RANK.get(threat.get("severity","low"),1)<_SEV_RANK.get(_webhook_cache.get("min_severity","high"),3):return
  urls=[u for u in (_webhook_cache.get("slack_url"),_webhook_cache.get("discord_url")) if u]
@@ -48,16 +124,35 @@ async def interfaces():
   for name in psutil.net_if_addrs():out.append({"name":name,"label":name,"capturable":True,"live":True})
  except Exception:pass
  return {"interfaces":out}
+@api.get("/capture/backends")
+async def capture_backends():return provider_inventory()
 @api.post("/capture/start")
 async def start_capture(req:StartRequest):
- if session.running:return {"status":"already_running","stats":session.stats()}
- session.clear(); await session.start(req.interface); return {"status":"started","stats":session.stats()}
+ async with _capture_control_lock:
+  if session.running:return {"status":"already_running","stats":session.stats()}
+  if req.packet_limit is not None:session.configure_packet_limit(req.packet_limit)
+  session.clear(); await session.start(req.interface); return {"status":"started","stats":session.stats()}
+@api.post("/capture/switch")
+async def switch_capture(req:SwitchCaptureRequest):
+ async with _capture_control_lock:
+  try:return await session.switch_interface(req.interface,req.preserve_packets,req.packet_limit)
+  except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+@api.post("/capture/configuration")
+async def configure_capture(req:CaptureConfigurationRequest):
+ async with _capture_control_lock:
+  try:session.configure_packet_limit(req.packet_limit)
+  except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+  return {"status":"configured","stats":session.stats()}
 @api.post("/capture/stop")
-async def stop_capture():await session.stop(); return {"status":"stopped","stats":session.stats()}
+async def stop_capture():
+ async with _capture_control_lock:await session.stop(); return {"status":"stopped","stats":session.stats()}
 @api.post("/capture/clear")
-async def clear_capture():session.clear(); return {"status":"cleared"}
+async def clear_capture():
+ async with _capture_control_lock:session.clear(); return {"status":"cleared","stats":session.stats()}
 @api.get("/capture/status")
 async def status():return session.stats()
+@api.get("/capture/diagnostics")
+async def capture_diagnostics():return session.diagnostics()
 @api.get("/packets")
 async def list_packets(limit:int=500,protocol:Optional[str]=None,q:Optional[str]=None):return {"packets":session.list_packets(limit=limit,protocol=protocol,q=q)}
 @api.get("/packets/search")
@@ -102,28 +197,147 @@ async def devices_info():return {"devices":intelligence.device_intelligence(list
 @api.get("/intelligence/hosts")
 async def hosts_info():
  packets=list(session.packets);security=intelligence.security_intelligence(packets,session.list_threats())
- return {"hosts":intelligence.host_intelligence(packets,security["findings"])}
+ profiles=intelligence.host_intelligence(packets,security["findings"])
+ try:profiles=await asyncio.to_thread(_host_profile_store.enrich,profiles)
+ except ValueError as exc:logger.warning("Host profile persistence unavailable: %s",exc)
+ return {"hosts":profiles}
+@api.patch("/intelligence/hosts/{host_ip}")
+async def update_host_profile(host_ip:str,body:HostProfileRequest):
+ if body.alias is None and body.watchlisted is None:raise HTTPException(status_code=400,detail="Alias or watchlist state is required")
+ try:profile=await asyncio.to_thread(_host_profile_store.update,host_ip,body.alias,body.watchlisted)
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ return {"profile":profile}
 @api.get("/intelligence/timeline")
 async def investigation_timeline_view(host:str="",domain:str="",connection:str="",protocol:str="",min_severity:str="info",start:Optional[float]=None,end:Optional[float]=None,limit:int=1000):
  packets=list(session.packets);security=intelligence.security_intelligence(packets,session.list_threats())
  return intelligence.investigation_timeline(packets,security["findings"],host=host,domain=domain,connection=connection,protocol=protocol,min_severity=min_severity,start=start,end=end,limit=limit)
 @api.get("/investigation/summary")
 async def investigation_summary():return intelligence.investigation_summary(list(session.packets),session.list_threats())
-@api.get("/investigation/report.json")
-async def investigation_report_json():
+@api.post("/baselines",status_code=201)
+async def baselines_create(body:CreateBaselineRequest):
+ packets=list(session.packets)
+ try:
+  profile=await asyncio.to_thread(build_profile,packets,session.list_threats())
+  baseline=await asyncio.to_thread(_baseline_store.create,body.name,profile)
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ except OSError as exc:raise HTTPException(status_code=500,detail="Could not save network baseline") from exc
+ return {"baseline":baseline}
+@api.get("/baselines")
+async def baselines_list():return {"baselines":await asyncio.to_thread(_baseline_store.list)}
+@api.get("/baselines/{baseline_id}")
+async def baselines_get(baseline_id:str):
+ try:return {"baseline":await asyncio.to_thread(_baseline_store.get,baseline_id)}
+ except BaselineNotFound as exc:raise HTTPException(status_code=404,detail="Baseline not found") from exc
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+@api.delete("/baselines/{baseline_id}")
+async def baselines_delete(baseline_id:str):
+ try:await asyncio.to_thread(_baseline_store.delete,baseline_id)
+ except BaselineNotFound as exc:raise HTTPException(status_code=404,detail="Baseline not found") from exc
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ return {"status":"deleted"}
+@api.get("/baselines/{baseline_id}/compare")
+async def baselines_compare(baseline_id:str):
+ try:baseline=await asyncio.to_thread(_baseline_store.get,baseline_id)
+ except BaselineNotFound as exc:raise HTTPException(status_code=404,detail="Baseline not found") from exc
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ try:current=await asyncio.to_thread(build_profile,list(session.packets),session.list_threats())
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ comparison=await asyncio.to_thread(compare_profile,baseline["profile"],current)
+ return {"baseline":{"id":baseline["id"],"name":baseline["name"],"created_at":baseline["created_at"]},"current":current,"comparison":comparison}
+@api.get("/search")
+async def global_investigation_search(q:str="",limit:int=50):
+ packets=list(session.packets);security=intelligence.security_intelligence(packets,session.list_threats())
+ hosts=intelligence.host_intelligence(packets,security["findings"])
+ try:hosts=await asyncio.to_thread(_host_profile_store.enrich,hosts)
+ except ValueError as exc:logger.warning("Host profile persistence unavailable during search: %s",exc)
+ saved=[]
+ try:
+  summaries=await asyncio.to_thread(_investigation_store.list)
+  for summary in summaries[:500]:
+   try:saved.append((await asyncio.to_thread(_investigation_store.get,summary["id"])).to_dict())
+   except (InvestigationNotFound,ValueError):continue
+ except ValueError as exc:logger.warning("Investigation persistence unavailable during search: %s",exc)
+ try:
+  return search_investigation_data(q,packets=packets,hosts=hosts,
+   connections=intelligence.connection_intelligence(packets,limit=5000),
+   dns_events=intelligence.dns_intelligence(packets)["events"],findings=security["findings"],
+   timeline=intelligence.investigation_timeline(packets,security["findings"],limit=5000)["events"],
+   investigations=saved,limit=limit)
+ except (ValueError,TypeError) as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+def _workspace_result(workspace):return {"investigation":workspace.to_dict()}
+async def _workspace_get(workspace_id:str):
+ try:return await asyncio.to_thread(_investigation_store.get,workspace_id)
+ except InvestigationNotFound as exc:raise HTTPException(status_code=404,detail="Investigation not found") from exc
+ except ValueError as exc:raise HTTPException(status_code=500,detail=str(exc)) from exc
+async def _workspace_mutate(workspace_id:str,operation):
+ try:return await asyncio.to_thread(_investigation_store.mutate,workspace_id,operation)
+ except InvestigationNotFound as exc:raise HTTPException(status_code=404,detail="Investigation not found") from exc
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+@api.post("/investigations",status_code=201)
+async def investigations_create(body:CreateInvestigationRequest):
+ try:workspace=await asyncio.to_thread(_investigation_store.create,body.name,body.description)
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ return _workspace_result(workspace)
+@api.get("/investigations")
+async def investigations_list():return {"investigations":await asyncio.to_thread(_investigation_store.list)}
+@api.get("/investigations/{workspace_id}")
+async def investigations_get(workspace_id:str):return _workspace_result(await _workspace_get(workspace_id))
+@api.patch("/investigations/{workspace_id}")
+async def investigations_update(workspace_id:str,body:UpdateInvestigationRequest):
+ workspace=await _workspace_mutate(workspace_id,lambda item:item.update_details(body.name,body.description))
+ return _workspace_result(workspace)
+@api.delete("/investigations/{workspace_id}")
+async def investigations_delete(workspace_id:str):
+ try:deleted=await asyncio.to_thread(_investigation_store.delete,workspace_id)
+ except InvestigationNotFound as exc:raise HTTPException(status_code=404,detail="Investigation not found") from exc
+ if not deleted:raise HTTPException(status_code=404,detail="Investigation not found")
+ return {"status":"deleted"}
+@api.post("/investigations/{workspace_id}/evidence")
+async def investigations_add_evidence(workspace_id:str,body:EvidenceRequest):
+ if len(json.dumps(body.snapshot,default=str))>128*1024:raise HTTPException(status_code=413,detail="Evidence snapshot is too large")
+ try:evidence=EvidenceItem(body.type,body.ref_id.strip(),title=body.title.strip(),note=body.note.strip(),snapshot=body.snapshot)
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ workspace=await _workspace_mutate(workspace_id,lambda item:item.add_evidence(evidence))
+ return _workspace_result(workspace)
+@api.delete("/investigations/{workspace_id}/evidence/{evidence_id}")
+async def investigations_remove_evidence(workspace_id:str,evidence_id:str):
+ removed={"value":False}
+ def operation(item):removed["value"]=item.remove_evidence(evidence_id)
+ workspace=await _workspace_mutate(workspace_id,operation)
+ if not removed["value"]:raise HTTPException(status_code=404,detail="Evidence not found")
+ return _workspace_result(workspace)
+@api.post("/investigations/{workspace_id}/notes")
+async def investigations_add_note(workspace_id:str,body:InvestigationNoteRequest):
+ workspace=await _workspace_mutate(workspace_id,lambda item:item.add_note(body.text,body.author.strip()))
+ return _workspace_result(workspace)
+@api.put("/investigations/{workspace_id}/findings/{finding_id}/state")
+async def investigations_set_finding_state(workspace_id:str,finding_id:str,body:FindingStateRequest):
+ workspace=await _workspace_mutate(workspace_id,lambda item:item.set_finding_state(finding_id,body.state,body.note))
+ return _workspace_result(workspace)
+_REPORT_EXPORTERS={
+ "json":(json_report,"application/json"),"html":(html_report,"text/html; charset=utf-8"),
+ "pdf":(pdf_report,"application/pdf"),"csv":(csv_report,"text/csv; charset=utf-8"),
+ "xlsx":(xlsx_report,"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+ "xml":(xml_report,"application/xml"),
+}
+@api.get("/investigation/report.{report_format}")
+async def investigation_report_export(report_format:str,workspace_id:Optional[str]=None,redact:bool=False):
+ exporter=_REPORT_EXPORTERS.get(report_format.lower())
+ if not exporter:raise HTTPException(status_code=404,detail="Unsupported report format")
  summary=intelligence.investigation_summary(list(session.packets),session.list_threats())
- return Response(content=json_report(summary),media_type="application/json",headers={"Content-Disposition":'attachment; filename="nscout-investigation.json"'})
-@api.get("/investigation/report.html")
-async def investigation_report_html():
- summary=intelligence.investigation_summary(list(session.packets),session.list_threats())
- return Response(content=html_report(summary),media_type="text/html; charset=utf-8",headers={"Content-Disposition":'attachment; filename="nscout-investigation.html"'})
-@api.get("/investigation/report.pdf")
-async def investigation_report_pdf():
- summary=intelligence.investigation_summary(list(session.packets),session.list_threats())
- return Response(content=pdf_report(summary),media_type="application/pdf",headers={"Content-Disposition":'attachment; filename="nscout-investigation.pdf"'})
+ try:summary["hosts"]=await asyncio.to_thread(_host_profile_store.enrich,summary.get("hosts",[]))
+ except ValueError as exc:logger.warning("Host profile persistence unavailable during report export: %s",exc)
+ workspace=(await _workspace_get(workspace_id)).to_dict() if workspace_id else None
+ content=await asyncio.to_thread(exporter[0],summary,workspace,redact)
+ suffix="-redacted" if redact else ""
+ return Response(content=content,media_type=exporter[1],headers={"Content-Disposition":f'attachment; filename="nscout-investigation{suffix}.{report_format.lower()}"',"X-nScout-Report-Schema":"2"})
 @api.get("/topology")
 async def topology(enrich:bool=False):
- data=session.topology()
+ packets=list(session.packets);security=intelligence.security_intelligence(packets,session.list_threats())
+ hosts=intelligence.host_intelligence(packets,security["findings"])
+ try:hosts=await asyncio.to_thread(_host_profile_store.enrich,hosts)
+ except ValueError as exc:logger.warning("Host profile persistence unavailable during topology build: %s",exc)
+ data=build_topology(hosts,intelligence.connection_intelligence(packets,limit=5000))
  if enrich:
   ext=[n["id"] for n in data["nodes"] if n.get("type")!="local"]; gm=await geo.enrich(ext)
   for n in data["nodes"]:n["geo"]=gm.get(n["id"]) if n["id"] in gm else None
@@ -137,6 +351,15 @@ async def upload_pcap(file:UploadFile=File(...)):
  try:n=session.ingest_pcap_bytes(data)
  except Exception as e:raise HTTPException(status_code=400,detail=f"Invalid pcap: {e}") from e
  return {"status":"parsed","packets":n,"stats":session.stats(),"investigation":intelligence.investigation_summary(list(session.packets),session.list_threats())}
+@api.post("/pcap/compare")
+async def compare_pcaps(baseline:UploadFile=File(...),current:UploadFile=File(...)):
+ baseline_data,current_data=await baseline.read(),await current.read()
+ if not baseline_data or not current_data:raise HTTPException(status_code=400,detail="Both PCAP files are required")
+ if len(baseline_data)>MAX_PCAP_BYTES or len(current_data)>MAX_PCAP_BYTES:raise HTTPException(status_code=413,detail="Each PCAP must be 50 MB or smaller")
+ if _pcap_compare_lock.locked():raise HTTPException(status_code=429,detail="Another PCAP comparison is already running")
+ try:
+  async with _pcap_compare_lock:return await asyncio.to_thread(compare_pcap_bytes,baseline_data,current_data,baseline.filename or "baseline.pcap",current.filename or "current.pcap")
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
 @api.get("/pcap/export")
 async def export_pcap():
  pkts=list(session.packets)
@@ -159,25 +382,38 @@ async def save_webhook_settings(body:WebhookSettings):
  _webhook_cache.update(body.model_dump());return {"status":"saved" if mongo_available else "saved_in_memory","settings":_webhook_cache}
 @api.post("/settings/webhooks/test")
 async def test_webhook(body:WebhookTestRequest):return await webhooks.send(body.url,{"severity":"high","type":"Test Alert","title":"nScout test notification","description":"This is a test alert from nScout.","src":"127.0.0.1","dst":"127.0.0.1"})
-def _require_mongo():
- if not mongo_available:raise HTTPException(status_code=503,detail="MongoDB is unavailable; saved sessions are disabled")
 @api.post("/sessions/save")
 async def sessions_save(body:SaveSessionRequest):
- _require_mongo()
- try:meta=await save_session(db,session,body.name)
- except ValueError as e:raise HTTPException(status_code=400,detail=str(e))
+ async with _capture_control_lock:
+  try:meta=await asyncio.to_thread(_capture_session_store.save,session,body.name)
+  except ValueError as e:raise HTTPException(status_code=400,detail=str(e)) from e
+  except OSError as e:raise HTTPException(status_code=500,detail="Could not save capture session") from e
  return {"status":"saved",**meta}
 @api.get("/sessions")
-async def sessions_list():return {"sessions":await list_sessions(db),"mongo_available":True} if mongo_available else {"sessions":[],"mongo_available":False}
+async def sessions_list():
+ local=await asyncio.to_thread(_capture_session_store.list)
+ legacy=await list_sessions(db) if mongo_available else []
+ known={row["id"] for row in local}
+ combined=local+[row for row in legacy if row["id"] not in known]
+ combined.sort(key=lambda row:row.get("created_at") or "",reverse=True)
+ return {"sessions":combined[:100],"storage":"local","mongo_available":mongo_available}
 @api.post("/sessions/{sid}/load")
 async def sessions_load(sid:str):
- _require_mongo()
- try:meta=await load_session(db,session,sid)
- except KeyError:raise HTTPException(status_code=404,detail="session not found")
+ async with _capture_control_lock:
+  try:
+   doc=await asyncio.to_thread(_capture_session_store.get,sid)
+   meta=await restore_capture_session(session,doc)
+  except CaptureSessionNotFound:
+   if not mongo_available:raise HTTPException(status_code=404,detail="session not found")
+   try:meta=await load_session(db,session,sid)
+   except KeyError:raise HTTPException(status_code=404,detail="session not found")
+  except ValueError as exc:raise HTTPException(status_code=422,detail=str(exc)) from exc
  return {"status":"loaded",**meta,"stats":session.stats()}
 @api.delete("/sessions/{sid}")
 async def sessions_delete(sid:str):
- _require_mongo();ok=await delete_session(db,sid)
+ try:ok=await asyncio.to_thread(_capture_session_store.delete,sid)
+ except CaptureSessionNotFound:ok=False
+ if not ok and mongo_available:ok=await delete_session(db,sid)
  if not ok:raise HTTPException(status_code=404,detail="session not found")
  return {"status":"deleted"}
 EMERGENT_LLM_KEY=os.environ.get("EMERGENT_LLM_KEY","")
@@ -196,6 +432,8 @@ def _resolve_ai_connection(req:ExplainRequest,packets:list[dict]):
  return connection
 @api.post("/ai/explain")
 async def ai_explain(req:ExplainRequest):
+ if not _ai_settings.enabled:raise HTTPException(status_code=403,detail="AI is disabled in Settings")
+ settings=_ai_settings.model_copy(deep=True)
  packets=list(session.packets);pkt=session.get_packet(req.packet_id) if req.packet_id else None;threat=next((t for t in session.threats if t.get("id")==req.threat_id),None) if req.threat_id else None;connection=_resolve_ai_connection(req,packets)
  if not pkt and not threat and not connection:raise HTTPException(status_code=404,detail="packet, threat, or connection not found")
  if connection:
@@ -203,6 +441,17 @@ async def ai_explain(req:ExplainRequest):
   prompt=connection_prompt(context);session_key=f"connection-{connection.get('a_ip')}-{connection.get('a_port')}-{connection.get('b_ip')}-{connection.get('b_port')}"
  else:prompt=_build_prompt(pkt,threat);session_key=req.packet_id or req.threat_id
  async def gen():
+  if settings.provider!="emergent":
+   try:
+    if _ai_lock.locked():raise ai_provider.AIUnavailable("Local AI is busy. Try again when the current explanation finishes.")
+    async with _ai_lock:
+     answer=await asyncio.wait_for(asyncio.to_thread(ai_provider.complete,settings,prompt),timeout=settings.timeout_seconds+5)
+    yield "data: "+json.dumps({"delta":answer,"provider":settings.provider,"model":settings.model})+"\n\n"
+   except (ai_provider.AIUnavailable,asyncio.TimeoutError) as exc:
+    message=str(exc) or "Local AI timed out."
+    fallback=explain_connection(connection,intelligence.dns_intelligence(packets),tls_intelligence(packets)) if connection else {k:pkt.get(k) for k in ("protocol","src_ip","dst_ip","info","length")} if pkt else threat.get("description", "Review the finding evidence.")
+    yield "data: "+json.dumps({"delta":message+"\n\nDeterministic context:\n"+json.dumps(fallback,default=str),"fallback":True})+"\n\n"
+   yield "data: [DONE]\n\n";return
   if not EMERGENT_LLM_KEY:yield "data: "+json.dumps({"delta":"AI key not configured. Core deterministic analysis remains available."})+"\n\n";yield "data: [DONE]\n\n";return
   try:
    from emergentintegrations.llm.chat import LlmChat,UserMessage,TextDelta,StreamDone

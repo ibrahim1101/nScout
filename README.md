@@ -4,7 +4,7 @@
 
 nScout is a defensive network monitoring, packet-analysis and investigation platform built to turn raw network traffic into understandable security context. It can inspect live traffic or imported PCAP captures, reconstruct conversations between hosts, analyze protocol behavior, surface network-health problems and defensive security findings, and provide an investigation workspace for drilling from a device or connection all the way down to individual packets.
 
-The current stable release is **nScout v0.2.0 — Intelligence Update**. The `main` branch now contains the completed **v0.3 Security Intelligence** milestone pending its tagged release. A native Windows installer and portable Windows build for the stable release are available from the repository's Releases page.
+The current stable release is [**nScout v0.3.0 — Security Intelligence**](https://github.com/ibrahim1101/nScout/releases/tag/v0.3.0), available as a native Windows installer and portable ZIP. **v0.4.0 — Investigation Platform is in development** on `v0.4-investigation-platform`; its features are not yet included in the stable installer. Follow [the development PR](https://github.com/ibrahim1101/nScout/pull/3) for progress.
 
 ## What nScout does
 
@@ -79,8 +79,8 @@ Export investigation information as **JSON, standalone HTML or PDF** for sharing
 
 ### Recommended: Windows installer
 
-1. Open the **Releases** section of this repository and select **nScout v0.2.0** (or the newest stable release).
-2. Download `nScout-Setup-0.2.0-windows-x64.exe`.
+1. Open the **Releases** section of this repository and select **nScout v0.3.0** (or the newest stable release).
+2. Download `nScout-Setup-0.3.0-windows-x64.exe`.
 3. Run the installer and complete the setup wizard.
 4. Launch **nScout** from the Start Menu or desktop shortcut created by the installer.
 5. nScout starts its local backend and opens the application in your default browser.
@@ -105,7 +105,11 @@ Install **Npcap** to provide packet-capture support. Running nScout as Administr
 
 ### Linux / macOS
 
-Native Linux packaging is being developed. The application architecture already supports Linux/macOS execution from compatible builds/source, but the Windows v0.2.0 package should not be treated as a Linux/macOS installer.
+The v0.4 development branch builds unsigned Linux AppImage/deb and macOS
+app/DMG artifacts in CI using the same React/FastAPI + Tauri application. These
+artifacts are development-only and are not stable downloads: clean-install,
+capture-permission and investigation-workflow validation is still pending. The
+stable v0.3 Windows packages must not be treated as Linux/macOS installers.
 
 On Linux, live capture normally requires libpcap and suitable capabilities/permissions. A typical capability configuration for a native binary is:
 
@@ -132,7 +136,9 @@ EMERGENT_LLM_KEY=your-key-here
 CORS_ORIGINS=*
 ```
 
-MongoDB is currently used for persisted saved sessions/settings. If MongoDB is unavailable, nScout continues to run while persistence-dependent functionality such as Saved Sessions is unavailable.
+MongoDB remains optional for legacy saved sessions and webhook settings. On the v0.4 development branch, new Capture Sessions are stored locally and remain available without MongoDB.
+
+On the v0.4 development branch, optional local LLM settings persist independently of MongoDB. See the setup section below.
 
 The AI integration is optional. Packet capture, protocol parsing, deterministic investigation intelligence, PCAP analysis and reporting do not require an AI key. Never commit API keys or credentials to the repository.
 
@@ -182,10 +188,10 @@ nScout uses:
 - **Scapy** — packet parsing/capture and PCAP processing.
 - **React** — analyst interface.
 - **WebSockets** — live application updates.
-- **MongoDB / Motor / PyMongo** — optional persisted sessions/settings.
+- **MongoDB / Motor / PyMongo** — optional legacy session access and webhook-setting persistence.
 - **PyInstaller** — standalone application packaging.
-- **Inno Setup** — native Windows installer.
-- **GitHub Actions** — automated verification and Windows release builds.
+- **Inno Setup / Tauri** — stable Windows installer and development desktop packaging.
+- **GitHub Actions** — automated verification plus development Windows, Linux and macOS package builds.
 
 ## nScout v0.2.0
 
@@ -220,6 +226,58 @@ The v0.3 milestone adds:
 6. Expanded focused regression coverage (52 tests)
 
 See [the v0.3 Security Intelligence guide](docs/v0.3-security-intelligence.md) for rule coverage, filter syntax, API routes, risk scoring and the recommended analyst workflow.
+
+## nScout v0.4.0 — Investigation Platform (in development)
+
+v0.4 extends the security-intelligence foundation into a persistent analyst workflow.
+The development branch currently includes:
+
+- Expanded settings foundation for capture, investigation, privacy and detection preferences.
+- Running captures can switch interfaces through a serialized transition, optionally preserving current evidence; the configured bounded packet-retention limit now applies in the backend.
+- Capture health now exposes runtime session identity, interface history, buffer pressure and live-to-simulated fallback warnings; saved snapshots retain capture provenance.
+- Dedicated Investigation Workspace UI backed by durable local cases: bookmark selected packets, observed hosts and findings; add analyst notes; review/remove evidence; and manage finding lifecycle without requiring MongoDB.
+- Optional local LLM explanations for selected packets, findings and connections, using Ollama, LM Studio or a custom local OpenAI-compatible server.
+- AI disabled by default, with backend enforcement, model discovery, connection testing, model selection and timeout/output limits.
+- Development-only Tauri 2 shell with a native window, packaged FastAPI sidecar, readiness/error handling, single-instance focus, bounded lifecycle diagnostics and owned-process shutdown while preserving React/FastAPI. CI now constructs Windows NSIS, Linux AppImage/deb and macOS app/DMG artifacts; clean-system support validation remains pending, and stable v0.3 still uses the browser launcher.
+- A capture-provider capability boundary and documented Windows Pktmon/WFP evaluation. Npcap remains required for supported Windows live capture until native parity is verified.
+- Persistent AI settings without MongoDB and observed-context fallback when local inference is unavailable.
+- Local Capture Sessions with atomic persistence, replay and capture provenance without requiring MongoDB; legacy Mongo sessions remain accessible when MongoDB is configured.
+- Searchable in-app Keyboard Shortcuts help sourced from the same definitions as the implemented global shortcuts.
+- A dedicated Live Hosts investigation view with passive Active/Recently Seen/Inactive semantics, persistent analyst aliases and watchlists, bounded activity history, host search and packet drill-down.
+- Global Investigation Search across live packet/host/connection/DNS/finding/timeline metadata and saved cases, notes and evidence, with direct navigation back to the matching workspace. Raw payload and hex content are deliberately excluded from this index.
+- Investigation Report 2.0 exports PDF, HTML, JSON, CSV, XLSX and XML from live analysis or a saved case, including hosts, timeline, evidence, notes and finding states. Optional deterministic redaction aliases IP addresses, MAC addresses and domains consistently across every format; packet payloads and evidence snapshot bodies are excluded.
+- PCAP Comparison analyzes a baseline and current PCAP/PCAPNG side by side without replacing the active capture. It reports bounded packet/byte/duration, protocol, service-port, host, domain, connection, finding and TCP-health changes; records source hashes and truncation state; and exports the comparison as JSON.
+- Network Baselines save bounded metadata-only profiles from the active capture and compare later traffic using explicit rules for new hosts/domains/service ports, protocol-share shifts, traffic-rate changes, findings and TCP-health signals. Every deviation exposes its observed value, baseline value, threshold and score; results are analyst leads from one saved sample, not proof of compromise or a learned normal model.
+- TLS intelligence now decodes bounded, visible ClientHello and ServerHello metadata directly from captured TLS handshake records: SNI, ALPN, offered/selected versions, cipher suites and JA3/JA3S-style fingerprints. The searchable TLS view also identifies legacy versions and certificate expiry, not-yet-valid and self-signed metadata warnings when those certificate fields are observable. Encrypted application payload remains encrypted.
+- Network Map 2.0 combines Live Hosts identity and risk context with an investigation topology: search aliases, IP/MAC/hostname, domains, protocols, ports, ASN or location; filter local/external, protocol, port, traffic volume or security evidence; focus a host; freeze the live view; and drill from an aggregated host pair into its exact reconstructed flows and Connection Story.
+- Packet timestamps preserve canonical UTC/epoch evidence while displaying in the user's system-local timezone across desktop platforms.
+- Local preference profiles save reusable capture, workspace, privacy, detection and alert settings atomically without a cloud account. Webhook URLs, AI server details, credentials and captured evidence are deliberately excluded.
+
+Remaining engine preference wiring, workspace recovery and further UI improvements
+remain under development.
+See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, the [cross-platform desktop packaging guide](docs/cross-platform-desktop.md) for development builds and release gates, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for Windows capture validation.
+Full AI Analyst remains planned for v0.5; Sensor Mode and threat-intelligence integrations are later milestones.
+
+### Connect a local model (v0.4 development builds)
+
+1. Start a model server on the same computer as the nScout backend.
+2. Open **Settings → AI integration**, enable AI and select **Ollama**, **LM Studio** or a custom local provider.
+3. Enter the API base URL: `http://127.0.0.1:11434/v1` for Ollama or `http://127.0.0.1:1234/v1` for LM Studio.
+4. **Test connection / discover models**, choose or enter the exact model ID, then **Save**.
+
+Local providers need no cloud AI key. Only loopback endpoints are supported;
+local failures never automatically switch to cloud AI. Select a locally running
+model in your server. The existing cloud integration remains a separate explicit
+provider selection. See the guide for optional authentication and data-directory settings.
+
+### Validation status
+
+The current v0.4 development suite contains **142 focused backend regression tests**; GitHub Actions is the authoritative validation environment for capture-dependent tests.
+The branch is protected by Docker smoke testing, the existing Windows
+PyInstaller/Inno gate and development Tauri package builds for Windows, Linux
+and macOS. Package construction is not equivalent to clean-system support.
+Real-model and operating-system lifecycle/capture testing remain pending.
+This is development progress, not a v0.4 release announcement.
 
 ## Project maturity & accuracy
 

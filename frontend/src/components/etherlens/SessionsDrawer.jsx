@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "./lib";
-import { X, Save, Play, Trash2, Clock, Package, ShieldAlert } from "lucide-react";
+import { X, Save, Play, Trash2, Clock, Package, ShieldAlert, Activity } from "lucide-react";
 
-export default function SessionsDrawer({ open, onClose, onLoaded }) {
+export default function SessionsDrawer({ open, onClose, onLoaded, status = {} }) {
   const [sessions, setSessions] = useState([]);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -58,12 +58,16 @@ export default function SessionsDrawer({ open, onClose, onLoaded }) {
         <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div>
             <h3 className="font-display font-bold">Saved Sessions</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Snapshot, archive & replay captures</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Local snapshots — MongoDB not required</p>
           </div>
           <button data-testid="sessions-close" onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md"><X size={16} /></button>
         </div>
 
         <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
+          <div className="mb-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-3 text-xs">
+            <div className="flex items-center justify-between gap-2"><span className="font-semibold inline-flex items-center gap-1.5"><Activity size={13}/>Current capture</span><span className="font-mono-code text-slate-500">{status.capture_id?status.capture_id.slice(0,8):"not started"}</span></div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-500"><span>Interface: <b className="text-slate-700 dark:text-slate-300">{status.interface||"none"}</b></span><span>Switches: <b className="text-slate-700 dark:text-slate-300">{status.switch_count||0}</b></span><span>Buffer: <b className="text-slate-700 dark:text-slate-300">{Number(status.total_packets||0).toLocaleString()} / {Number(status.packet_limit||0).toLocaleString()}</b></span><span>Evicted: <b className="text-slate-700 dark:text-slate-300">{Number(status.dropped_packets||0).toLocaleString()}</b></span></div>
+          </div>
           <div className="flex gap-2">
             <input
               data-testid="session-name-input"
@@ -99,6 +103,9 @@ export default function SessionsDrawer({ open, onClose, onLoaded }) {
                   <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono-code flex items-center gap-3 flex-wrap">
                     <span className="inline-flex items-center gap-1"><Clock size={11} />{new Date(s.created_at).toLocaleString()}</span>
                     <span className="inline-flex items-center gap-1"><Package size={11} />{s.packet_count.toLocaleString()} pkts</span>
+                    <span className="uppercase tracking-wide text-blue-500">{s.storage || "local"}</span>
+                    {s.truncated && <span className="text-amber-500">Newest {s.packet_count.toLocaleString()} of {s.source_packet_count.toLocaleString()}</span>}
+                    {s.source_interface && <span>{s.source_interface}</span>}
                     {s.threat_count > 0 && <span className="inline-flex items-center gap-1 text-rose-500"><ShieldAlert size={11} />{s.threat_count} alerts</span>}
                   </div>
                 </div>
