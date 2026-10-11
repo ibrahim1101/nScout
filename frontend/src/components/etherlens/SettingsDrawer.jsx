@@ -107,6 +107,10 @@ export default function SettingsDrawer({
       .get("/settings/profiles")
       .then((r) => setProfiles(r.data.profiles || []))
       .catch(() => setProfileStatus("Could not load local profiles."));
+    api
+      .get("/settings/detection")
+      .then((r) => patch("detectionPreset", r.data.preset || "balanced"))
+      .catch(() => setSaveError("Could not load detection settings."));
   }, [open]);
   useEffect(() => {
     if (open && initialSection === "shortcuts")
@@ -134,6 +138,9 @@ export default function SettingsDrawer({
       });
       await api.post("/capture/configuration", {
         packet_limit: next.packetLimit,
+      });
+      await api.post("/settings/detection", {
+        preset: next.detectionPreset,
       });
       localStorage.setItem("nscout.preferences", JSON.stringify(next));
       window.dispatchEvent(

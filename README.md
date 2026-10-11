@@ -253,9 +253,10 @@ The development branch currently includes:
 - Packet timestamps preserve canonical UTC/epoch evidence while displaying in the user's system-local timezone across desktop platforms.
 - Local preference profiles save reusable capture, workspace, privacy, detection and alert settings atomically without a cloud account. Webhook URLs, AI server details, credentials and captured evidence are deliberately excluded.
 - Workspace recovery restores the active primary view and bounded packet display filters for up to seven days when enabled. It never stores packet payloads, imported PCAP data, evidence snapshots or credentials.
+- Detection sensitivity now applies to backend analysis, not only the Settings UI: conservative, balanced (default) and sensitive presets persist atomically and publish the exact thresholds used with each security-intelligence result.
 
-Remaining engine preference wiring and further empty/error-state improvements
-remain under development.
+Contextual bookmark coverage and clean-system release-gate validation remain
+under development.
 See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, the [cross-platform desktop packaging guide](docs/cross-platform-desktop.md) for development builds and release gates, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for Windows capture validation.
 Full AI Analyst remains planned for v0.5; Sensor Mode and threat-intelligence integrations are later milestones.
 
@@ -273,7 +274,7 @@ provider selection. See the guide for optional authentication and data-directory
 
 ### Validation status
 
-The current v0.4 development suite contains **142 focused backend regression tests**; GitHub Actions is the authoritative validation environment for capture-dependent tests.
+The current v0.4 development suite contains **149 focused backend regression tests**; GitHub Actions is the authoritative validation environment for capture-dependent tests.
 The branch is protected by Docker smoke testing, the existing Windows
 PyInstaller/Inno gate and development Tauri package builds for Windows, Linux
 and macOS. Package construction is not equivalent to clean-system support.

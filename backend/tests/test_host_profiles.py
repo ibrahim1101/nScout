@@ -60,7 +60,11 @@ def test_host_profile_api_enriches_and_updates(tmp_path, monkeypatch):
     store = HostProfileStore(tmp_path / "hosts.json")
     monkeypatch.setattr(server, "_host_profile_store", store)
     monkeypatch.setattr(server.intelligence, "host_intelligence", lambda packets, findings: [profile()])
-    monkeypatch.setattr(server.intelligence, "security_intelligence", lambda packets, threats: {"findings": []})
+    monkeypatch.setattr(
+        server.intelligence,
+        "security_intelligence",
+        lambda packets, threats, preset="balanced": {"findings": []},
+    )
 
     result = asyncio.run(server.hosts_info())
     assert result["hosts"][0]["ip"] == "10.0.0.5"

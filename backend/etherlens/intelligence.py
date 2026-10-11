@@ -97,6 +97,6 @@ def protocol_dashboard(packets):
     total=sum(protocols.values()) or 1
     return {"total_packets":len(packets),"total_bytes":sum(int(p.get("length") or 0) for p in packets),"protocols":[{"protocol":k,"packets":v,"percent":round(v*100/total,2)} for k,v in protocols.most_common()],"top_ports":[{"port":k,"packets":v} for k,v in ports.most_common(15)],"top_endpoints":[{"ip":k,"bytes":v} for k,v in endpoints.most_common(15)]}
 
-def investigation_summary(packets, threats):
-    connections=connection_intelligence(packets); health=annotate_tcp_health(packets); health_counts=Counter(event for value in health.values() for event in value.get("events",[])); security=security_intelligence(packets, threats)
+def investigation_summary(packets, threats, detection_preset="balanced"):
+    connections=connection_intelligence(packets); health=annotate_tcp_health(packets); health_counts=Counter(event for value in health.values() for event in value.get("events",[])); security=security_intelligence(packets, threats, preset=detection_preset)
     return {"overview":protocol_dashboard(packets),"connections":connections[:50],"devices":device_intelligence(packets)[:50],"hosts":host_intelligence(packets, security["findings"])[:100],"dns":dns_intelligence(packets),"http":http_intelligence(packets),"tls":tls_intelligence(packets),"timeline":packet_timeline(packets),"investigation_timeline":investigation_timeline(packets,security["findings"]),"tcp_health":dict(health_counts),"security":security,"threats":threats[:100],"interesting_packets":[{"packet_id":pid,**value} for pid,value in health.items()][:100]}

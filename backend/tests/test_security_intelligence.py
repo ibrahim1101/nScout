@@ -1,3 +1,5 @@
+import pytest
+
 from etherlens.security_intelligence import security_intelligence
 
 
@@ -77,3 +79,20 @@ def test_security_output_states_heuristic_boundary():
     out = security_intelligence([])
     assert "not proof" in out["note"].lower()
     assert out["findings"] == []
+
+
+def test_detection_presets_change_explainable_port_scan_thresholds():
+    rows = [pkt(str(i), i, dport=1000 + i, sport=40000 + i) for i in range(8)]
+
+    sensitive = security_intelligence(rows, preset="sensitive")
+    balanced = security_intelligence(rows, preset="balanced")
+
+    assert any(f["type"] == "network.port_scan" for f in sensitive["findings"])
+    assert not any(f["type"] == "network.port_scan" for f in balanced["findings"])
+    assert sensitive["detection_preset"] == "sensitive"
+    assert sensitive["thresholds"]["scan_ports"] == 8
+
+
+def test_rejects_unknown_detection_preset():
+    with pytest.raises(ValueError, match="Unknown detection preset"):
+        security_intelligence([], preset="maximum")
