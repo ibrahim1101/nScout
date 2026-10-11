@@ -105,7 +105,7 @@ For build/test commands, use **the actual current README, workflow YAML and proj
 
 ## 5. Current gaps and release gates
 
-- Contextual bookmarks; remaining empty/error states.
+- Remaining empty/error-state audit outside the packet stream and Intelligence workspace.
 - Implement and test NEO shared tokens/components, per-page migration, scalable topology, and isolated pixel-cat loading state.
 - Audit remaining production simulation entry points while preserving explicitly selected demos and deterministic automated tests.
 - Windows/Linux/macOS clean-machine Tauri install/launch/backend readiness/shutdown, capture permissions and interface enumeration, evidence persistence and export checks.
@@ -270,4 +270,18 @@ Add a dated entry for **every significant success, failure, debugging attempt, b
 - Security, compatibility and migration impact: no raw packet payload is added by the builders; only existing bounded protocol-intelligence metadata is snapshotted. The API's 128 KiB snapshot cap, 500-character reference/title bounds, local persistence and type/reference deduplication remain enforced. Existing cases remain compatible because the change only expands the allow-list.
 - Remaining blockers / next step: inspect new CI, then audit remaining non-packet empty/error states and release gates. Clean-system install/capture validation still requires suitable Windows, Linux and macOS environments.
 - Docs/README/roadmap updates: marked the final DNS/HTTP/TLS tranche and full contextual-bookmark surface coverage complete without changing stable-release claims.
+
+### 2026-10-11 21:00 IST — Honest Intelligence loading and empty states
+- Branch / before SHA / implementation SHA: `v0.4-investigation-platform` / `84e110d50fe90f47c6283e1c4977d2fa15cefcbe` / `38e712cf21107bd23427b9d7cf372b7eccac1a17`.
+- Objective and why: continue the remaining non-packet empty/error-state release gate by preventing an unavailable local backend, an initial request, a genuinely empty evidence set and a filter-zero result from all appearing as the same generic `No data yet` state.
+- Files changed / implementation: added a pure Intelligence empty-state classifier and five regression tests; panel-specific states for connections, hosts, timeline, DNS, HTTP, TLS and defensive findings; distinct backend-refresh and navigation-target errors; retry handling; and last-successful-data disclosure after a transient refresh failure. HTTP copy explicitly states that encrypted HTTPS payload is unavailable.
+- Commands actually executed: `npx prettier --write src/components/etherlens/IntelligenceWorkspace.jsx src/components/etherlens/intelligenceEmptyState.js src/components/etherlens/intelligenceEmptyState.test.js`; `CI=true npm test -- --watchAll=false --runInBand src/components/etherlens/intelligenceEmptyState.test.js`; `CI=true npm test -- --watchAll=false --runInBand`; `CI=true npm run build`; `git diff --check`.
+- Environment: Linux automation runner and repository React/CRACO toolchain.
+- Tests: focused Intelligence-state tests passed 5/5; complete frontend suite passed 25/25; optimized React production build compiled successfully. Backend source was unchanged and was not rerun locally.
+- CI: before implementation, head `84e110d` was fully green in runs 38148082457 (Docker/API), 38148082466 (focused regression and conventional Windows) and 38148082444 (Windows/Linux/macOS desktop). Implementation-head runs 38151816649, 38151816656 and 38151816652 were in progress or queued at journal time.
+- Failure symptoms / log excerpt: no source validation failure. `npx` installed the missing Prettier 3.9.10 command package in the transient runner; npm emitted the existing `http-proxy` warning and Node emitted the existing `fs.F_OK` deprecation warning. Neither changed repository dependencies or failed tests/build.
+- Root cause / fix / verification: the Intelligence workspace used one `error` value for endpoint failures and failed graph navigation, and every empty table used the same copy. Separate state now prevents those causes from overwriting one another; the classifier prioritizes first-load failures over empty claims, labels loaded-but-filtered evidence separately and uses protocol-specific visibility language. Tests exercise loading, failure, genuine-empty, filtered and HTTPS-boundary behavior.
+- Security, compatibility and migration impact: no packet, credential or evidence persistence was added. Successful data remains in memory during transient refresh failure and is labeled as last successfully loaded; API contracts and existing evidence are unchanged.
+- Remaining blockers / next step: inspect implementation and journal CI, then continue the empty/error-state audit outside the packet stream and Intelligence workspace. Clean-system install/capture validation still requires suitable Windows, Linux and macOS environments.
+- Docs/README/roadmap updates: documented the implemented Intelligence states without changing stable v0.3 claims or implying that clean-system v0.4 release gates are complete.
 
