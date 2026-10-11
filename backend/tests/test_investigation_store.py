@@ -59,6 +59,14 @@ def test_investigation_api_lifecycle(tmp_path, monkeypatch):
             workspace_id,
             server.EvidenceRequest(type="packet", ref_id="pkt-42", snapshot={"protocol": "DNS"}),
         )
+        await server.investigations_add_evidence(
+            workspace_id,
+            server.EvidenceRequest(type="http", ref_id="pkt-http", snapshot={"method": "GET"}),
+        )
+        await server.investigations_add_evidence(
+            workspace_id,
+            server.EvidenceRequest(type="tls", ref_id="pkt-tls", snapshot={"sni": "example.test"}),
+        )
         await server.investigations_add_note(
             workspace_id,
             server.InvestigationNoteRequest(text="Compare with baseline"),
@@ -79,6 +87,8 @@ def test_investigation_api_lifecycle(tmp_path, monkeypatch):
     workspace_id, updated, listed, loaded = asyncio.run(scenario())
     assert updated["investigation"]["name"] == "Incident 42A"
     assert listed["investigations"][0]["evidence"]["packet"] == 1
+    assert listed["investigations"][0]["evidence"]["http"] == 1
+    assert listed["investigations"][0]["evidence"]["tls"] == 1
     assert loaded["investigation"]["notes"][0]["text"] == "Compare with baseline"
     assert loaded["investigation"]["finding_states"]["finding-42"]["state"] == "investigating"
     asyncio.run(server.investigations_delete(workspace_id))

@@ -255,10 +255,9 @@ The development branch currently includes:
 - Workspace recovery restores the active primary view and bounded packet display filters for up to seven days when enabled. It never stores packet payloads, imported PCAP data, evidence snapshots or credentials.
 - Detection sensitivity now applies to backend analysis, not only the Settings UI: conservative, balanced (default) and sensitive presets persist atomically and publish the exact thresholds used with each security-intelligence result.
 - Advanced Packet Search keeps its bounded draft while the analyst moves between workspaces in the same app window. Search results and packet evidence are never written to browser storage.
-- Contextual evidence actions can bookmark a selected Live Host, defensive finding, reconstructed connection or correlated timeline event directly into the active local investigation. If no case is active, nScout opens Investigations instead of silently dropping evidence.
+- Contextual evidence actions can bookmark a selected Live Host, defensive finding, reconstructed connection, correlated timeline event, or DNS/HTTP/TLS intelligence row directly into the active local investigation. If no case is active, nScout opens Investigations instead of silently dropping evidence.
 
-Contextual bookmark coverage and clean-system release-gate validation remain
-under development.
+Clean-system release-gate validation remains under development.
 See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, the [cross-platform desktop packaging guide](docs/cross-platform-desktop.md) for development builds and release gates, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for Windows capture validation.
 Full AI Analyst remains planned for v0.5; Sensor Mode and threat-intelligence integrations are later milestones.
 

@@ -3,11 +3,14 @@ import {
   BookmarkError,
   bookmarkActiveInvestigation,
   connectionBookmark,
+  dnsBookmark,
   findingBookmark,
   hostBookmark,
+  httpBookmark,
   normalizeEvidenceBookmark,
   readActiveInvestigation,
   timelineBookmark,
+  tlsBookmark,
 } from "./investigationBookmarks";
 
 function memoryStorage(value = "") {
@@ -115,9 +118,38 @@ test("builds bounded timeline evidence from event identity", () => {
   });
 });
 
+test("builds DNS, HTTP, and TLS evidence from packet identities", () => {
+  expect(
+    dnsBookmark({ packet_id: "dns-1", query: "example.test", response: false }),
+  ).toMatchObject({
+    type: "dns",
+    ref_id: "dns-1",
+    title: "DNS query: example.test",
+  });
+  expect(
+    httpBookmark({
+      packet_id: "http-1",
+      method: "GET",
+      host: "example.test",
+      path: "/health",
+    }),
+  ).toMatchObject({
+    type: "http",
+    ref_id: "http-1",
+    title: "GET example.test /health",
+  });
+  expect(
+    tlsBookmark({ packet_id: "tls-1", sni: "secure.example.test" }),
+  ).toMatchObject({
+    type: "tls",
+    ref_id: "tls-1",
+    title: "TLS: secure.example.test",
+  });
+});
+
 test("rejects unsupported or empty evidence references", () => {
   expect(() =>
-    normalizeEvidenceBookmark({ type: "http", ref_id: "1" }),
+    normalizeEvidenceBookmark({ type: "unsupported", ref_id: "1" }),
   ).toThrow(BookmarkError);
   expect(() =>
     normalizeEvidenceBookmark({ type: "host", ref_id: " " }),

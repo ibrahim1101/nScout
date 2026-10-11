@@ -32,8 +32,13 @@ def test_evidence_summary_and_removal():
     workspace = InvestigationWorkspace("Case")
     packet = workspace.add_evidence(EvidenceItem("packet", "p1"))
     workspace.add_evidence(EvidenceItem("host", "192.168.1.10"))
-    assert evidence_summary(workspace.evidence)["total"] == 2
-    assert evidence_summary(workspace.evidence)["packet"] == 1
+    workspace.add_evidence(EvidenceItem("http", "pkt-http"))
+    workspace.add_evidence(EvidenceItem("tls", "pkt-tls"))
+    summary = evidence_summary(workspace.evidence)
+    assert summary["total"] == 4
+    assert summary["packet"] == 1
+    assert summary["http"] == 1
+    assert summary["tls"] == 1
     assert workspace.remove_evidence(packet.id) is True
     assert workspace.remove_evidence(packet.id) is False
 

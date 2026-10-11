@@ -4,6 +4,8 @@ const EVIDENCE_TYPES = new Set([
   "host",
   "connection",
   "dns",
+  "http",
+  "tls",
   "finding",
   "timeline",
 ]);
@@ -133,6 +135,67 @@ export function timelineBookmark(event, index = 0) {
     type: "timeline",
     ref_id: identity === "event" ? `event:${index}` : identity,
     title: event?.title || event?.event_type || "Timeline event",
+    snapshot: event,
+  });
+}
+
+function protocolReference(kind, event, fields, index) {
+  if (event?.packet_id) return String(event.packet_id);
+  const identity = [kind, event?.timestamp, ...fields]
+    .filter((value) => value !== undefined && value !== null && value !== "")
+    .join(":");
+  return identity === kind ? `${kind}:${index}` : identity;
+}
+
+export function dnsBookmark(event, index = 0) {
+  return normalizeEvidenceBookmark({
+    type: "dns",
+    ref_id: protocolReference(
+      "dns",
+      event,
+      [event?.query, event?.response ? "response" : "query"],
+      index,
+    ),
+    title: `DNS ${event?.response ? "response" : "query"}: ${event?.query || "unknown domain"}`,
+    snapshot: event,
+  });
+}
+
+export function httpBookmark(event, index = 0) {
+  const request = [event?.method, event?.host, event?.path]
+    .filter(Boolean)
+    .join(" ");
+  return normalizeEvidenceBookmark({
+    type: "http",
+    ref_id: protocolReference(
+      "http",
+      event,
+      [event?.method, event?.host, event?.path, event?.status],
+      index,
+    ),
+    title: request || `HTTP ${event?.status || "event"}`,
+    snapshot: event,
+  });
+}
+
+export function tlsBookmark(event, index = 0) {
+  const endpoints = `${event?.src_ip || "unknown"}:${event?.src_port ?? "*"} → ${event?.dst_ip || "unknown"}:${event?.dst_port ?? "*"}`;
+  return normalizeEvidenceBookmark({
+    type: "tls",
+    ref_id: protocolReference(
+      "tls",
+      event,
+      [
+        event?.src_ip,
+        event?.src_port,
+        event?.dst_ip,
+        event?.dst_port,
+        event?.sni,
+        event?.handshake,
+      ],
+      index,
+    ),
+    title: event?.sni ? `TLS: ${event.sni}` : `TLS: ${endpoints}`,
     snapshot: event,
   });
 }

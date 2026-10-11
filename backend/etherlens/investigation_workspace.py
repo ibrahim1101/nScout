@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 import uuid
 
-EVIDENCE_TYPES = {"packet", "host", "connection", "dns", "finding", "timeline"}
+EVIDENCE_TYPES = {"packet", "host", "connection", "dns", "http", "tls", "finding", "timeline"}
 FINDING_STATES = {"new", "investigating", "benign", "suspicious", "confirmed", "resolved"}
 
 

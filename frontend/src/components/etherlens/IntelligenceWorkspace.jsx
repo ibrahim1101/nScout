@@ -7,8 +7,11 @@ import {
 } from "./advancedSearchState";
 import {
   connectionBookmark,
+  dnsBookmark,
   findingBookmark,
+  httpBookmark,
   timelineBookmark,
+  tlsBookmark,
 } from "./investigationBookmarks";
 import {
   Network,
@@ -197,10 +200,14 @@ export default function IntelligenceWorkspace({
             onBookmark={onBookmark}
           />
         )}{" "}
-        {panel === "dns" && <DNS data={data.dns} />}{" "}
-        {panel === "http" && <HTTP data={data.http} />}{" "}
+        {panel === "dns" && <DNS data={data.dns} onBookmark={onBookmark} />}{" "}
+        {panel === "http" && <HTTP data={data.http} onBookmark={onBookmark} />}{" "}
         {panel === "tls" && (
-          <TLS data={data.tls} onSelectPacket={onSelectPacket} />
+          <TLS
+            data={data.tls}
+            onSelectPacket={onSelectPacket}
+            onBookmark={onBookmark}
+          />
         )}{" "}
         {panel === "security" && (
           <Security
@@ -932,11 +939,11 @@ function timelineTime(value) {
         second: "2-digit",
       });
 }
-function DNS({ data }) {
+function DNS({ data, onBookmark }) {
   const rows = data.events || [];
   return (
     <Table
-      headers={["Time", "Type", "Domain", "Answers", "RCODE", "TTL"]}
+      headers={["Time", "Type", "Domain", "Answers", "RCODE", "TTL", "Action"]}
       empty={!rows.length}
     >
       {rows.map((r, i) => (
@@ -949,16 +956,35 @@ function DNS({ data }) {
           </td>
           <td className="px-4 py-2">{r.response_code ?? "—"}</td>
           <td className="px-4 py-2">{r.ttl ?? "—"}</td>
+          <td className="px-4 py-2">
+            <button
+              type="button"
+              onClick={() => onBookmark?.(dnsBookmark(r, i))}
+              className="tool whitespace-nowrap"
+              aria-label={`Bookmark DNS ${r.query || "event"}`}
+            >
+              <BookmarkPlus size={13} />
+              Bookmark
+            </button>
+          </td>
         </tr>
       ))}
     </Table>
   );
 }
-function HTTP({ data }) {
+function HTTP({ data, onBookmark }) {
   const rows = data.events || [];
   return (
     <Table
-      headers={["Time", "Method", "Host", "Path", "Status", "User Agent"]}
+      headers={[
+        "Time",
+        "Method",
+        "Host",
+        "Path",
+        "Status",
+        "User Agent",
+        "Action",
+      ]}
       empty={!rows.length}
     >
       {rows.map((r, i) => (
@@ -969,12 +995,23 @@ function HTTP({ data }) {
           <td className="px-4 py-2 font-mono-code">{r.path || "—"}</td>
           <td className="px-4 py-2">{r.status || "—"}</td>
           <td className="px-4 py-2 truncate max-w-xs">{r.user_agent || "—"}</td>
+          <td className="px-4 py-2">
+            <button
+              type="button"
+              onClick={() => onBookmark?.(httpBookmark(r, i))}
+              className="tool whitespace-nowrap"
+              aria-label={`Bookmark HTTP ${r.method || r.status || "event"}`}
+            >
+              <BookmarkPlus size={13} />
+              Bookmark
+            </button>
+          </td>
         </tr>
       ))}
     </Table>
   );
 }
-function TLS({ data, onSelectPacket }) {
+function TLS({ data, onSelectPacket, onBookmark }) {
   const [query, setQuery] = useState("");
   const warnings = data.warnings || [],
     warningByPacket = new Map();
@@ -1054,6 +1091,7 @@ function TLS({ data, onSelectPacket }) {
           "Cipher / Fingerprint",
           "Certificate",
           "Warnings",
+          "Action",
         ]}
         empty={!rows.length}
       >
@@ -1140,6 +1178,20 @@ function TLS({ data, onSelectPacket }) {
                       </div>
                     ))
                   : "—"}
+              </td>
+              <td className="px-4 py-2">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onBookmark?.(tlsBookmark(r, i));
+                  }}
+                  className="tool whitespace-nowrap"
+                  aria-label={`Bookmark TLS ${r.sni || r.packet_id || "event"}`}
+                >
+                  <BookmarkPlus size={13} />
+                  Bookmark
+                </button>
               </td>
             </tr>
           );
