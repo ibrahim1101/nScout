@@ -105,7 +105,7 @@ For build/test commands, use **the actual current README, workflow YAML and proj
 
 ## 5. Current gaps and release gates
 
-- Remaining empty/error-state audit outside the packet stream and Intelligence workspace.
+- Remaining empty/error-state audit outside the packet stream, Intelligence and Live Hosts workspaces.
 - Implement and test NEO shared tokens/components, per-page migration, scalable topology, and isolated pixel-cat loading state.
 - Audit remaining production simulation entry points while preserving explicitly selected demos and deterministic automated tests.
 - Windows/Linux/macOS clean-machine Tauri install/launch/backend readiness/shutdown, capture permissions and interface enumeration, evidence persistence and export checks.
@@ -284,4 +284,18 @@ Add a dated entry for **every significant success, failure, debugging attempt, b
 - Security, compatibility and migration impact: no packet, credential or evidence persistence was added. Successful data remains in memory during transient refresh failure and is labeled as last successfully loaded; API contracts and existing evidence are unchanged.
 - Remaining blockers / next step: inspect implementation and journal CI, then continue the empty/error-state audit outside the packet stream and Intelligence workspace. Clean-system install/capture validation still requires suitable Windows, Linux and macOS environments.
 - Docs/README/roadmap updates: documented the implemented Intelligence states without changing stable v0.3 claims or implying that clean-system v0.4 release gates are complete.
+
+### 2026-10-11 22:00 IST — Honest Live Hosts loading and empty states
+- Branch / before SHA / implementation SHA: `v0.4-investigation-platform` / `7c2f132f0f5ef5fad9f742a14e1dc7964c2085cc` / `ed38a5c5b96dd783f478cbb1b7713c6b5bdc4960`.
+- Objective and why: continue the non-packet empty/error-state release gate by preventing a failed `/intelligence/hosts` request from being silently converted into the claim that no observed hosts matched the current filters.
+- Files changed / implementation: added explicit host-inventory loading/loaded/error state in Dashboard; retained the last successful host inventory across transient refresh failures; added a retryable failure notice; distinguished initial loading, first-load failure, genuine no-host evidence and filters hiding loaded hosts in both the host list and empty inspector; and added a pure classifier with five regression tests.
+- Commands actually executed: `npx prettier --write src/components/etherlens/Dashboard.jsx src/components/etherlens/LiveHostsWorkspace.jsx src/components/etherlens/liveHostsState.js src/components/etherlens/liveHostsState.test.js`; `CI=true npm test -- --watchAll=false --runInBand src/components/etherlens/liveHostsState.test.js`; `CI=true npm test -- --watchAll=false --runInBand`; `CI=true npm run build`; `git diff --check`.
+- Environment: Linux automation runner and repository React/CRACO toolchain.
+- Tests: focused Live Hosts state tests passed 5/5; complete frontend suite passed 30/30; optimized React production build compiled successfully. Backend source was unchanged and was not rerun locally.
+- CI: before implementation, journal head `7c2f132` was fully green in runs 38151913253 (Docker/API), 38151913258 (focused regression and conventional Windows) and 38151913246 (Windows/Linux/macOS desktop). Implementation-head workflows had not appeared in the GitHub API at journal time.
+- Failure symptoms / log excerpt: no source validation failure. `npx` installed the missing Prettier 3.9.10 command package in the transient runner; npm emitted the existing `http-proxy` warning and Node emitted the existing `fs.F_OK` deprecation warning. Neither changed repository dependencies or failed tests/build.
+- Root cause / fix / verification: Dashboard previously swallowed every host-refresh exception and left `hostProfiles` at its default empty array. Live Hosts therefore rendered a filter-zero message even when the local backend was unavailable. The parent now carries explicit request state, only replaces host data on success and supplies the real safe backend detail; the classifier's regression cases prevent failure, empty and filtered states from collapsing again.
+- Security, compatibility and migration impact: host metadata remains in memory only and uses the existing API. No packet, evidence, credential or new persistence path was added. Passive-capture copy continues to avoid claiming that an unobserved host is offline.
+- Remaining blockers / next step: inspect implementation and journal CI, then continue the remaining empty/error-state audit outside packet, Intelligence and Live Hosts surfaces. Clean-system install/capture validation still requires suitable Windows, Linux and macOS environments.
+- Docs/README/roadmap updates: documented the implemented Live Hosts state semantics without changing stable-release or platform-support claims.
 
