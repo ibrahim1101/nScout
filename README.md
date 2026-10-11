@@ -252,8 +252,9 @@ The development branch currently includes:
 - Network Map 2.0 combines Live Hosts identity and risk context with an investigation topology: search aliases, IP/MAC/hostname, domains, protocols, ports, ASN or location; filter local/external, protocol, port, traffic volume or security evidence; focus a host; freeze the live view; and drill from an aggregated host pair into its exact reconstructed flows and Connection Story.
 - Packet timestamps preserve canonical UTC/epoch evidence while displaying in the user's system-local timezone across desktop platforms.
 - Local preference profiles save reusable capture, workspace, privacy, detection and alert settings atomically without a cloud account. Webhook URLs, AI server details, credentials and captured evidence are deliberately excluded.
+- Workspace recovery restores the active primary view and bounded packet display filters for up to seven days when enabled. It never stores packet payloads, imported PCAP data, evidence snapshots or credentials.
 
-Remaining engine preference wiring, workspace recovery and further UI improvements
+Remaining engine preference wiring and further empty/error-state improvements
 remain under development.
 See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, the [cross-platform desktop packaging guide](docs/cross-platform-desktop.md) for development builds and release gates, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for Windows capture validation.
 Full AI Analyst remains planned for v0.5; Sensor Mode and threat-intelligence integrations are later milestones.
