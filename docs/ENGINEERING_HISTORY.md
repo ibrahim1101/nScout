@@ -151,10 +151,25 @@ Add a dated entry for **every significant success, failure, debugging attempt, b
 - Commands actually executed: `python -m py_compile backend/etherlens/preference_profiles.py backend/server.py`; `python -m pytest -q tests/test_preference_profiles.py`; `python -m pytest -q --ignore=tests/backend_test.py --ignore=tests/test_v2_features.py --ignore=tests/test_v3_features.py`; `npx prettier --write src/components/etherlens/SettingsDrawer.jsx`; `npm run build`; `git diff --check`.
 - Environment: Linux automation runner, Python 3.12, pinned backend requirements, React production build through the repository npm script.
 - Tests: 4 new profile tests passed; full focused backend suite passed 142 tests; optimized React build compiled successfully.
-- CI: pending GitHub Actions after push.
+- CI: GitHub Actions runs 38112137238 (Windows), 38112137146 (Docker/API) and 38112137155 (Windows/Linux/macOS desktop) all completed successfully at head `a840878b65f1c75cb9387fa794c41c8feb8fefcb`.
 - Failure symptoms / log excerpt: initial pytest attempt failed because the runner lacked `pytest` and `python-dotenv`; pinned `backend/requirements.txt` and `backend/requirements-dev.txt` were installed, after which the real tests passed. An initial `yarn build` attempt failed because Yarn was unavailable; the repository's `npm run build` succeeded.
 - Root cause / fix / verification: missing local runner dependencies/tools, not a source defect. Installed pinned Python dependencies and used the available npm build path.
 - Security, compatibility and migration impact: profiles contain only allow-listed non-secret preferences. Webhook URLs, AI provider details/models, credentials, packet data and investigation evidence are excluded. Storage is capped at 50 profiles and written atomically under `NSCOUT_DATA_DIR`.
 - Remaining blockers / next step: verify GitHub CI, then implement bounded workspace crash recovery and honest capture empty/error states.
 - Docs/README/roadmap updates: local-profile behavior, storage path and exclusions documented.
+
+### 2026-10-11 11:00 IST — Bounded workspace crash recovery
+- Branch / before SHA / implementation SHA: `v0.4-investigation-platform` / `a840878b65f1c75cb9387fa794c41c8feb8fefcb` / `b180630611fb94a1b9400819064a5c1c849dcad0`.
+- Objective and why: complete the next v0.4 recovery increment without silently persisting captured evidence in browser storage.
+- Files changed / implementation: added a versioned seven-day workspace-recovery helper, Dashboard restoration/persistence wiring, three focused frontend tests, and README/roadmap documentation.
+- Commands actually executed: `npx prettier --write src/components/etherlens/Dashboard.jsx src/components/etherlens/workspaceRecovery.js src/components/etherlens/workspaceRecovery.test.js`; `npm test -- --watchAll=false --runInBand src/components/etherlens/workspaceRecovery.test.js`; `CI=true npm run build`; `git diff --check`.
+- Environment: Linux automation runner, repository React/CRACO toolchain.
+- Tests: 3/3 workspace-recovery tests passed; optimized React build compiled successfully without ESLint warnings.
+- CI: pending GitHub Actions after push.
+- Failure symptoms / log excerpt: the first production build succeeded but reported one `react-hooks/exhaustive-deps` warning for the initial recovery notice effect.
+- Hypotheses and attempts: adding the mutable `recovered` object directly as a dependency would have reset the notice timer after rerenders; instead its initial value is retained in a ref.
+- Root cause / fix / verification: the effect intentionally consumed startup-only state but did not declare it. A startup ref plus explicit dependency removed the warning; tests and a second CI-mode build passed.
+- Security, compatibility and migration impact: only primary workspace ID, packet text filter and protocol filter are stored, with 512-character bounds and seven-day expiry. Packets, payloads, PCAP content, selected packet details, evidence, credentials and AI/webhook configuration are excluded. Disabling recovery deletes the record.
+- Remaining blockers / next step: inspect CI, then implement honest capture empty/error states without synthetic fallback claims.
+- Docs/README/roadmap updates: recovery scope, expiry, validation and evidence boundaries documented.
 
