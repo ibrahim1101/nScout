@@ -5,7 +5,11 @@ import {
   readAdvancedSearchDraft,
   writeAdvancedSearchDraft,
 } from "./advancedSearchState";
-import { findingBookmark } from "./investigationBookmarks";
+import {
+  connectionBookmark,
+  findingBookmark,
+  timelineBookmark,
+} from "./investigationBookmarks";
 import {
   Network,
   Monitor,
@@ -187,7 +191,11 @@ export default function IntelligenceWorkspace({
         )}{" "}
         {panel === "hosts" && <Hosts rows={data.hosts} />}{" "}
         {panel === "timeline" && (
-          <Timeline data={data.timeline} onSelectPacket={onSelectPacket} />
+          <Timeline
+            data={data.timeline}
+            onSelectPacket={onSelectPacket}
+            onBookmark={onBookmark}
+          />
         )}{" "}
         {panel === "dns" && <DNS data={data.dns} />}{" "}
         {panel === "http" && <HTTP data={data.http} />}{" "}
@@ -208,6 +216,7 @@ export default function IntelligenceWorkspace({
           dns={data.dns}
           tls={data.tls}
           onSelectPacket={onSelectPacket}
+          onBookmark={onBookmark}
         />
       )}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -478,7 +487,13 @@ function Connections({ rows, selected, onSelect }) {
   );
 }
 
-function ConnectionStory({ connection: r, dns, tls, onSelectPacket }) {
+function ConnectionStory({
+  connection: r,
+  dns,
+  tls,
+  onSelectPacket,
+  onBookmark,
+}) {
   const relatedDns = (dns.events || []).filter(
       (e) =>
         [r.a_ip, r.b_ip].includes(e.src_ip) ||
@@ -561,6 +576,14 @@ function ConnectionStory({ connection: r, dns, tls, onSelectPacket }) {
             className="text-xs font-semibold px-2 py-1 rounded bg-blue-600 text-white"
           >
             View packets
+          </button>
+          <button
+            onClick={() => onBookmark?.(connectionBookmark(r))}
+            className="tool whitespace-nowrap"
+            aria-label="Bookmark connection"
+          >
+            <BookmarkPlus size={13} />
+            Bookmark
           </button>
           <button
             onClick={explain}
@@ -749,7 +772,7 @@ function riskClass(level) {
     return "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300";
   return "bg-slate-100 text-slate-500 dark:bg-slate-800";
 }
-function Timeline({ data, onSelectPacket }) {
+function Timeline({ data, onSelectPacket, onBookmark }) {
   const [filters, setFilters] = useState({
       host: "",
       domain: "",
@@ -846,10 +869,9 @@ function Timeline({ data, onSelectPacket }) {
       </div>
       <div className="max-h-[520px] overflow-auto el-scroll">
         {rows.map((r, i) => (
-          <button
+          <div
             key={`${r.timestamp}-${r.event_type}-${r.packet_id || i}`}
-            onClick={() => r.packet_id && onSelectPacket?.({ id: r.packet_id })}
-            className="w-full grid grid-cols-[110px_110px_minmax(0,1fr)] gap-3 text-left px-4 py-3 border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="w-full grid grid-cols-[110px_110px_minmax(0,1fr)_auto] gap-3 text-left px-4 py-3 border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <span className="font-mono-code text-[11px] text-slate-500">
               {timelineTime(r.timestamp)}
@@ -859,7 +881,14 @@ function Timeline({ data, onSelectPacket }) {
             >
               {r.category}
             </span>
-            <span>
+            <button
+              type="button"
+              onClick={() =>
+                r.packet_id && onSelectPacket?.({ id: r.packet_id })
+              }
+              disabled={!r.packet_id}
+              className="text-left disabled:cursor-default"
+            >
               <span className="font-semibold text-xs">{r.title}</span>
               <span className="block text-[11px] text-slate-500 mt-1">
                 {r.src_ip || "—"}
@@ -872,8 +901,17 @@ function Timeline({ data, onSelectPacket }) {
                   {r.detail}
                 </span>
               )}
-            </span>
-          </button>
+            </button>
+            <button
+              type="button"
+              onClick={() => onBookmark?.(timelineBookmark(r, i))}
+              className="tool self-start whitespace-nowrap"
+              aria-label={`Bookmark ${r.title || r.event_type || "timeline event"}`}
+            >
+              <BookmarkPlus size={13} />
+              Bookmark
+            </button>
+          </div>
         ))}
         {!rows.length && (
           <div className="p-8 text-center text-slate-400 text-sm">

@@ -2,10 +2,12 @@ import {
   ACTIVE_INVESTIGATION_KEY,
   BookmarkError,
   bookmarkActiveInvestigation,
+  connectionBookmark,
   findingBookmark,
   hostBookmark,
   normalizeEvidenceBookmark,
   readActiveInvestigation,
+  timelineBookmark,
 } from "./investigationBookmarks";
 
 function memoryStorage(value = "") {
@@ -67,6 +69,49 @@ test("builds stable host and finding evidence", () => {
   ).toMatchObject({
     type: "finding",
     ref_id: "network.port_scan:packet-7:10.0.0.2:3",
+  });
+});
+
+test("builds deterministic connection evidence independent of endpoint order", () => {
+  const forward = connectionBookmark({
+    transport: "TCP",
+    a_ip: "192.0.2.20",
+    a_port: 443,
+    b_ip: "192.0.2.10",
+    b_port: 51515,
+  });
+  const reverse = connectionBookmark({
+    transport: "TCP",
+    a_ip: "192.0.2.10",
+    a_port: 51515,
+    b_ip: "192.0.2.20",
+    b_port: 443,
+  });
+
+  expect(forward).toMatchObject({
+    type: "connection",
+    ref_id: "tcp:192.0.2.10:51515<->192.0.2.20:443",
+  });
+  expect(reverse.ref_id).toBe(forward.ref_id);
+});
+
+test("builds bounded timeline evidence from event identity", () => {
+  const evidence = timelineBookmark(
+    {
+      event_type: "dns_query",
+      packet_id: "packet-12",
+      timestamp: 1720000000.25,
+      src_ip: "192.0.2.10",
+      dst_ip: "198.51.100.53",
+      title: "DNS query observed",
+    },
+    4,
+  );
+
+  expect(evidence).toMatchObject({
+    type: "timeline",
+    ref_id: "dns_query:packet-12:1720000000.25:192.0.2.10:198.51.100.53",
+    title: "DNS query observed",
   });
 });
 

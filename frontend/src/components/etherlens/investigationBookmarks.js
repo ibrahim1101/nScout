@@ -100,3 +100,39 @@ export function hostBookmark(host) {
     snapshot: host,
   });
 }
+
+export function connectionBookmark(connection) {
+  const endpoints = [
+    `${connection?.a_ip || "unknown"}:${connection?.a_port ?? "*"}`,
+    `${connection?.b_ip || "unknown"}:${connection?.b_port ?? "*"}`,
+  ].sort();
+  const transport =
+    connection?.transport ||
+    connection?.protocol ||
+    connection?.protocols?.join("+") ||
+    "connection";
+  return normalizeEvidenceBookmark({
+    type: "connection",
+    ref_id: `${String(transport).toLowerCase()}:${endpoints.join("<->")}`,
+    title: `${endpoints[0]} ↔ ${endpoints[1]}`,
+    snapshot: connection,
+  });
+}
+
+export function timelineBookmark(event, index = 0) {
+  const identity = [
+    event?.event_type || event?.category || "event",
+    event?.packet_id,
+    event?.timestamp,
+    event?.src_ip,
+    event?.dst_ip,
+  ]
+    .filter((value) => value !== undefined && value !== null && value !== "")
+    .join(":");
+  return normalizeEvidenceBookmark({
+    type: "timeline",
+    ref_id: identity === "event" ? `event:${index}` : identity,
+    title: event?.title || event?.event_type || "Timeline event",
+    snapshot: event,
+  });
+}
