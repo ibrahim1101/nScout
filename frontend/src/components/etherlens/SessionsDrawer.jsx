@@ -1,52 +1,69 @@
 import { useEffect, useState } from "react";
 import { api } from "./lib";
-import { X, Save, Play, Trash2, Clock, Package, ShieldAlert, Activity } from "lucide-react";
+import { X, Save, Play, Trash2, Clock, Package, ShieldAlert, Activity, AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import { describeCaptureSessionsState } from "./captureSessionsState";
 
 export default function SessionsDrawer({ open, onClose, onLoaded, status = {} }) {
   const [sessions, setSessions] = useState([]);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const refresh = async () => {
+    setLoading(true); setLoadError("");
     try {
       const r = await api.get("/sessions");
       setSessions(r.data.sessions || []);
-    } catch (e) { /* ignore */ }
+      setLoaded(true);
+      return true;
+    } catch (e) {
+      setLoadError(e?.response?.data?.detail || e.message || "Could not load saved sessions.");
+      return false;
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { if (open) refresh(); }, [open]);
 
   const save = async () => {
-    setSaving(true); setErr("");
+    setSaving(true); setActionError("");
     try {
-      await api.post("/sessions/save", { name: name || "Untitled" });
+      const response = await api.post("/sessions/save", { name: name || "Untitled" });
+      const saved = response.data;
+      setSessions((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
+      setLoaded(true);
       setName("");
       await refresh();
     } catch (e) {
-      setErr(e?.response?.data?.detail || e.message);
+      setActionError(e?.response?.data?.detail || e.message || "Could not save this session.");
     } finally { setSaving(false); }
   };
 
   const load = async (sid) => {
+    setActionError("");
     try {
       const r = await api.post(`/sessions/${sid}/load`);
       onLoaded && onLoaded(r.data);
       onClose();
     } catch (e) {
-      setErr(e?.response?.data?.detail || e.message);
+      setActionError(e?.response?.data?.detail || e.message || "Could not replay this session.");
     }
   };
 
   const remove = async (sid) => {
     if (!window.confirm("Delete this saved session?")) return;
+    setActionError("");
     try {
       await api.delete(`/sessions/${sid}`);
-      refresh();
-    } catch (e) { setErr(e.message); }
+      setSessions((current) => current.filter((row) => row.id !== sid));
+      await refresh();
+    } catch (e) { setActionError(e?.response?.data?.detail || e.message || "Could not delete this session."); }
   };
 
   if (!open) return null;
+  const emptyState = describeCaptureSessionsState({ loading, loaded, error: loadError, sessionCount: sessions.length });
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end bg-slate-950/50 backdrop-blur-sm" onClick={onClose}>
@@ -85,14 +102,16 @@ export default function SessionsDrawer({ open, onClose, onLoaded, status = {} })
               <Save size={14} /> Save current
             </button>
           </div>
-          {err && <div className="mt-2 text-xs text-rose-600 dark:text-rose-400">{err}</div>}
+          {actionError && <div className="mt-2 text-xs text-rose-600 dark:text-rose-400">{actionError}</div>}
         </div>
 
         <div className="flex-1 overflow-auto el-scroll divide-y divide-slate-100 dark:divide-slate-800">
-          {sessions.length === 0 && (
-            <div className="p-10 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
-              <Package size={28} />
-              <span>No sessions yet. Capture some traffic then click "Save current".</span>
+          {emptyState && (
+            <div className={`p-10 text-center text-sm flex flex-col items-center gap-2 ${emptyState.tone === "error" ? "text-rose-500" : emptyState.tone === "warning" ? "text-amber-500" : "text-slate-400"}`}>
+              {emptyState.tone === "loading" ? <Loader2 size={28} className="animate-spin" /> : emptyState.tone === "empty" ? <Package size={28} /> : <AlertCircle size={28} />}
+              <span className="font-semibold">{emptyState.title}</span>
+              <span className="text-xs">{emptyState.message}</span>
+              {(emptyState.tone === "error" || emptyState.tone === "warning") && <button onClick={refresh} disabled={loading} className="mt-1 inline-flex items-center gap-1 rounded-md border border-current px-2.5 py-1 text-xs font-semibold disabled:opacity-50"><RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Retry</button>}
             </div>
           )}
           {sessions.map((s) => (
