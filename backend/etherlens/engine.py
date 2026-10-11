@@ -11,6 +11,9 @@ from .protocol_intelligence import decode_tls_payload
 
 APP_PORTS={80:"HTTP",8080:"HTTP",443:"HTTPS",8443:"HTTPS",53:"DNS",22:"SSH",21:"FTP",25:"SMTP",587:"SMTP",465:"SMTPS",110:"POP3",143:"IMAP",993:"IMAPS",995:"POP3S",3306:"MySQL",5432:"PostgreSQL",6379:"Redis",27017:"MongoDB",3389:"RDP",5900:"VNC",123:"NTP",161:"SNMP",1883:"MQTT",5060:"SIP",67:"DHCP",68:"DHCP",69:"TFTP",179:"BGP",389:"LDAP",636:"LDAPS",445:"SMB",139:"NetBIOS"}
 
+class CaptureUnavailableError(RuntimeError):
+    """Raised when a requested live capture cannot start honestly."""
+
 def _tcp_flags(v:int)->str:
     names=[name for bit,name in ((1,"FIN"),(2,"SYN"),(4,"RST"),(8,"PSH"),(16,"ACK"),(32,"URG"),(64,"ECE"),(128,"CWR")) if v&bit]
     return ",".join(names) if names else "-"
@@ -105,7 +108,7 @@ def _simulate_one(anomaly=False):
 class CaptureSession:
     MIN_PACKET_LIMIT=1000; MAX_PACKET_LIMIT=1000000; DEFAULT_PACKET_LIMIT=5000; MAX_THREATS=300
     def __init__(self):
-        self.packet_limit=self.DEFAULT_PACKET_LIMIT; self.packets=deque(maxlen=self.packet_limit); self.threats=deque(maxlen=self.MAX_THREATS); self.by_id={}; self.running=False; self.mode="idle"; self.interface=""; self.counter=0; self.start_ts=None; self.dropped_packets=0; self.threat_state=ThreatState(); self.flows={}; self.hosts={}; self.timeline=deque(maxlen=120); self._task=None; self._subscribers=[]; self._reset_capture_metadata()
+        self.packet_limit=self.DEFAULT_PACKET_LIMIT; self.packets=deque(maxlen=self.packet_limit); self.threats=deque(maxlen=self.MAX_THREATS); self.by_id={}; self.running=False; self.mode="idle"; self.interface=""; self.counter=0; self.start_ts=None; self.dropped_packets=0; self.threat_state=ThreatState(); self.flows={}; self.hosts={}; self.timeline=deque(maxlen=120); self._task=None; self._startup_event=None; self._subscribers=[]; self._reset_capture_metadata()
     def _reset_capture_metadata(self):
         self.capture_id=str(uuid.uuid4()); self.capture_created_at=time.time(); self.requested_mode="idle"; self.last_packet_at=None; self.capture_error=None; self.fallback_active=False; self.switch_count=0; self.interface_history=deque(maxlen=50)
     def configure_packet_limit(self,packet_limit:int):
@@ -120,7 +123,16 @@ class CaptureSession:
         self.running=True; self.interface=interface; self.start_ts=now if reset_started_at or self.start_ts is None else self.start_ts; self.mode=requested_mode; self.requested_mode=requested_mode; self.capture_error=None; self.fallback_active=False
         if previous and previous!=interface:self.switch_count+=1
         self.interface_history.append({"from":previous or None,"to":interface,"timestamp":now,"preserved_packets":len(self.packets),"reason":"switch" if previous and previous!=interface else "start" if not previous else "resume"})
+        self._startup_event=asyncio.Event()
         self._task=asyncio.create_task(self._loop())
+        try:await asyncio.wait_for(self._startup_event.wait(),timeout=3)
+        except asyncio.TimeoutError:
+            self.capture_error="Live capture did not become ready. Check interface availability, capture permissions, and capture backend installation."
+            self.fallback_active=False; self.mode="error"; self.running=False
+            self._task.cancel()
+            try:await self._task
+            except BaseException:pass
+        if self.capture_error:raise CaptureUnavailableError(self.capture_error)
     async def stop(self):
         self.running=False
         if self._task:
@@ -170,17 +182,24 @@ class CaptureSession:
                     loop=asyncio.get_running_loop()
                     def cb(pkt):
                         p=self.ingest(pkt); asyncio.run_coroutine_threadsafe(self._broadcast({"type":"packet","data":p}),loop)
-                    sniffer=AsyncSniffer(iface=self.interface,prn=cb,store=False); sniffer.start()
+                    def ready():loop.call_soon_threadsafe(self._startup_event.set)
+                    sniffer=AsyncSniffer(iface=self.interface,prn=cb,store=False,started_callback=ready); sniffer.start()
                     try:
                         while self.running:await asyncio.sleep(.5)
                     finally:sniffer.stop()
                     return
                 except Exception as exc:
                     if not self.running:return
-                    self.capture_error=f"Live capture unavailable ({type(exc).__name__})"; self.fallback_active=True; self.mode="simulated"
+                    self.capture_error=f"Live capture unavailable on the selected interface ({type(exc).__name__}). Check interface availability, capture permissions, and capture backend installation."
+                    self.fallback_active=False; self.mode="error"; self.running=False
+                    await self._broadcast({"type":"capture_error","data":{"message":self.capture_error,"interface":self.interface}})
+                    return
+            self._startup_event.set()
             while self.running:
                 p=self.ingest(_simulate_one(random.random()<.01)); await self._broadcast({"type":"packet","data":p}); await asyncio.sleep(.05)
         except asyncio.CancelledError:pass
+        finally:
+            if self._startup_event:self._startup_event.set()
     def ingest_pcap_bytes(self,data):
         n=0
         for pkt in rdpcap(io.BytesIO(data)):
@@ -192,11 +211,10 @@ class CaptureSession:
         return {"running":self.running,"mode":self.mode,"requested_mode":self.requested_mode,"interface":self.interface,"capture_id":self.capture_id,"capture_created_at":self.capture_created_at,"capture_started_at":self.start_ts,"last_packet_at":self.last_packet_at,"switch_count":self.switch_count,"total_packets":total,"total_bytes":total_bytes,"packet_limit":self.packet_limit,"buffer_utilization":round(total/self.packet_limit,4),"dropped_packets":self.dropped_packets,"capture_health":self.capture_health(now),"pps":round(total/duration,1),"mbps":round(total_bytes*8/duration/1e6,3),"threats":len(self.threats),"unique_hosts":len(self.hosts),"unique_flows":len(self.flows),"protocol_counts":pc,"duration_sec":round(duration,1)}
     def capture_health(self,now=None):
         now=now or time.time()
+        if self.capture_error:return {"state":"error","reason":self.capture_error,"fallback_active":False}
         if not self.running:
             if self.mode in ("pcap","replay"):return {"state":"ready","reason":"Offline capture evidence is loaded.","fallback_active":False}
             return {"state":"idle","reason":"Capture is stopped.","fallback_active":self.fallback_active}
-        if self.fallback_active:return {"state":"degraded","reason":"Live capture failed; simulated fallback is active.","fallback_active":True}
-        if self.capture_error:return {"state":"error","reason":self.capture_error,"fallback_active":False}
         if self.running and self.last_packet_at is None and self.start_ts and now-self.start_ts>5:return {"state":"warning","reason":"Capture is running but no packets have arrived yet.","fallback_active":False}
         if self.running and self.last_packet_at and now-self.last_packet_at>10:return {"state":"warning","reason":"No packets observed in the last 10 seconds.","fallback_active":False}
         if self.dropped_packets and len(self.packets)>=self.packet_limit:return {"state":"warning","reason":"The retention limit is active; oldest packets are being evicted.","fallback_active":False}

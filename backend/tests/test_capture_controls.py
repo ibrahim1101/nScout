@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from scapy.all import Ether, IP, TCP
 
-from etherlens.engine import CaptureSession
+from etherlens.engine import CaptureSession, CaptureUnavailableError
 
 
 def packet(number):
@@ -44,7 +44,19 @@ def test_packet_limit_rejects_unbounded_values():
         session.configure_packet_limit(1000001)
 
 
-def test_interface_switch_preserves_or_clears_capture_state():
+def test_interface_switch_preserves_or_clears_capture_state(monkeypatch):
+    class ReadySniffer:
+        def __init__(self, started_callback, **_kwargs):
+            self.started_callback = started_callback
+
+        def start(self):
+            self.started_callback()
+
+        def stop(self):
+            pass
+
+    monkeypatch.setattr("scapy.all.AsyncSniffer", ReadySniffer)
+
     async def scenario():
         session = CaptureSession()
         original_capture_id = session.capture_id
@@ -63,32 +75,68 @@ def test_interface_switch_preserves_or_clears_capture_state():
         cleared = await session.switch_interface("simulated", False, 1000)
         assert cleared["preserved_packets"] == 0
         assert session.get_packet(first["id"]) is None
-        assert session.counter == 0
         assert session.capture_id != original_capture_id
         await session.stop()
 
     asyncio.run(scenario())
 
 
-def test_capture_diagnostics_explain_fallback_and_buffer_pressure():
+def test_capture_diagnostics_explain_capture_error_without_fallback():
     session = CaptureSession()
-    session.running = True
+    session.running = False
     session.requested_mode = "live"
-    session.mode = "simulated"
+    session.mode = "error"
     session.interface = "adapter-a"
     session.capture_error = "Live capture unavailable (RuntimeError)"
-    session.fallback_active = True
+    session.fallback_active = False
 
     diagnostics = session.diagnostics()
 
-    assert diagnostics["health"]["state"] == "degraded"
-    assert diagnostics["health"]["fallback_active"] is True
+    assert diagnostics["health"]["state"] == "error"
+    assert diagnostics["health"]["fallback_active"] is False
     assert diagnostics["requested_mode"] == "live"
-    assert diagnostics["actual_mode"] == "simulated"
+    assert diagnostics["actual_mode"] == "error"
     assert diagnostics["buffer"]["limit"] == session.DEFAULT_PACKET_LIMIT
 
 
-def test_capture_metadata_records_interface_history_without_packet_content():
+def test_failed_live_capture_stops_without_generating_simulated_packets(monkeypatch):
+    class FailingSniffer:
+        def __init__(self, **_kwargs):
+            pass
+
+        def start(self):
+            raise RuntimeError("capture backend unavailable")
+
+    monkeypatch.setattr("scapy.all.AsyncSniffer", FailingSniffer)
+
+    async def scenario():
+        session = CaptureSession()
+        with pytest.raises(CaptureUnavailableError, match="capture permissions"):
+            await session.start("adapter-a")
+
+        assert session.running is False
+        assert session.mode == "error"
+        assert session.requested_mode == "live"
+        assert session.fallback_active is False
+        assert session.stats()["total_packets"] == 0
+        assert session.capture_health()["state"] == "error"
+
+    asyncio.run(scenario())
+
+
+def test_capture_metadata_records_interface_history_without_packet_content(monkeypatch):
+    class ReadySniffer:
+        def __init__(self, started_callback, **_kwargs):
+            self.started_callback = started_callback
+
+        def start(self):
+            self.started_callback()
+
+        def stop(self):
+            pass
+
+    monkeypatch.setattr("scapy.all.AsyncSniffer", ReadySniffer)
+
     async def scenario():
         session = CaptureSession()
         await session.start("simulated")

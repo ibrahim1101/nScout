@@ -186,8 +186,11 @@ export default function Dashboard({ theme, setTheme }) {
         interface: iface,
         packet_limit: prefs.packetLimit,
       });
-    } catch (_) {
-      setNotice("Failed to start capture");
+    } catch (error) {
+      setNotice(
+        `Could not start live capture: ${error?.response?.data?.detail || error.message}`,
+      );
+      setTimeout(() => setNotice(""), 8000);
     }
   }, [iface, prefs.packetLimit]);
   const changeInterface = useCallback(

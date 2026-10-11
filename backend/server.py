@@ -16,7 +16,7 @@ from etherlens.protocol_intelligence import tls_intelligence,packet_timeline,pac
 from etherlens.explanations import explain_connection
 from etherlens.connection_selection import select_connection
 from etherlens.ai_context import connection_context,connection_prompt
-from etherlens.engine import CaptureSession
+from etherlens.engine import CaptureSession,CaptureUnavailableError
 from etherlens.capture_backends import provider_inventory
 from etherlens.sessions import CaptureSessionNotFound,LocalCaptureSessionStore,delete_session,list_sessions,load_session,restore_capture_session
 from etherlens.investigation_workspace import EvidenceItem
@@ -131,12 +131,16 @@ async def start_capture(req:StartRequest):
  async with _capture_control_lock:
   if session.running:return {"status":"already_running","stats":session.stats()}
   if req.packet_limit is not None:session.configure_packet_limit(req.packet_limit)
-  session.clear(); await session.start(req.interface); return {"status":"started","stats":session.stats()}
+  session.clear()
+  try:await session.start(req.interface)
+  except CaptureUnavailableError as exc:raise HTTPException(status_code=503,detail=str(exc)) from exc
+  return {"status":"started","stats":session.stats()}
 @api.post("/capture/switch")
 async def switch_capture(req:SwitchCaptureRequest):
  async with _capture_control_lock:
   try:return await session.switch_interface(req.interface,req.preserve_packets,req.packet_limit)
   except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+  except CaptureUnavailableError as exc:raise HTTPException(status_code=503,detail=str(exc)) from exc
 @api.post("/capture/configuration")
 async def configure_capture(req:CaptureConfigurationRequest):
  async with _capture_control_lock:
