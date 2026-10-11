@@ -251,8 +251,9 @@ The development branch currently includes:
 - TLS intelligence now decodes bounded, visible ClientHello and ServerHello metadata directly from captured TLS handshake records: SNI, ALPN, offered/selected versions, cipher suites and JA3/JA3S-style fingerprints. The searchable TLS view also identifies legacy versions and certificate expiry, not-yet-valid and self-signed metadata warnings when those certificate fields are observable. Encrypted application payload remains encrypted.
 - Network Map 2.0 combines Live Hosts identity and risk context with an investigation topology: search aliases, IP/MAC/hostname, domains, protocols, ports, ASN or location; filter local/external, protocol, port, traffic volume or security evidence; focus a host; freeze the live view; and drill from an aggregated host pair into its exact reconstructed flows and Connection Story.
 - Packet timestamps preserve canonical UTC/epoch evidence while displaying in the user's system-local timezone across desktop platforms.
+- Local preference profiles save reusable capture, workspace, privacy, detection and alert settings atomically without a cloud account. Webhook URLs, AI server details, credentials and captured evidence are deliberately excluded.
 
-Remaining preference wiring, workspace recovery and further map/UI improvements
+Remaining engine preference wiring, workspace recovery and further UI improvements
 remain under development.
 See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, the [cross-platform desktop packaging guide](docs/cross-platform-desktop.md) for development builds and release gates, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for Windows capture validation.
 Full AI Analyst remains planned for v0.5; Sensor Mode and threat-intelligence integrations are later milestones.
@@ -271,7 +272,7 @@ provider selection. See the guide for optional authentication and data-directory
 
 ### Validation status
 
-The current v0.4 development suite contains **138 focused backend regression tests**; GitHub Actions is the authoritative validation environment for capture-dependent tests.
+The current v0.4 development suite contains **142 focused backend regression tests**; GitHub Actions is the authoritative validation environment for capture-dependent tests.
 The branch is protected by Docker smoke testing, the existing Windows
 PyInstaller/Inno gate and development Tauri package builds for Windows, Linux
 and macOS. Package construction is not equivalent to clean-system support.

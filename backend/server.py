@@ -26,6 +26,7 @@ from etherlens.global_search import search_investigation_data
 from etherlens.pcap_compare import MAX_PCAP_BYTES,compare_pcap_bytes
 from etherlens.baselines import BaselineNotFound,BaselineStore,build_profile,compare_profile
 from etherlens.topology import build_topology
+from etherlens.preference_profiles import PreferenceProfileStore
 ROOT_DIR=Path(__file__).parent; load_dotenv(ROOT_DIR/".env"); logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s - %(message)s"); logger=logging.getLogger("nscout")
 mongo_url=os.environ.get("MONGO_URL","mongodb://127.0.0.1:27017"); db_name=os.environ.get("DB_NAME","nscout"); client=AsyncIOMotorClient(mongo_url,serverSelectionTimeoutMS=1500,connectTimeoutMS=1500); db=client[db_name]; settings_col=db.etherlens_settings; mongo_available=False; session=CaptureSession(); app=FastAPI(title="nScout"); api=APIRouter(prefix="/api")
 DATA_DIR=Path(os.environ.get("NSCOUT_DATA_DIR", str(Path.home()/".nscout")))
@@ -34,6 +35,7 @@ _investigation_store=InvestigationStore(DATA_DIR/"investigations")
 _capture_session_store=LocalCaptureSessionStore(DATA_DIR/"capture-sessions")
 _host_profile_store=HostProfileStore(DATA_DIR/"host-profiles.json")
 _baseline_store=BaselineStore(DATA_DIR/"baselines")
+_preference_profile_store=PreferenceProfileStore(DATA_DIR/"preference-profiles.json")
 _ai_settings=ai_provider.load_settings(AI_SETTINGS_PATH)
 _ai_lock=asyncio.Lock()
 _pcap_compare_lock=asyncio.Lock()
@@ -78,6 +80,13 @@ class FindingStateRequest(BaseModel):
 class HostProfileRequest(BaseModel):
  alias:Optional[str]=Field(default=None,max_length=120);watchlisted:Optional[bool]=None
 class CreateBaselineRequest(BaseModel):name:str=Field(min_length=1,max_length=160)
+class LocalPreferences(BaseModel):
+ preservePackets:bool=True;autoRestore:bool=True;redactReports:bool=False
+ packetLimit:int=Field(default=50000,ge=1000,le=1000000)
+ detectionPreset:str=Field(default="balanced",pattern="^(conservative|balanced|sensitive)$")
+ alertSeverity:str=Field(default="high",pattern="^(low|medium|high|critical)$")
+class CreatePreferenceProfileRequest(BaseModel):
+ name:str=Field(min_length=1,max_length=80);preferences:LocalPreferences
 _webhook_cache={"slack_url":"","discord_url":"","min_severity":"high"}; _SEV_RANK={"low":1,"medium":2,"high":3,"critical":4}
 _capture_control_lock=asyncio.Lock()
 async def _load_settings():
@@ -86,6 +95,21 @@ async def _load_settings():
   await client.admin.command("ping"); mongo_available=True; doc=await settings_col.find_one({"_id":"webhooks"})
   if doc:_webhook_cache.update({k:doc.get(k,_webhook_cache[k]) for k in _webhook_cache})
  except Exception as exc: mongo_available=False; logger.warning("MongoDB unavailable; legacy sessions and webhook persistence disabled: %s",exc)
+@api.get("/settings/profiles")
+async def list_preference_profiles():
+ try:return {"profiles":await asyncio.to_thread(_preference_profile_store.list)}
+ except ValueError as exc:raise HTTPException(status_code=500,detail=str(exc)) from exc
+@api.post("/settings/profiles",status_code=201)
+async def create_preference_profile(body:CreatePreferenceProfileRequest):
+ try:profile=await asyncio.to_thread(_preference_profile_store.create,body.name,body.preferences.model_dump())
+ except ValueError as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
+ return {"profile":profile}
+@api.delete("/settings/profiles/{profile_id}")
+async def delete_preference_profile(profile_id:str):
+ try:await asyncio.to_thread(_preference_profile_store.delete,profile_id)
+ except KeyError as exc:raise HTTPException(status_code=404,detail="Preference profile not found") from exc
+ except ValueError as exc:raise HTTPException(status_code=500,detail=str(exc)) from exc
+ return {"status":"deleted"}
 async def _threat_hook(threat):
  if _SEV_RANK.get(threat.get("severity","low"),1)<_SEV_RANK.get(_webhook_cache.get("min_severity","high"),3):return
  urls=[u for u in (_webhook_cache.get("slack_url"),_webhook_cache.get("discord_url")) if u]
