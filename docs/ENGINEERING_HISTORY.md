@@ -105,7 +105,7 @@ For build/test commands, use **the actual current README, workflow YAML and proj
 
 ## 5. Current gaps and release gates
 
-- Sticky Advanced Packet Search; detection presets and settings integration; contextual bookmarks; remaining empty/error states.
+- Sticky Advanced Packet Search; contextual bookmarks; remaining empty/error states.
 - Implement and test NEO shared tokens/components, per-page migration, scalable topology, and isolated pixel-cat loading state.
 - Audit remaining production simulation entry points while preserving explicitly selected demos and deterministic automated tests.
 - Windows/Linux/macOS clean-machine Tauri install/launch/backend readiness/shutdown, capture permissions and interface enumeration, evidence persistence and export checks.
@@ -165,7 +165,7 @@ Add a dated entry for **every significant success, failure, debugging attempt, b
 - Commands actually executed: `npx prettier --write src/components/etherlens/Dashboard.jsx src/components/etherlens/workspaceRecovery.js src/components/etherlens/workspaceRecovery.test.js`; `npm test -- --watchAll=false --runInBand src/components/etherlens/workspaceRecovery.test.js`; `CI=true npm run build`; `git diff --check`.
 - Environment: Linux automation runner, repository React/CRACO toolchain.
 - Tests: 3/3 workspace-recovery tests passed; optimized React build compiled successfully without ESLint warnings.
-- CI: pending GitHub Actions after push.
+- CI: GitHub Actions runs 38121648224 (Docker/API), 38121648274 (focused regression and conventional Windows) and 38121648217 (Windows/Linux/macOS desktop) all completed successfully at journal head `75e0cca171d7f3468f9202879b0227a12b50603c`.
 - Failure symptoms / log excerpt: the first production build succeeded but reported one `react-hooks/exhaustive-deps` warning for the initial recovery notice effect.
 - Hypotheses and attempts: adding the mutable `recovered` object directly as a dependency would have reset the notice timer after rerenders; instead its initial value is retained in a ref.
 - Root cause / fix / verification: the effect intentionally consumed startup-only state but did not declare it. A startup ref plus explicit dependency removed the warning; tests and a second CI-mode build passed.
@@ -200,4 +200,18 @@ Add a dated entry for **every significant success, failure, debugging attempt, b
 - Security, compatibility and migration impact: backend-provided error reasons are displayed without inventing packet evidence. The helper uses aggregate status only and does not store or expose packet payloads. Existing packet rows and capture controls are unchanged.
 - Remaining blockers / next step: inspect CI, continue detection-preset preference wiring and remaining release-gate validation.
 - Docs/README/roadmap updates: documented the five distinct packet-stream empty states and refreshed completed recovery/fallback journal status.
+
+### 2026-10-11 14:00 IST — Persisted backend detection presets
+- Branch / before SHA / implementation SHA: `v0.4-investigation-platform` / `75e0cca171d7f3468f9202879b0227a12b50603c` / `34aa9c4e857d9452dbe8352fa5c4d6b8ac012926`.
+- Objective and why: finish the detection-sensitivity preference path so the Settings choice changes explainable backend heuristics instead of remaining a browser-only value.
+- Files changed / implementation: added an atomic versioned detection-settings store; GET/POST Settings API; conservative, balanced and sensitive threshold sets; active-preset propagation through security, host, dashboard, investigation, report and PCAP-import analysis; exact threshold disclosure; Settings load/save wiring; six new regression tests plus one updated contract mock; and README/roadmap documentation.
+- Commands actually executed: `python -m py_compile backend/etherlens/detection_settings.py backend/etherlens/security_intelligence.py backend/etherlens/intelligence.py backend/server.py`; `python -m pytest -q tests/test_detection_settings.py tests/test_security_intelligence.py`; `python -m pytest -q --ignore=tests/backend_test.py --ignore=tests/test_v2_features.py --ignore=tests/test_v3_features.py`; `npx prettier --write src/components/etherlens/SettingsDrawer.jsx`; `npm test -- --runInBand`; `CI=true npm run build`; `git diff --check`.
+- Environment: Linux automation runner, Python 3.12 with pinned backend requirements, repository React/CRACO toolchain.
+- Tests: 16/16 focused detection tests passed; full focused backend suite passed 149 tests; complete frontend suite passed 8/8 tests; optimized React build compiled successfully.
+- CI: pending GitHub Actions after implementation push.
+- Failure symptoms / log excerpt: the initial focused test command failed because the ephemeral runner lacked `pytest`; installing the pinned backend requirements resolved the environment issue. The first full backend run then failed one host-profile test whose monkeypatched legacy callable did not accept the new `preset` keyword. The production code was unaffected; updating that mock to the current contract produced 149/149 passing tests. The first frontend test process remained open after reporting 8/8 passed, so it was stopped and the CI-mode production build was run separately and passed.
+- Root cause / fix / verification: the selected preset previously existed only in browser preferences and local profile bundles. Backend analysis always used hard-coded balanced thresholds. The server now loads balanced by default, persists a validated selection atomically and passes it to every security-intelligence call; behavioral regression proves eight fast SYN probes are a sensitive lead but not a balanced lead.
+- Security, compatibility and migration impact: the settings file contains one allow-listed non-secret value and is capped at 16 KiB. Corrupt or future-version files fall back to balanced with a warning. Existing balanced thresholds remain unchanged, so current installations preserve behavior until an analyst explicitly selects another preset. Findings remain heuristic leads, not verdicts.
+- Remaining blockers / next step: inspect GitHub CI, then continue contextual bookmark coverage, remaining empty/error-state audit and clean-system release gates. Stable v0.3, Npcap fallback and draft PR status remain unchanged.
+- Docs/README/roadmap updates: documented the persistence path, default, affected rules, threshold disclosure and non-verdict boundary; refreshed the verified backend test count to 149.
 
