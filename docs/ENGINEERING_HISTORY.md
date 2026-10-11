@@ -105,7 +105,7 @@ For build/test commands, use **the actual current README, workflow YAML and proj
 
 ## 5. Current gaps and release gates
 
-- Remaining empty/error-state audit outside the packet stream, Intelligence and Live Hosts workspaces.
+- Remaining empty/error-state audit outside the packet stream, Intelligence, Live Hosts and Investigation workspaces.
 - Implement and test NEO shared tokens/components, per-page migration, scalable topology, and isolated pixel-cat loading state.
 - Audit remaining production simulation entry points while preserving explicitly selected demos and deterministic automated tests.
 - Windows/Linux/macOS clean-machine Tauri install/launch/backend readiness/shutdown, capture permissions and interface enumeration, evidence persistence and export checks.
@@ -298,4 +298,18 @@ Add a dated entry for **every significant success, failure, debugging attempt, b
 - Security, compatibility and migration impact: host metadata remains in memory only and uses the existing API. No packet, evidence, credential or new persistence path was added. Passive-capture copy continues to avoid claiming that an unobserved host is offline.
 - Remaining blockers / next step: inspect implementation and journal CI, then continue the remaining empty/error-state audit outside packet, Intelligence and Live Hosts surfaces. Clean-system install/capture validation still requires suitable Windows, Linux and macOS environments.
 - Docs/README/roadmap updates: documented the implemented Live Hosts state semantics without changing stable-release or platform-support claims.
+
+### 2026-10-12 02:00 IST — Honest Investigation Workspace loading and empty states
+- Branch / before SHA / implementation SHA: `v0.4-investigation-platform` / `3b215f1be53feffdde45994236dc6119d1f7b34c` / `dc154efe617b6882c2fd0f81ee3f3d4442d4c0bd`.
+- Objective and why: continue the non-packet empty/error-state release gate by preventing an unavailable local investigation API from being presented as a genuinely empty case store, while preventing failed case switches from pairing a requested case ID with stale case contents.
+- Files changed / implementation: added an Investigation Workspace state classifier and five regression tests; explicit first-load failure with retry; separate load and action errors; retained-last-good disclosure for transient refresh failure; atomic case-index plus active-workspace commits; atomic case selection; and immediate local removal after a confirmed delete so a failed post-delete refresh cannot display the deleted case.
+- Commands actually executed: `npx prettier --write src/components/etherlens/InvestigationWorkspace.jsx src/components/etherlens/investigationWorkspaceState.js src/components/etherlens/investigationWorkspaceState.test.js`; `CI=true npm test -- --watchAll=false --runInBand src/components/etherlens/investigationWorkspaceState.test.js`; `CI=true npm test -- --watchAll=false --runInBand`; `CI=true npm run build`; `npx prettier --write src/components/etherlens/InvestigationWorkspace.jsx && CI=true npm test -- --watchAll=false --runInBand && CI=true npm run build`; `git diff --check`.
+- Environment: Linux automation runner and repository React/CRACO toolchain.
+- Tests: focused Investigation Workspace state tests passed 5/5; complete frontend suite passed 35/35 on both full-suite runs; optimized React production build compiled successfully on both build runs. Backend source was unchanged and was not rerun locally.
+- CI: before implementation, journal head `3b215f1` was fully green in runs 38156228173 (Docker/API), 38156228101 (focused regression and conventional Windows) and 38156228206 (Windows/Linux/macOS desktop). Implementation-head workflows had not appeared in the GitHub API at journal time.
+- Failure symptoms / log excerpt: no source validation failure. npm emitted the existing `http-proxy` warning and Node emitted the existing `fs.F_OK` deprecation warning; neither failed tests/build or changed repository dependencies.
+- Root cause / fix / verification: the workspace previously used one `error` value for initial loading, case selection and mutations. After an initial list failure it rendered `Create your first investigation`; after a selection failure it had already changed `activeId` and local storage while retaining the previous workspace. The new flow does not commit list/selection state until all required GETs succeed and uses a tested classifier to separate loading, failure and legitimate empty-store states.
+- Security, compatibility and migration impact: local investigation persistence and API contracts are unchanged. No packet, evidence, note, credential or new persistence path was added; existing case data is retained in memory only across transient read failure.
+- Remaining blockers / next step: inspect implementation and journal CI, then continue the remaining empty/error-state audit outside packet, Intelligence, Live Hosts and Investigation surfaces. Clean-system install/capture validation still requires suitable Windows, Linux and macOS environments.
+- Docs/README/roadmap updates: documented the implemented Investigation Workspace state and atomic-selection behavior without changing stable-release or platform-support claims.
 
