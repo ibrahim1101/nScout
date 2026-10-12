@@ -260,6 +260,7 @@ The development branch currently includes:
 - Live Hosts reports initial loading and local-backend failures separately from a genuinely empty capture or filters hiding loaded hosts, and labels retained last-successful host data after a refresh failure.
 - Investigation Workspace no longer presents an unavailable local case store as an empty store. Initial failures are retryable, transient refresh failures retain the last successful case, and failed case switches cannot pair a new case ID with stale case contents.
 - Capture Sessions distinguishes initial loading, local-store failure and a genuinely empty session list. Refresh failures retain the last successful list, successful saves/deletes update it immediately, and list errors are retryable.
+- Network Baselines distinguishes initial loading, local-store failure and a genuinely empty baseline list. Refresh failures retain the last successful metadata, confirmed saves/deletes remain reflected locally, and comparison/action errors stay separate from list availability.
 
 Clean-system release-gate validation remains under development.
 See [the v0.4 roadmap and setup guide](docs/v0.4-investigation-platform.md) for scope and progress, the [cross-platform desktop packaging guide](docs/cross-platform-desktop.md) for development builds and release gates, plus the [Windows desktop/native-capture transition](docs/windows-desktop-native-capture.md) for Windows capture validation.

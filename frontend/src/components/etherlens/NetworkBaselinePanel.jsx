@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, BarChart3, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, BarChart3, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { api } from "./lib";
+import { describeNetworkBaselineState } from "./networkBaselineState";
 
 const LEVEL_STYLE = {
   high: "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300",
@@ -20,42 +21,58 @@ export default function NetworkBaselinePanel({ capturePacketCount = 0 }) {
   const [name, setName] = useState("");
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const refresh = useCallback(async () => {
+    setLoading(true); setLoadError("");
     try {
       const rows = (await api.get("/baselines")).data.baselines || [];
       setBaselines(rows);
       setSelected(current => rows.some(row => row.id === current) ? current : (rows[0]?.id || ""));
-    } catch (exc) { setError(exc?.response?.data?.detail || "Could not load baselines"); }
+      setLoaded(true);
+      return true;
+    } catch (exc) {
+      setLoadError(exc?.response?.data?.detail || exc.message || "Could not load baselines");
+      return false;
+    } finally { setLoading(false); }
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
 
   const create = async () => {
     if (!name.trim() || !capturePacketCount || busy) return;
-    setBusy(true); setError("");
+    setBusy(true); setActionError("");
     try {
       const created = (await api.post("/baselines", { name: name.trim() })).data.baseline;
-      setName(""); setResult(null); await refresh(); setSelected(created.id);
-    } catch (exc) { setError(exc?.response?.data?.detail || exc.message || "Could not save baseline"); }
+      setBaselines(current => [created, ...current.filter(row => row.id !== created.id)]);
+      setLoaded(true); setSelected(created.id); setName(""); setResult(null); await refresh();
+    } catch (exc) { setActionError(exc?.response?.data?.detail || exc.message || "Could not save baseline"); }
     finally { setBusy(false); }
   };
   const compare = async () => {
     if (!selected || !capturePacketCount || busy) return;
-    setBusy(true); setError("");
+    setBusy(true); setActionError("");
     try { setResult((await api.get(`/baselines/${encodeURIComponent(selected)}/compare`)).data); }
-    catch (exc) { setResult(null); setError(exc?.response?.data?.detail || exc.message || "Could not compare baseline"); }
+    catch (exc) { setResult(null); setActionError(exc?.response?.data?.detail || exc.message || "Could not compare baseline"); }
     finally { setBusy(false); }
   };
   const remove = async () => {
     if (!selected || busy) return;
-    setBusy(true); setError("");
-    try { await api.delete(`/baselines/${encodeURIComponent(selected)}`); setResult(null); await refresh(); }
-    catch (exc) { setError(exc?.response?.data?.detail || exc.message || "Could not delete baseline"); }
+    setBusy(true); setActionError("");
+    try {
+      await api.delete(`/baselines/${encodeURIComponent(selected)}`);
+      const remaining = baselines.filter(row => row.id !== selected);
+      setBaselines(remaining); setSelected(remaining[0]?.id || ""); setResult(null); await refresh();
+    }
+    catch (exc) { setActionError(exc?.response?.data?.detail || exc.message || "Could not delete baseline"); }
     finally { setBusy(false); }
   };
 
   const comparison = result?.comparison;
+  const baselineState = describeNetworkBaselineState({ loading, loaded, error: loadError, baselineCount: baselines.length });
+  const emptyOption = !loaded && loading ? "Loading baselines…" : !loaded && loadError ? "Baselines unavailable" : "No saved baselines";
   return <section data-testid="network-baselines" className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><div className="flex items-center gap-2"><BarChart3 size={18} className="text-cyan-500"/><h3 className="font-display font-bold text-sm">Network baselines</h3></div><p className="text-[11px] text-slate-500 mt-1">Save current capture metadata and compare later activity with explicit, deterministic deviation reasons.</p></div>
@@ -65,14 +82,15 @@ export default function NetworkBaselinePanel({ capturePacketCount = 0 }) {
       <input value={name} onChange={event => setName(event.target.value)} maxLength={160} placeholder="Baseline name, e.g. Office morning" className="rounded-md border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-2 text-xs"/>
       <button onClick={create} disabled={!name.trim() || !capturePacketCount || busy} className="inline-flex justify-center items-center gap-1.5 rounded-md bg-cyan-600 hover:bg-cyan-700 disabled:opacity-40 text-white px-3 py-2 text-xs font-semibold"><Plus size={13}/> Save current</button>
       <select value={selected} onChange={event => { setSelected(event.target.value); setResult(null); }} className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs">
-        {!baselines.length && <option value="">No saved baselines</option>}
+        {!baselines.length && <option value="">{emptyOption}</option>}
         {baselines.map(row => <option key={row.id} value={row.id}>{row.name} · {Number(row.packet_count || 0).toLocaleString()} packets</option>)}
       </select>
       <button onClick={compare} disabled={!selected || !capturePacketCount || busy} className="rounded-md bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white px-3 py-2 text-xs font-semibold">{busy ? "Working…" : "Compare current"}</button>
       <button onClick={remove} disabled={!selected || busy} title="Delete selected baseline" className="rounded-md border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-300 p-2 disabled:opacity-40"><Trash2 size={14}/></button>
     </div>
     {!capturePacketCount && <p className="mt-3 text-xs text-slate-400">Start a capture or import a PCAP before saving or comparing a baseline.</p>}
-    {error && <div className="mt-3 rounded-md bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 px-3 py-2 text-xs">{error}</div>}
+    {baselineState && baselineState.tone !== "empty" && <div className={`mt-3 rounded-md px-3 py-2 text-xs ${baselineState.tone === "error" ? "bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300" : baselineState.tone === "warning" ? "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300" : "bg-slate-50 dark:bg-slate-800 text-slate-500"}`}><div className="flex items-center gap-2 font-semibold">{baselineState.tone === "loading" ? <Loader2 size={13} className="animate-spin"/> : <AlertCircle size={13}/>} {baselineState.title}</div><div className="mt-1">{baselineState.message}</div>{(baselineState.tone === "error" || baselineState.tone === "warning") && <button onClick={refresh} disabled={loading} className="mt-2 inline-flex items-center gap-1 rounded border border-current px-2 py-1 font-semibold disabled:opacity-50"><RefreshCw size={11} className={loading ? "animate-spin" : ""}/> Retry</button>}</div>}
+    {actionError && <div className="mt-3 rounded-md bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 px-3 py-2 text-xs">{actionError}</div>}
     {comparison && <div className="mt-4 space-y-3">
       <div className="flex flex-wrap gap-3 items-center rounded-lg bg-slate-50 dark:bg-slate-800 p-3">
         <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${LEVEL_STYLE[comparison.level] || LEVEL_STYLE.low}`}>{comparison.level} deviation</span>
