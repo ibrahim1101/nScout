@@ -79,9 +79,9 @@ export default function NetworkBaselinePanel({ capturePacketCount = 0 }) {
       <button onClick={refresh} className="rounded-md p-2 bg-slate-100 dark:bg-slate-800" title="Refresh baselines"><RefreshCw size={14}/></button>
     </div>
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,1fr)_auto_minmax(260px,1fr)_auto_auto] gap-2 mt-4 items-center">
-      <input value={name} onChange={event => setName(event.target.value)} maxLength={160} placeholder="Baseline name, e.g. Office morning" className="rounded-md border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-2 text-xs"/>
+      <input value={name} onChange={event => setName(event.target.value)} maxLength={160} placeholder="Baseline name, e.g. Office morning" className="filter-control rounded-md border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-2 text-xs"/>
       <button onClick={create} disabled={!name.trim() || !capturePacketCount || busy} className="inline-flex justify-center items-center gap-1.5 rounded-md bg-cyan-600 hover:bg-cyan-700 disabled:opacity-40 text-white px-3 py-2 text-xs font-semibold"><Plus size={13}/> Save current</button>
-      <select value={selected} onChange={event => { setSelected(event.target.value); setResult(null); }} className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs">
+      <select value={selected} onChange={event => { setSelected(event.target.value); setResult(null); }} className="filter-control rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs">
         {!baselines.length && <option value="">{emptyOption}</option>}
         {baselines.map(row => <option key={row.id} value={row.id}>{row.name} · {Number(row.packet_count || 0).toLocaleString()} packets</option>)}
       </select>
