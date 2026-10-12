@@ -287,7 +287,7 @@ export default function SettingsDrawer({
                   <select
                     value={ai.provider}
                     onChange={(e) => provider(e.target.value)}
-                    className="mt-1 w-full border rounded-md p-2 bg-white dark:bg-slate-950"
+                    className="filter-control mt-1 w-full border rounded-md p-2 bg-white dark:bg-slate-950"
                   >
                     <option value="ollama">Ollama (local)</option>
                     <option value="lmstudio">LM Studio (local)</option>
@@ -313,7 +313,7 @@ export default function SettingsDrawer({
                         onChange={(e) =>
                           setAI((a) => ({ ...a, base_url: e.target.value }))
                         }
-                        className="mt-1 w-full border rounded-md p-2 bg-transparent"
+                        className="filter-control mt-1 w-full border rounded-md p-2 bg-transparent"
                       />
                     </label>
                     <label className="block text-xs font-semibold">
@@ -325,7 +325,7 @@ export default function SettingsDrawer({
                           setAI((a) => ({ ...a, model: e.target.value }))
                         }
                         placeholder="Test connection or enter model ID"
-                        className="mt-1 w-full border rounded-md p-2 bg-transparent"
+                        className="filter-control mt-1 w-full border rounded-md p-2 bg-transparent"
                       />
                       <datalist id="nscout-ai-models">
                         {models.map((m) => (
@@ -346,7 +346,7 @@ export default function SettingsDrawer({
                             timeout_seconds: Number(e.target.value),
                           }))
                         }
-                        className="mt-1 w-full border rounded-md p-2 bg-transparent"
+                        className="filter-control mt-1 w-full border rounded-md p-2 bg-transparent"
                       />
                     </label>
                     <label className="block text-xs font-semibold">
@@ -362,7 +362,7 @@ export default function SettingsDrawer({
                             max_tokens: Number(e.target.value),
                           }))
                         }
-                        className="mt-1 w-full border rounded-md p-2 bg-transparent"
+                        className="filter-control mt-1 w-full border rounded-md p-2 bg-transparent"
                       />
                     </label>
                   </>
@@ -420,7 +420,7 @@ export default function SettingsDrawer({
                 onChange={(e) =>
                   patch("packetLimit", normalizePacketLimit(e.target.value))
                 }
-                className="mt-1 w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-transparent font-mono-code"
+                className="filter-control mt-1 w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-transparent font-mono-code"
               />
               <span className="block mt-1 text-[11px] font-normal text-slate-500">
                 Oldest packets are evicted first; packet detail lookup is pruned
@@ -440,7 +440,7 @@ export default function SettingsDrawer({
               <select
                 value={prefs.detectionPreset}
                 onChange={(e) => patch("detectionPreset", e.target.value)}
-                className="mt-1 w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950"
+                className="filter-control mt-1 w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950"
               >
                 <option value="conservative">Conservative</option>
                 <option value="balanced">Balanced</option>
@@ -461,7 +461,7 @@ export default function SettingsDrawer({
                 onChange={(e) => setProfileName(e.target.value)}
                 maxLength={80}
                 placeholder="Profile name"
-                className="flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-transparent text-sm"
+                className="filter-control flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-transparent text-sm"
               />
               <button
                 data-testid="profile-create"
@@ -533,7 +533,7 @@ export default function SettingsDrawer({
                   value={shortcutQuery}
                   onChange={(e) => setShortcutQuery(e.target.value)}
                   placeholder="Search shortcuts…"
-                  className="w-full pl-8 pr-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-transparent text-sm"
+                  className="filter-control w-full pl-8 pr-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-transparent text-sm"
                 />
               </div>
               <ShortcutList query={shortcutQuery} />
@@ -547,7 +547,7 @@ export default function SettingsDrawer({
               data-testid="settings-severity"
               value={severity}
               onChange={(e) => setSeverity(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm"
+              className="filter-control w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm"
             >
               {SEVERITIES.map((s) => (
                 <option key={s.v} value={s.v}>
@@ -641,7 +641,7 @@ function WebhookField({ label, value, onChange, onTest, testing, testId }) {
           placeholder="https://…"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm font-mono-code"
+          className="filter-control flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm font-mono-code"
         />
         <button
           data-testid={`${testId}-test`}
