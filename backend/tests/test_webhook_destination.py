@@ -44,3 +44,18 @@ def test_delivery_failure_does_not_expose_webhook_secret():
     assert result["ok"] is False
     assert "sensitive-token" not in result["error"]
     assert secret_url not in result["error"]
+
+
+def test_discord_payload_requires_real_discord_host():
+    import asyncio
+    from etherlens.webhooks import send
+
+    fake = [(2, 1, 6, "", ("8.8.8.8", 443))]
+    threat = {"severity": "high", "title": "Alert"}
+    with (patch("etherlens.webhooks.socket.getaddrinfo", return_value=fake),
+          patch("etherlens.webhooks.requests.post") as post):
+        post.return_value.status_code = 204
+        asyncio.run(send("https://example.com/discord.com/api/webhooks/123", threat))
+        assert "text" in post.call_args.kwargs["json"]
+        asyncio.run(send("https://discord.com/api/webhooks/123", threat))
+        assert "embeds" in post.call_args.kwargs["json"]
