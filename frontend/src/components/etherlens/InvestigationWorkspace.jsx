@@ -224,9 +224,9 @@ export default function InvestigationWorkspace({
     );
 
   return (
-    <div className="space-y-4" data-testid="investigation-workspace">
+    <div className="space-y-5" data-testid="investigation-workspace">
       <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2 mr-auto">
             <BriefcaseBusiness size={18} />
             <div>
@@ -329,7 +329,7 @@ export default function InvestigationWorkspace({
 
           <ReportExports workspaceId={workspace.id} />
 
-          <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <section className="grid grid-cols-1 2xl:grid-cols-3 gap-5 items-start">
             <Panel
               title="Add observed evidence"
               icon={BookmarkPlus}
@@ -460,7 +460,7 @@ export default function InvestigationWorkspace({
             </Panel>
           </section>
 
-          <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <section className="grid grid-cols-1 2xl:grid-cols-3 gap-5 items-start">
             <Panel
               title="Evidence locker"
               icon={BookmarkPlus}
