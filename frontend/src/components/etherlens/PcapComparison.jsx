@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ArrowRight, Download, FileDiff, ShieldAlert } from "lucide-react";
 import { api } from "./lib";
+import { describePcapComparisonState } from "./pcapComparisonState";
 
 const ACCEPT = ".pcap,.pcapng,.cap";
 
@@ -51,13 +52,28 @@ export default function PcapComparison() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const canCompare = useMemo(() => baseline && current && !loading, [baseline, current, loading]);
+  const status = describePcapComparisonState({
+    baselineSelected: Boolean(baseline),
+    currentSelected: Boolean(current),
+    loading,
+    error,
+    hasResult: Boolean(result),
+  });
+
+  const selectBaseline = file => {
+    setBaseline(file); setResult(null); setError("");
+  };
+
+  const selectCurrent = file => {
+    setCurrent(file); setResult(null); setError("");
+  };
 
   const compare = async () => {
     if (!canCompare) return;
     const form = new FormData(); form.append("baseline", baseline); form.append("current", current);
     setLoading(true); setError("");
     try { setResult((await api.post("/pcap/compare", form, { headers: { "Content-Type": "multipart/form-data" } })).data); }
-    catch (exc) { setResult(null); setError(exc?.response?.data?.detail || exc.message || "Comparison failed"); }
+    catch (exc) { setError(exc?.response?.data?.detail || exc.message || "Comparison failed"); }
     finally { setLoading(false); }
   };
 
@@ -74,9 +90,9 @@ export default function PcapComparison() {
       {result && <button onClick={download} className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-800 px-3 py-2 text-xs font-semibold"><Download size={13}/> Export comparison JSON</button>}
     </div>
     <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto] gap-3 items-center mt-4">
-      <FilePicker label="Baseline capture" file={baseline} onChange={setBaseline}/><ArrowRight className="hidden md:block text-slate-400" size={18}/><FilePicker label="Current capture" file={current} onChange={setCurrent}/><button disabled={!canCompare} onClick={compare} className="rounded-md bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white text-xs font-semibold px-4 py-2.5">{loading ? "Comparing…" : "Compare"}</button>
+      <FilePicker label="Baseline capture" file={baseline} onChange={selectBaseline}/><ArrowRight className="hidden md:block text-slate-400" size={18}/><FilePicker label="Current capture" file={current} onChange={selectCurrent}/><button disabled={!canCompare} onClick={compare} className="rounded-md bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white text-xs font-semibold px-4 py-2.5">{loading ? "Comparing…" : "Compare"}</button>
     </div>
-    {error && <div className="mt-3 rounded-md bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 px-3 py-2 text-xs">{error}</div>}
+    {status && <div aria-live="polite" className={`mt-3 rounded-md px-3 py-2 text-xs ${status.tone === "error" ? "bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300" : status.tone === "warning" ? "bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-200" : status.tone === "ready" ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-200" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}><span className="font-semibold">{status.title}</span><span className="ml-1">{status.message}</span></div>}
     {result && <div className="mt-5 space-y-4">
       {(result.baseline?.truncated || result.current?.truncated) && <div className="flex gap-2 rounded-md bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-200 px-3 py-2 text-xs"><ShieldAlert size={15}/><span>At least one capture exceeded the 100,000-packet analysis bound. Results describe the analyzed prefix and include the truncation flag.</span></div>}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2">{Object.entries(comparison.metrics || {}).map(([key, value]) => <Metric key={key} label={key.replaceAll("_", " ")} value={value}/>)}</div>
