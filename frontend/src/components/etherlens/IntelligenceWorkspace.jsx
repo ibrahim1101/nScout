@@ -422,7 +422,7 @@ function SearchWorkspace({ onSelectPacket }) {
           maxLength={2048}
           onChange={(e) => updateExpression(e.target.value)}
           placeholder="(protocol == DNS OR port == 443) AND bytes > 500"
-          className="flex-1 rounded-md border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-2 text-xs font-mono-code"
+          className="filter-control min-w-0 flex-1 font-mono-code" aria-label="Advanced intelligence filter expression"
         />
         <button
           type="button"
