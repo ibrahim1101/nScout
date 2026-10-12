@@ -91,7 +91,7 @@ export default function SessionsDrawer({ open, onClose, onLoaded, status = {} })
               placeholder="Name this session (e.g. Monday incident)"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm font-mono-code focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="filter-control flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm font-mono-code focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
               data-testid="session-save-btn"
