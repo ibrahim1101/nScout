@@ -77,7 +77,8 @@ async def send(url: str, threat: Dict) -> Dict:
         )
         return {"ok": resp.status_code < 400, "status": resp.status_code}
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        # Requests exceptions can embed webhook URLs containing secret tokens.
+        return {"ok": False, "error": "Webhook delivery failed; check destination and network connectivity"}
 
 
 async def fan_out(urls: List[str], threat: Dict) -> None:
