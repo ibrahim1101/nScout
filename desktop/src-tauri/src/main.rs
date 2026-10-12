@@ -6,6 +6,8 @@ use serde::Deserialize;
 use std::{
     fs,
     path::{Path, PathBuf},
+    #[cfg(target_os = "windows")]
+    process::Command,
     sync::Mutex,
     thread,
     time::Duration,
@@ -45,6 +47,19 @@ fn stop_backend(app: &tauri::AppHandle, lifecycle_path: &Path, reason: &str) {
         .take();
 
     if let Some(child) = child {
+        // The packaged Python backend can have descendants. On Windows,
+        // terminate the complete sidecar tree rather than only its parent.
+        #[cfg(target_os = "windows")]
+        {
+            let result = Command::new("taskkill")
+                .args(["/PID", &child.pid().to_string(), "/T", "/F"])
+                .output();
+            if result.as_ref().is_ok_and(|output| output.status.success()) {
+                let _ = lifecycle::record(lifecycle_path, "backend_tree_stopped", Some(reason));
+                return;
+            }
+            let _ = lifecycle::record(lifecycle_path, "backend_tree_stop_failed", Some(reason));
+        }
         match child.kill() {
             Ok(()) => {
                 let _ = lifecycle::record(lifecycle_path, "backend_stopped", Some(reason));
