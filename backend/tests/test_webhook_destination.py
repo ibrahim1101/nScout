@@ -38,8 +38,8 @@ def test_delivery_failure_does_not_expose_webhook_secret():
 
     secret_url = "https://hooks.example.com/services/sensitive-token"
     fake = [(2, 1, 6, "", ("8.8.8.8", 443))]
-    with patch("etherlens.webhooks.socket.getaddrinfo", return_value=fake), \\
-         patch("etherlens.webhooks.requests.post", side_effect=requests.ConnectionError(secret_url)):
+    with (patch("etherlens.webhooks.socket.getaddrinfo", return_value=fake),
+          patch("etherlens.webhooks.requests.post", side_effect=requests.ConnectionError(secret_url))):
         result = asyncio.run(send(secret_url, {"severity": "high", "title": "Test"}))
     assert result["ok"] is False
     assert "sensitive-token" not in result["error"]
