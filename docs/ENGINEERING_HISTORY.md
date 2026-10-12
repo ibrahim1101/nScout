@@ -105,7 +105,7 @@ For build/test commands, use **the actual current README, workflow YAML and proj
 
 ## 5. Current gaps and release gates
 
-- Remaining empty/error-state audit outside the packet stream, Intelligence, Live Hosts and Investigation workspaces.
+- Remaining empty/error-state audit outside the packet stream, Intelligence, Live Hosts, Investigation Workspace and Capture Sessions.
 - Implement and test NEO shared tokens/components, per-page migration, scalable topology, and isolated pixel-cat loading state.
 - Audit remaining production simulation entry points while preserving explicitly selected demos and deterministic automated tests.
 - Windows/Linux/macOS clean-machine Tauri install/launch/backend readiness/shutdown, capture permissions and interface enumeration, evidence persistence and export checks.
@@ -312,4 +312,18 @@ Add a dated entry for **every significant success, failure, debugging attempt, b
 - Security, compatibility and migration impact: local investigation persistence and API contracts are unchanged. No packet, evidence, note, credential or new persistence path was added; existing case data is retained in memory only across transient read failure.
 - Remaining blockers / next step: inspect implementation and journal CI, then continue the remaining empty/error-state audit outside packet, Intelligence, Live Hosts and Investigation surfaces. Clean-system install/capture validation still requires suitable Windows, Linux and macOS environments.
 - Docs/README/roadmap updates: documented the implemented Investigation Workspace state and atomic-selection behavior without changing stable-release or platform-support claims.
+
+### 2026-10-12 03:00 IST — Honest Capture Sessions loading and empty states
+- Branch / before SHA / implementation SHA: `v0.4-investigation-platform` / `51f6bcd63bf29940ebbf971275cd6ca9418cd017` / `29ca07544f8c2d29955520197cc4f31256897945`.
+- Objective and why: continue the non-packet empty/error-state release gate by preventing a failed local Capture Sessions list request from being silently presented as a genuinely empty snapshot store.
+- Files changed / implementation: added a pure Capture Sessions state classifier and five regression tests; explicit initial loading, first-load failure, genuine-empty and retained-last-good states; retry handling; separate list and action errors; immediate local insertion after a successful save; and immediate local removal after a successful delete so a failed follow-up refresh does not undo the confirmed result.
+- Commands actually executed: `npx prettier --write src/components/etherlens/SessionsDrawer.jsx src/components/etherlens/captureSessionsState.js src/components/etherlens/captureSessionsState.test.js`; `CI=true npm test -- --watchAll=false --runInBand src/components/etherlens/captureSessionsState.test.js`; `CI=true npm test -- --watchAll=false --runInBand` (twice after final diff cleanup); `CI=true npm run build` (twice); `git diff --check`.
+- Environment: Linux automation runner and repository React/CRACO toolchain.
+- Tests: focused Capture Sessions state tests passed 5/5; complete frontend suite passed 40/40 on both final full-suite runs; optimized React production build compiled successfully on both build runs. Backend source and API contracts were unchanged and were not rerun locally.
+- CI: implementation head `29ca075` is fully green in runs 38176974120 (Docker/API), 38176974034 (focused regression and conventional Windows) and 38176974131 (Windows/Linux/macOS desktop packaging).
+- Failure symptoms / log excerpt: no source or CI validation failure. The prior drawer swallowed `/sessions` list errors and rendered `No sessions yet`; npm emitted the existing `http-proxy` warning and Node emitted the existing `fs.F_OK` deprecation warning, neither of which failed tests/build or changed repository dependencies.
+- Root cause / fix / verification: list state and mutation state previously shared one ambiguous path, while refresh failures were ignored. The new tested classifier requires a successful list response before claiming the store is empty, retains the last successful list on transient failure and exposes a retry without changing stored session data.
+- Security, compatibility and migration impact: capture-session persistence, replay and API contracts remain unchanged. Only bounded session summary metadata remains in frontend memory; no packet bodies, credentials, investigation evidence or new persistence path was added.
+- Remaining blockers / next step: inspect journal-head CI, then continue the remaining non-packet empty/error-state audit and finding-lifecycle/simulation release gates. Clean-system install/capture validation still requires suitable Windows, Linux and macOS environments.
+- Docs/README/roadmap updates: documented Capture Sessions state semantics without changing stable-release or platform-support claims.
 
