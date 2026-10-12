@@ -19,8 +19,19 @@
     <main id="startup-status">
       <div class="mark" aria-hidden="true">nS</div>
       <h1>Starting nScout</h1>
-      <p>The local analysis engine is being prepared. No capture data leaves this computer.</p>
+      <p role="status" aria-live="polite" id="startup-message">Preparing the local analysis engine. The first launch may take 10–20 seconds while Windows initializes the bundled backend.</p>
+      <p id="startup-elapsed" aria-live="off">Starting…</p>
       <div class="pulse" aria-label="Starting"></div>
     </main>
+    <script>
+      const started = Date.now();
+      const elapsed = document.getElementById("startup-elapsed");
+      const progress = setInterval(() => {
+        if (!elapsed.isConnected) { clearInterval(progress); return; }
+        const seconds = Math.floor((Date.now() - started) / 1000);
+        elapsed.textContent = `Initializing locally · ${seconds}s elapsed`;
+        if (seconds >= 10) document.getElementById("startup-message").textContent = "Still preparing the backend. nScout will open automatically when it is ready.";
+      }, 1000);
+    </script>
   </body>
 </html>
