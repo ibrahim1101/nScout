@@ -103,7 +103,7 @@ export default function LiveHostsWorkspace({
   });
   return (
     <div
-      className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,.7fr)] gap-4"
+      className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.65fr)_minmax(390px,.85fr)] gap-5 items-start"
       data-testid="live-hosts-workspace"
     >
       <section className="space-y-3">
@@ -124,7 +124,7 @@ export default function LiveHostsWorkspace({
             </button>
           </div>
         )}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Metric
             icon={Wifi}
             label="Active now"
@@ -190,17 +190,17 @@ export default function LiveHostsWorkspace({
               </button>
             </div>
           </div>
-          <div className="max-h-[650px] overflow-auto divide-y divide-slate-100 dark:divide-slate-800 el-scroll">
+          <div className="max-h-[min(68vh,820px)] overflow-auto divide-y divide-slate-100 dark:divide-slate-800 el-scroll">
             {rows.map((host) => (
               <button
                 key={host.ip}
                 onClick={() => setSelectedIp(host.ip)}
-                className={`w-full text-left p-4 hover:bg-slate-50 dark:hover:bg-slate-800/60 ${selected?.ip === host.ip ? "bg-blue-50 dark:bg-blue-500/5" : ""}`}
+                className={`w-full text-left px-5 py-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60 ${selected?.ip === host.ip ? "bg-blue-50 dark:bg-blue-500/5" : ""}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <span className="min-w-0">
                     <span className="flex items-center gap-2">
-                      <span className="font-mono-code text-sm font-semibold truncate">
+                      <span className="font-mono-code text-[13px] sm:text-sm font-semibold truncate">
                         {host.alias || host.ip}
                       </span>
                       {host.watchlisted && (
@@ -211,7 +211,7 @@ export default function LiveHostsWorkspace({
                         />
                       )}
                     </span>
-                    <span className="block text-[11px] text-slate-500 mt-1 truncate">
+                    <span className="block text-xs text-slate-500 mt-1 truncate">
                       {host.alias ? `${host.ip} · ` : ""}
                       {host.hostname ||
                         host.mac ||
@@ -220,7 +220,7 @@ export default function LiveHostsWorkspace({
                   </span>
                   <StateBadge state={host.activity_state} />
                 </div>
-                <div className="grid grid-cols-3 gap-2 mt-3 text-[11px] text-slate-500">
+                <div className="grid grid-cols-3 gap-3 mt-3 text-xs text-slate-400 dark:text-slate-400">
                   <span>
                     {Number(host.total_packets || 0).toLocaleString()} packets
                   </span>
