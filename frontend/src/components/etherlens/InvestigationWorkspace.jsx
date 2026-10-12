@@ -14,6 +14,7 @@ import {
 import { api } from "./lib";
 import ReportExports from "./ReportExports";
 import { ACTIVE_INVESTIGATION_KEY as ACTIVE_CASE_KEY } from "./investigationBookmarks";
+import { mergeInvestigationSummary } from "./investigationSummary";
 import { describeInvestigationWorkspaceState } from "./investigationWorkspaceState";
 
 const FINDING_STATES = [
@@ -134,10 +135,13 @@ export default function InvestigationWorkspace({
     setActionError("");
     try {
       const response = await request();
-      if (response.data.investigation)
-        setWorkspace(response.data.investigation);
-      const list = await api.get("/investigations");
-      setCases(list.data.investigations || []);
+      const nextWorkspace = response.data.investigation;
+      if (!nextWorkspace)
+        throw new Error("Investigation update returned no workspace.");
+      setWorkspace(nextWorkspace);
+      setCases((current) =>
+        mergeInvestigationSummary(current, nextWorkspace),
+      );
       return true;
     } catch (err) {
       setActionError(message(err, fallback));
@@ -238,6 +242,7 @@ export default function InvestigationWorkspace({
             <select
               value={activeId}
               onChange={(event) => selectCase(event.target.value)}
+              disabled={saving || loading}
               className="filter-control min-w-[220px]"
               aria-label="Active investigation"
             >
