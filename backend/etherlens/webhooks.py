@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import ipaddress
 import socket
 from urllib.parse import urlsplit
@@ -69,14 +68,15 @@ def _public_webhook_target(url: str) -> bool:
 async def send(url: str, threat: Dict) -> Dict:
     if not _public_webhook_target(url):
         return {"ok": False, "error": "webhook destination must be a public HTTPS endpoint"}
-    is_discord = "discord.com/api/webhooks" in url or "discordapp.com/api/webhooks" in url
+    hostname = (urlsplit(url).hostname or "").lower().rstrip(".")
+    is_discord = hostname in {"discord.com", "discordapp.com"} and urlsplit(url).path.startswith("/api/webhooks/")
     payload = _discord_payload(threat) if is_discord else _slack_payload(threat)
     try:
         resp = await asyncio.to_thread(
             requests.post, url, json=payload, timeout=5.0, allow_redirects=False,
         )
         return {"ok": resp.status_code < 400, "status": resp.status_code}
-    except Exception as e:
+    except requests.RequestException:
         # Requests exceptions can embed webhook URLs containing secret tokens.
         return {"ok": False, "error": "Webhook delivery failed; check destination and network connectivity"}
 
