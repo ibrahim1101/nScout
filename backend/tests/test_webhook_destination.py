@@ -29,3 +29,18 @@ def test_webhook_accepts_public_https_dns_answers():
     fake = [(2, 1, 6, "", ("8.8.8.8", 443))]
     with patch("etherlens.webhooks.socket.getaddrinfo", return_value=fake):
         assert _public_webhook_target("https://hooks.example.com/alert")
+
+
+def test_delivery_failure_does_not_expose_webhook_secret():
+    import asyncio
+    import requests
+    from etherlens.webhooks import send
+
+    secret_url = "https://hooks.example.com/services/sensitive-token"
+    fake = [(2, 1, 6, "", ("8.8.8.8", 443))]
+    with patch("etherlens.webhooks.socket.getaddrinfo", return_value=fake), \\
+         patch("etherlens.webhooks.requests.post", side_effect=requests.ConnectionError(secret_url)):
+        result = asyncio.run(send(secret_url, {"severity": "high", "title": "Test"}))
+    assert result["ok"] is False
+    assert "sensitive-token" not in result["error"]
+    assert secret_url not in result["error"]
