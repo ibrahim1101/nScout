@@ -37,7 +37,7 @@ export default function HeaderNav({
               data-testid="interface-select"
               value={iface}
               onChange={(e) => setIface(e.target.value)}
-              className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-2.5 py-1.5 font-mono-code focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="filter-control rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-2.5 py-1.5 font-mono-code focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {interfaces.map((i) => (
                 <option key={i.name} value={i.name}>{i.label}</option>
@@ -164,14 +164,14 @@ export default function HeaderNav({
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter by IP, port, protocol, text (e.g. 192.168.1.10 or 443 or dns)"
-              className="w-full pl-9 pr-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-mono-code focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="filter-control w-full pl-9 pr-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-mono-code focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <select
             data-testid="protocol-filter-select"
             value={protocolFilter}
             onChange={(e) => setProtocolFilter(e.target.value)}
-            className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 font-mono-code focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="filter-control rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 font-mono-code focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {PROTOCOLS.map((p) => <option key={p} value={p}>{p || "All protocols"}</option>)}
           </select>
