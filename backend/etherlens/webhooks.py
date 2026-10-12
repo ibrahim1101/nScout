@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import ipaddress
+import socket
+from urllib.parse import urlsplit
 from typing import Dict, List
 
 import requests
@@ -46,14 +49,31 @@ def _discord_payload(threat: Dict) -> Dict:
     }
 
 
+def _public_webhook_target(url: str) -> bool:
+    """Reject non-HTTPS, credential-bearing, local and private webhook targets."""
+    try:
+        parsed = urlsplit(url)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+            return False
+        if parsed.port not in (None, 443):
+            return False
+        hostname = parsed.hostname.rstrip(".").lower()
+        if hostname in {"localhost"} or hostname.endswith((".localhost", ".local", ".internal")):
+            return False
+        addresses = socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM)
+        return bool(addresses) and all(ipaddress.ip_address(item[4][0]).is_global for item in addresses)
+    except (ValueError, OSError, TypeError):
+        return False
+
+
 async def send(url: str, threat: Dict) -> Dict:
-    if not url:
-        return {"ok": False, "error": "empty url"}
+    if not _public_webhook_target(url):
+        return {"ok": False, "error": "webhook destination must be a public HTTPS endpoint"}
     is_discord = "discord.com/api/webhooks" in url or "discordapp.com/api/webhooks" in url
     payload = _discord_payload(threat) if is_discord else _slack_payload(threat)
     try:
         resp = await asyncio.to_thread(
-            requests.post, url, json=payload, timeout=5.0,
+            requests.post, url, json=payload, timeout=5.0, allow_redirects=False,
         )
         return {"ok": resp.status_code < 400, "status": resp.status_code}
     except Exception as e:
