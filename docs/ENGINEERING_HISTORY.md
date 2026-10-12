@@ -105,7 +105,7 @@ For build/test commands, use **the actual current README, workflow YAML and proj
 
 ## 5. Current gaps and release gates
 
-- Remaining empty/error-state audit outside the packet stream, Intelligence, Live Hosts, Investigation Workspace and Capture Sessions.
+- Remaining empty/error-state audit outside the packet stream, Intelligence, Live Hosts, Investigation Workspace, Capture Sessions and Network Baselines.
 - Implement and test NEO shared tokens/components, per-page migration, scalable topology, and isolated pixel-cat loading state.
 - Audit remaining production simulation entry points while preserving explicitly selected demos and deterministic automated tests.
 - Windows/Linux/macOS clean-machine Tauri install/launch/backend readiness/shutdown, capture permissions and interface enumeration, evidence persistence and export checks.
@@ -326,4 +326,18 @@ Add a dated entry for **every significant success, failure, debugging attempt, b
 - Security, compatibility and migration impact: capture-session persistence, replay and API contracts remain unchanged. Only bounded session summary metadata remains in frontend memory; no packet bodies, credentials, investigation evidence or new persistence path was added.
 - Remaining blockers / next step: inspect journal-head CI, then continue the remaining non-packet empty/error-state audit and finding-lifecycle/simulation release gates. Clean-system install/capture validation still requires suitable Windows, Linux and macOS environments.
 - Docs/README/roadmap updates: documented Capture Sessions state semantics without changing stable-release or platform-support claims.
+
+### 2026-10-12 12:00 IST — Honest Network Baselines loading and empty states
+- Branch / before SHA / implementation SHA: `v0.4-investigation-platform` / `43ba10cf50513f7f55a4f0ad30670286ce36ac49` / `797660f05b2f317b6cb4cb2d3541fbc19f249792`.
+- Objective and why: continue the non-packet empty/error-state release gate by preventing an unavailable local baseline store from being presented as `No saved baselines`, while keeping list availability separate from create, compare and delete failures.
+- Files changed / implementation: added a pure Network Baseline state classifier and five regression tests; explicit loading, first-load failure, genuine-empty and retained-last-good states; retry handling; separate list and action errors; and immediate local insertion/removal after confirmed saves/deletes so a failed follow-up refresh cannot hide or resurrect the confirmed result.
+- Commands actually executed: `CI=true npm test -- --watchAll=false --runInBand src/components/etherlens/networkBaselineState.test.js`; `CI=true npm test -- --watchAll=false --runInBand`; `CI=true npm run build`; `git diff --check`.
+- Environment: Linux automation runner and repository React/CRACO toolchain.
+- Tests: focused Network Baseline state tests passed 5/5; complete frontend suite passed 45/45; optimized React production build compiled successfully. Backend source and baseline API contracts were unchanged and were not rerun locally.
+- CI: before implementation, journal head `43ba10c` was fully green in runs 38196305504 (Docker/API), 38196305438 (focused regression and conventional Windows) and 38196305447 (Windows/Linux/macOS desktop packaging). Implementation-head runs 38215432837, 38215432700 and 38215432754 were in progress with no reported failure at journal time.
+- Failure symptoms / log excerpt: no source validation failure. The prior panel rendered `No saved baselines` from its default empty array before and after a failed first request, and one error value mixed list failures with mutation/comparison failures. npm emitted the existing `http-proxy` warning and Node emitted the existing `fs.F_OK` deprecation warning; neither failed tests/build or changed dependencies.
+- Root cause / fix / verification: the baseline list had no explicit loaded/loading state and refresh failures only set the shared error string. The tested classifier now requires a successful GET before claiming an empty store, preserves last-good metadata on transient failure and keeps action errors independent.
+- Security, compatibility and migration impact: persisted baseline profiles and API contracts are unchanged. Only existing metadata remains in frontend memory; no packets, payloads, credentials, investigation evidence or new persistence path was added.
+- Remaining blockers / next step: inspect implementation and journal CI, then continue the remaining empty/error-state audit and finding-lifecycle/simulation release gates. Clean-system install/capture validation still requires suitable Windows, Linux and macOS environments.
+- Docs/README/roadmap updates: documented implemented Network Baseline state semantics without changing stable-release or platform-support claims.
 
