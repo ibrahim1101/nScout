@@ -13,7 +13,7 @@ export default function HeaderNav({
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-      <div className="mx-auto max-w-[1700px] px-4 sm:px-6 lg:px-8 py-3">
+      <div className="mx-auto w-full max-w-none px-4 sm:px-6 lg:px-8 py-3">
         <div className="flex items-center gap-4 flex-wrap">
           {/* Logo */}
           <div className="flex items-center gap-2">
