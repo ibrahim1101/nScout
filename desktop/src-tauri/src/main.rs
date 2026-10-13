@@ -3,11 +3,11 @@
 mod lifecycle;
 
 use serde::Deserialize;
+#[cfg(target_os = "windows")]
+use std::process::Command;
 use std::{
     fs,
     path::{Path, PathBuf},
-    #[cfg(target_os = "windows")]
-    process::Command,
     sync::Mutex,
     thread,
     time::Duration,
