@@ -503,6 +503,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
                     <g
                       key={n.id}
                       role="button"
+                      data-topology-host={n.id}
                       tabIndex={0}
                       aria-label={`Inspect host ${n.label || n.id}${flagged ? ", security flagged" : ""}`}
                       aria-pressed={active}
@@ -511,7 +512,21 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
                         setSelectedEdge(null);
                       }}
                       onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
+                        if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          const hosts = visible.nodes;
+                          const current = hosts.findIndex((host) => host.id === n.id);
+                          const next = event.key === "Home" ? 0
+                            : event.key === "End" ? hosts.length - 1
+                            : (current + (event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1) + hosts.length) % hosts.length;
+                          const nextId = hosts[next]?.id;
+                          if (nextId != null) {
+                            const hostElements = event.currentTarget.ownerSVGElement?.querySelectorAll('[data-topology-host]');
+                            const nextElement = Array.from(hostElements || []).find((element) => element.getAttribute("data-topology-host") === String(nextId));
+                            nextElement?.focus();
+                          }
+                        } else if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
                           event.stopPropagation();
                           setSelectedId(n.id);
