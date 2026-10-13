@@ -88,3 +88,42 @@ describe("topology component render smoke tests", () => {
     )).not.toThrow();
   });
 });
+
+describe("topology keyboard interactions", () => {
+  const React = require("react");
+  const { createRoot } = require("react-dom/client");
+  const { act } = require("react");
+
+  test("arrow keys move host focus and Enter selects the focused host", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const nodes = hosts(3);
+    try {
+      await act(async () => {
+        root.render(React.createElement(require("./TopologyMap").default, {
+          topology: { nodes, edges: [] }, threats: [],
+        }));
+      });
+      const targets = [...container.querySelectorAll("[data-topology-host]")];
+      expect(targets).toHaveLength(3);
+      targets[0].focus();
+      expect(document.activeElement).toBe(targets[0]);
+      await act(async () => {
+        targets[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+      });
+      expect(document.activeElement).toBe(targets[1]);
+      await act(async () => {
+        targets[1].dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      });
+      expect(targets[1].getAttribute("aria-pressed")).toBe("true");
+      await act(async () => {
+        targets[1].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+      });
+      expect(document.activeElement).toBe(targets[2]);
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
+  });
+});
