@@ -70,7 +70,7 @@ export default function SessionsDrawer({ open, onClose, onLoaded, status = {} })
       <div
         onClick={(e) => e.stopPropagation()}
         data-testid="sessions-drawer"
-        className="w-full max-w-md h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col"
+        className="w-full sm:w-[min(70vw,860px)] 2xl:w-[min(55vw,1120px)] min-w-0 h-[100dvh] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col"
       >
         <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div>

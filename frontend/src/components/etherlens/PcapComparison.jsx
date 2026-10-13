@@ -89,7 +89,7 @@ export default function PcapComparison() {
       <div><div className="flex items-center gap-2"><FileDiff size={18} className="text-violet-500"/><h3 className="font-display font-bold">PCAP Comparison</h3></div><p className="text-xs text-slate-500 mt-1">Compare two captures without replacing the active nScout session.</p></div>
       {result && <button onClick={download} className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-800 px-3 py-2 text-xs font-semibold"><Download size={13}/> Export comparison JSON</button>}
     </div>
-    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto] gap-3 items-center mt-4">
+    <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto_1fr_auto] gap-3 items-center mt-4">
       <FilePicker label="Baseline capture" file={baseline} onChange={selectBaseline}/><ArrowRight className="hidden md:block text-slate-400" size={18}/><FilePicker label="Current capture" file={current} onChange={selectCurrent}/><button disabled={!canCompare} onClick={compare} className="rounded-md bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white text-xs font-semibold px-4 py-2.5">{loading ? "Comparing…" : "Compare"}</button>
     </div>
     {status && <div aria-live="polite" className={`mt-3 rounded-md px-3 py-2 text-xs ${status.tone === "error" ? "bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300" : status.tone === "warning" ? "bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-200" : status.tone === "ready" ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-200" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}><span className="font-semibold">{status.title}</span><span className="ml-1">{status.message}</span></div>}

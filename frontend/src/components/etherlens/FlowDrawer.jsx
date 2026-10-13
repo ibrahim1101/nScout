@@ -18,17 +18,17 @@ export default function FlowDrawer({ open, onClose, flow }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/60 backdrop-blur-sm" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
         data-testid="follow-flow-drawer"
-        className="w-full max-w-4xl max-h-[85vh] bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden"
+        className="w-full min-w-0 max-w-[1600px] h-[min(90dvh,1200px)] max-h-full bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden"
       >
         <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div>
             <h3 className="font-display font-bold text-sm">Follow TCP Stream</h3>
             {flow && (
-              <div className="font-mono-code text-xs text-slate-500 mt-0.5">
+              <div className="font-mono-code text-xs text-slate-500 mt-0.5 break-all">
                 {flow.a_ip}:{flow.a_port} ↔ {flow.b_ip}:{flow.b_port}
                 <span className="ml-2 text-slate-400">· {flow.protocols?.join("/")} · {flow.packets} pkts</span>
               </div>

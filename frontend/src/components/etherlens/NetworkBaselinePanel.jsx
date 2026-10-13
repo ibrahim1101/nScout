@@ -78,7 +78,7 @@ export default function NetworkBaselinePanel({ capturePacketCount = 0 }) {
       <div><div className="flex items-center gap-2"><BarChart3 size={18} className="text-cyan-500"/><h3 className="font-display font-bold text-sm">Network baselines</h3></div><p className="text-[11px] text-slate-500 mt-1">Save current capture metadata and compare later activity with explicit, deterministic deviation reasons.</p></div>
       <button onClick={refresh} className="rounded-md p-2 bg-slate-100 dark:bg-slate-800" title="Refresh baselines"><RefreshCw size={14}/></button>
     </div>
-    <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,1fr)_auto_minmax(260px,1fr)_auto_auto] gap-2 mt-4 items-center">
+    <div className="grid grid-cols-1 2xl:grid-cols-[minmax(220px,1fr)_auto_minmax(260px,1fr)_auto_auto] gap-2 mt-4 items-center">
       <input value={name} onChange={event => setName(event.target.value)} maxLength={160} placeholder="Baseline name, e.g. Office morning" className="filter-control rounded-md border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-2 text-xs"/>
       <button onClick={create} disabled={!name.trim() || !capturePacketCount || busy} className="inline-flex justify-center items-center gap-1.5 rounded-md bg-cyan-600 hover:bg-cyan-700 disabled:opacity-40 text-white px-3 py-2 text-xs font-semibold"><Plus size={13}/> Save current</button>
       <select value={selected} onChange={event => { setSelected(event.target.value); setResult(null); }} className="filter-control rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs">

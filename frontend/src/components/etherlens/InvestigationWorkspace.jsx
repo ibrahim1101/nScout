@@ -253,13 +253,13 @@ export default function InvestigationWorkspace({
               ))}
             </select>
           )}
-          <form onSubmit={createCase} className="flex gap-2">
+          <form onSubmit={createCase} className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row">
             <input
               value={caseName}
               onChange={(event) => setCaseName(event.target.value)}
               maxLength={160}
               placeholder="New investigation name"
-              className="filter-control min-w-[230px] bg-white text-slate-900 placeholder:text-slate-500 caret-blue-600 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-400 dark:caret-blue-400 dark:border-slate-600"
+              className="filter-control w-full min-w-0 sm:min-w-[230px] bg-white text-slate-900 placeholder:text-slate-500 caret-blue-600 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-400 dark:caret-blue-400 dark:border-slate-600"
               aria-label="New investigation name"
             />
             <button

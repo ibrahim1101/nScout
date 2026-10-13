@@ -1121,7 +1121,7 @@ function TLS({ data, onSelectPacket, onBookmark, status }) {
         />
       </div>
       <div className="flex flex-wrap gap-3 items-center px-4 py-2 border-b border-slate-100 dark:border-slate-800">
-        <p className="text-[11px] text-slate-500 flex-1 min-w-[260px]">
+        <p className="text-[11px] text-slate-500 flex-1 min-w-0 w-full sm:min-w-[260px] sm:w-auto">
           {data.note ||
             "TLS view shows observable handshake/record metadata only. Encrypted application payload is not decrypted."}
         </p>

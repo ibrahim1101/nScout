@@ -255,7 +255,7 @@ export default function SettingsDrawer({
       <div
         onClick={(e) => e.stopPropagation()}
         data-testid="settings-drawer"
-        className="w-full max-w-lg h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col"
+        className="w-full sm:w-[min(82vw,960px)] 2xl:w-[min(70vw,1440px)] min-w-0 h-[100dvh] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col"
       >
         <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div>

@@ -103,10 +103,10 @@ export default function LiveHostsWorkspace({
   });
   return (
     <div
-      className="grid grid-cols-1 2xl:grid-cols-1 2xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,.85fr)] gap-5 items-start"
+      className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,.85fr)] gap-5 items-start"
       data-testid="live-hosts-workspace"
     >
-      <section className="space-y-3">
+      <section className="min-w-0 space-y-3">
         {status.error && (
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-4 py-2 text-xs text-red-600 dark:text-red-300">
             <span className="flex-1">

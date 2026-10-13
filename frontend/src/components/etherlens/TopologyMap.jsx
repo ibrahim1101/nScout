@@ -310,7 +310,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,1fr)_repeat(4,auto)] gap-2 mt-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_repeat(4,auto)] gap-2 mt-3">
           <label className="relative">
             <Search
               size={14}
@@ -348,7 +348,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
             value={port}
             onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))}
             placeholder="Port"
-            className="filter-control w-24"
+            className="filter-control w-full xl:w-24"
           />
           <select
             value={noiseFloor}
@@ -365,7 +365,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
           mode shows endpoints associated with current defensive findings.
         </div>
       </div>
-      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_320px] gap-3">
+      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_minmax(320px,28%)] gap-3">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
           {view === "map" ? (
             <div className="relative overflow-hidden" style={{ height: "clamp(460px, calc(100dvh - 240px), 1400px)", minHeight: 460 }}>
