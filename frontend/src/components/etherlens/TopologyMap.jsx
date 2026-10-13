@@ -390,7 +390,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
                     const dy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
                     setPan((current) => clampPan({ x: current.x + dx, y: current.y + dy }, zoom));
                   }
-                }
+                }}
                 viewBox={`${(layout.w * (1 - 1 / zoom)) / 2 + boundedPan.x} ${(layout.h * (1 - 1 / zoom)) / 2 + boundedPan.y} ${layout.w / zoom} ${layout.h / zoom}`}
                 preserveAspectRatio="xMidYMid meet"
                 className="w-full h-full"
