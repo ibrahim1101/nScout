@@ -451,7 +451,7 @@ export default function Dashboard({ theme, setTheme }) {
       ) && (
         <div
           data-testid="capture-health-banner"
-          className="mx-auto w-full max-w-[1920px] px-5 sm:px-7 lg:px-10 mt-3"
+          className="mx-auto w-full w-full max-w-none px-5 sm:px-7 lg:px-10 mt-3"
         >
           <div className="rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-900 dark:text-amber-200 px-4 py-2 text-sm">
             <b>Capture health: </b>
@@ -462,14 +462,14 @@ export default function Dashboard({ theme, setTheme }) {
       {notice && (
         <div
           data-testid="toast-notice"
-          className="mx-auto w-full max-w-[1920px] px-5 sm:px-7 lg:px-10 mt-3"
+          className="mx-auto w-full w-full max-w-none px-5 sm:px-7 lg:px-10 mt-3"
         >
           <div className="rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-900 dark:text-amber-200 px-4 py-2 text-sm">
             {notice}
           </div>
         </div>
       )}
-      <nav className="mx-auto w-full max-w-[1920px] px-5 sm:px-7 lg:px-10 mt-4">
+      <nav className="mx-auto w-full w-full max-w-none px-5 sm:px-7 lg:px-10 mt-4">
         <div className="flex flex-wrap gap-1.5 rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/70" aria-label="Investigation workspace navigation">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
@@ -489,7 +489,7 @@ export default function Dashboard({ theme, setTheme }) {
           ))}
         </div>
       </nav>
-      <main className="mx-auto w-full max-w-[1920px] px-5 sm:px-7 lg:px-10 py-4">
+      <main className="mx-auto w-full w-full max-w-none px-5 sm:px-7 lg:px-10 py-4">
         {tab === "analyzer" && (
           <PacketAnalyzer
             packets={filtered}
