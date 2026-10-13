@@ -932,7 +932,7 @@ function Timeline({ data, onSelectPacket, onBookmark, status }) {
         {rows.map((r, i) => (
           <div
             key={`${r.timestamp}-${r.event_type}-${r.packet_id || i}`}
-            className="w-full grid grid-cols-[110px_110px_minmax(0,1fr)_auto] gap-3 text-left px-4 py-3 border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="w-full grid grid-cols-1 sm:grid-cols-[110px_110px_minmax(0,1fr)_auto] gap-3 text-left px-4 py-3 border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <span className="font-mono-code text-[11px] text-slate-500">
               {timelineTime(r.timestamp)}
