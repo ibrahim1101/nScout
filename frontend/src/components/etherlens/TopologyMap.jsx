@@ -181,6 +181,13 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
     }
     return shown;
   }, [visible.nodes, selected?.id, flaggedIds, layout]);
+  const dragRef = useRef(null);
+  const [layoutMode, setLayoutMode] = useState("grouped");
+  const layout = useMemo(() => buildTopologyLayout(visible.nodes, {
+    mode: layoutMode,
+    focusId: focusOnly ? selected?.id : null,
+    flaggedIds,
+  }), [visible.nodes, layoutMode, focusOnly, selected?.id, flaggedIds]);
   const clampPan = (value, scale) => {
     const maxX = layout.w * (1 - 1 / scale) / 2;
     const maxY = layout.h * (1 - 1 / scale) / 2;
@@ -190,13 +197,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
     };
   };
   const boundedPan = clampPan(pan, zoom);
-  const dragRef = useRef(null);
-  const [layoutMode, setLayoutMode] = useState("grouped");
-  const layout = useMemo(() => buildTopologyLayout(visible.nodes, {
-    mode: layoutMode,
-    focusId: focusOnly ? selected?.id : null,
-    flaggedIds,
-  }), [visible.nodes, layoutMode, focusOnly, selected?.id, flaggedIds]);
+
   const selectedEdges = selected ? edgeMap.get(selected.id) || [] : [],
     maxEdge = Math.max(1, ...visible.edges.map((e) => Number(e.bytes || 0)));
   const togglePause = () => {
