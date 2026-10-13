@@ -13,6 +13,8 @@ import {
   GitBranch,
   ShieldAlert,
   Filter,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 
 const threatIps = (t) =>
@@ -25,6 +27,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
     [selectedEdge, setSelectedEdge] = useState(null),
     [query, setQuery] = useState(""),
     [view, setView] = useState("map"),
+    [zoom, setZoom] = useState(1),
     [focusOnly, setFocusOnly] = useState(false),
     [noiseFloor, setNoiseFloor] = useState("auto"),
     [protocol, setProtocol] = useState("all"),
@@ -186,6 +189,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
     setHostType("all");
     setSecurityOnly(false);
     setPort("");
+    setZoom(1);
   };
   const investigate = (target) =>
     onInvestigate?.(
@@ -252,6 +256,10 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
               <option value="columns">Columns</option>
               <option value="radial">Radial</option>
             </select>
+            <button aria-label="Zoom out" title="Zoom out" onClick={() => setZoom((value) => Math.max(1, Number((value - 0.25).toFixed(2))))} disabled={zoom <= 1} className="tool"><ZoomOut size={14} /></button>
+            <span aria-live="polite" className="text-xs tabular-nums self-center min-w-12 text-center">{Math.round(zoom * 100)}%</span>
+            <button aria-label="Zoom in" title="Zoom in" onClick={() => setZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))))} disabled={zoom >= 3} className="tool"><ZoomIn size={14} /></button>
+            <button onClick={() => setZoom(1)} disabled={zoom === 1} className="tool">Fit map</button>
             <button onClick={reset} className="tool">
               <RotateCcw size={14} />
               Reset
@@ -325,7 +333,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
           {view === "map" ? (
             <div className="relative overflow-hidden" style={{ height: "min(78vh, 900px)", minHeight: 460 }}>
               <svg
-                viewBox={`0 0 ${layout.w} ${layout.h}`} preserveAspectRatio="xMidYMid meet"
+                viewBox={`${(layout.w * (1 - 1 / zoom)) / 2} ${(layout.h * (1 - 1 / zoom)) / 2} ${layout.w / zoom} ${layout.h / zoom}`} preserveAspectRatio="xMidYMid meet"
                 className="w-full h-full"
               >
                 {visible.edges.map((e, i) => {
