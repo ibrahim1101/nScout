@@ -369,7 +369,28 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
           {view === "map" ? (
             <div className="relative overflow-hidden" style={{ height: "min(78vh, 900px)", minHeight: 460 }}>
               <svg
-                aria-label="Interactive network topology"
+                role="application"
+                tabIndex={0}
+                aria-label="Interactive network topology. Use plus or minus to zoom, arrow keys to pan, and zero to fit the map."
+                onKeyDown={(event) => {
+                  if (event.key === "+" || event.key === "=") {
+                    event.preventDefault();
+                    setZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))));
+                  } else if (event.key === "-") {
+                    event.preventDefault();
+                    setZoom((value) => Math.max(1, Number((value - 0.25).toFixed(2))));
+                  } else if (event.key === "0") {
+                    event.preventDefault();
+                    setZoom(1);
+                    setPan({ x: 0, y: 0 });
+                  } else if (zoom > 1 && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+                    event.preventDefault();
+                    const step = 40 / zoom;
+                    const dx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
+                    const dy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
+                    setPan((current) => clampPan({ x: current.x + dx, y: current.y + dy }, zoom));
+                  }
+                }
                 viewBox={`${(layout.w * (1 - 1 / zoom)) / 2 + boundedPan.x} ${(layout.h * (1 - 1 / zoom)) / 2 + boundedPan.y} ${layout.w / zoom} ${layout.h / zoom}`}
                 preserveAspectRatio="xMidYMid meet"
                 className="w-full h-full"
