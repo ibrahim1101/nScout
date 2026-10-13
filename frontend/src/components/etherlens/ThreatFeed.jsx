@@ -19,7 +19,7 @@ export default function ThreatFeed({ threats, onSelectPacket }) {
 
   return (
     <div className="grid grid-cols-1 2xl:grid-cols-3 gap-4">
-      <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="2xl:col-span-2 min-w-0 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
         <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
           <h3 className="font-display font-bold text-sm">Threat Feed</h3>
           <div className="flex items-center gap-1">
@@ -35,7 +35,7 @@ export default function ThreatFeed({ threats, onSelectPacket }) {
             ))}
           </div>
         </div>
-        <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[70vh] overflow-auto el-scroll">
+        <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[calc(100dvh-15rem)] min-h-[320px] overflow-auto el-scroll">
           {filtered.length === 0 && (
             <div className="p-10 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
               <ShieldCheck size={28} className="text-emerald-500" />
