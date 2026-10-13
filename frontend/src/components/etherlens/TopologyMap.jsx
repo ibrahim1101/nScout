@@ -978,7 +978,8 @@ export function buildTopologyLayout(nodes, { mode = "grouped", focusId, flaggedI
   }
   const count = nodes.length;
   const maxGroup = Math.max(1, ...Object.values(groups).map((g) => g.length));
-  const columns = mode === "columns" || mode === "grouped";
+  const columns = mode === "columns";
+  const grouped = mode === "grouped";
   const spacing = count > 150 ? 56 : 88;
   const w = columns ? Math.max(1100, 4 * 245) : Math.max(1100, Math.ceil(Math.sqrt(count)) * spacing);
   const h = columns ? Math.max(610, Math.ceil(maxGroup / 3) * spacing) : Math.max(610, Math.ceil(Math.sqrt(count)) * spacing);
@@ -995,6 +996,25 @@ export function buildTopologyLayout(nodes, { mode = "grouped", focusId, flaggedI
       const angle = 2 * Math.PI * slot / ringCount;
       const radius = Math.min(w, h) * (0.18 + 0.055 * ring);
       positions[n.id] = { x: w / 2 + Math.cos(angle) * radius, y: h / 2 + Math.sin(angle) * radius };
+    });
+  } else if (grouped) {
+    // Grouped view uses four spatial clusters rather than column-aligned host rows.
+    const centers = [
+      { x: w * 0.26, y: h * 0.28 },
+      { x: w * 0.74, y: h * 0.28 },
+      { x: w * 0.26, y: h * 0.73 },
+      { x: w * 0.74, y: h * 0.73 },
+    ];
+    Object.values(groups).forEach((group, index) => {
+      const center = centers[index];
+      group.forEach((node, i) => {
+        const angle = i * Math.PI * (3 - Math.sqrt(5));
+        const radius = Math.sqrt(i + 0.5) * Math.min(26, Math.min(w, h) / (Math.sqrt(Math.max(1, group.length)) * 4));
+        positions[node.id] = {
+          x: center.x + Math.cos(angle) * radius,
+          y: center.y + Math.sin(angle) * radius,
+        };
+      });
     });
   } else if (columns) {
     Object.values(groups).forEach((group, column) => {
