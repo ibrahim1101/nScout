@@ -1,1 +1,4 @@
 .nscout-threat-grid { min-width: 0; }
+@media (min-width: 1536px) {
+  .nscout-threat-grid.two-panel { grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); }
+}
