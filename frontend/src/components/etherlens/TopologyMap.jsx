@@ -159,6 +159,28 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
     edgeMap,
     flaggedIds,
   ]);
+  const labelVisibility = useMemo(() => {
+    const nodes = visible.nodes;
+    const occupied = [];
+    const shown = new Set();
+    // Prioritize selected and flagged hosts; suppress labels colliding with earlier labels.
+    const priority = [...nodes].sort((a, b) =>
+      Number(b.id === selected?.id) - Number(a.id === selected?.id) ||
+      Number(flaggedIds.has(String(b.id))) - Number(flaggedIds.has(String(a.id)))
+    );
+    for (const node of priority) {
+      const p = layout.positions[node.id];
+      if (!p) continue;
+      const important = node.id === selected?.id || flaggedIds.has(String(node.id));
+      if (!important && nodes.length > 120) continue;
+      const width = Math.min(26, String(node.label || node.id).length) * 6 + 12;
+      const rect = { left: p.x - width / 2, right: p.x + width / 2, top: p.y + 16, bottom: p.y + 34 };
+      if (!important && occupied.some((o) => rect.left < o.right && rect.right > o.left && rect.top < o.bottom && rect.bottom > o.top)) continue;
+      shown.add(node.id);
+      occupied.push(rect);
+    }
+    return shown;
+  }, [visible.nodes, selected?.id, flaggedIds, layout]);
   const dragRef = useRef(null);
   const [layoutMode, setLayoutMode] = useState("grouped");
   const layout = useMemo(() => buildTopologyLayout(visible.nodes, {
@@ -493,7 +515,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
                         fill="currentColor"
                         className="font-mono-code pointer-events-none"
                       >
-                        {visible.nodes.length > 120 && !active ? "" : (n.alias || n.hostname || n.id).slice(0, 26)}
+                        {!labelVisibility.has(n.id) ? "" : (n.alias || n.hostname || n.id).slice(0, 26)}
                       </text>
                     </g>
                   );
