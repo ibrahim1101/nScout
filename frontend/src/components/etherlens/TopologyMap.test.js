@@ -68,6 +68,9 @@ describe("topology component render smoke tests", () => {
     expect(markup).toContain(`Inspect host ${nodes[0].id}`);
     expect(markup).toContain('aria-pressed="false"');
     expect(markup).toContain('Interactive network topology');
+    expect(markup).toContain("Tab to a host");
+    expect(markup).toContain("Home and End");
+    expect(markup).toContain("Escape to clear selection");
   });
 
   test("renders host navigation targets in visible host order", () => {
