@@ -512,7 +512,13 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
                         setSelectedEdge(null);
                       }}
                       onKeyDown={(event) => {
-                        if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setSelectedId(null);
+                          setSelectedEdge(null);
+                          setFocusOnly(false);
+                        } else if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
                           event.preventDefault();
                           event.stopPropagation();
                           const hosts = visible.nodes;
