@@ -243,7 +243,7 @@ export default function InvestigationWorkspace({
               value={activeId}
               onChange={(event) => selectCase(event.target.value)}
               disabled={saving || loading}
-              className="filter-control min-w-[220px]"
+              className="filter-control w-full sm:w-auto sm:min-w-[220px]"
               aria-label="Active investigation"
             >
               {cases.map((item) => (
