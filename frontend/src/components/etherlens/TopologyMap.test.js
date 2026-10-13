@@ -58,6 +58,18 @@ describe("topology component render smoke tests", () => {
     )).not.toThrow();
   });
 
+  test("exposes keyboard-focusable host controls with accessible labels", () => {
+    const nodes = hosts(3);
+    const markup = renderToStaticMarkup(
+      React.createElement(TopologyMap, { topology: { nodes, edges: [] }, threats: [] })
+    );
+    expect(markup).toContain('role="button"');
+    expect(markup).toContain('tabindex="0"');
+    expect(markup).toContain(`Inspect host ${nodes[0].id}`);
+    expect(markup).toContain('aria-pressed="false"');
+    expect(markup).toContain('Interactive network topology');
+  });
+
   test("renders a populated topology with security findings", () => {
     const nodes = hosts(24);
     const topology = { nodes, edges: [{ source: nodes[0].id, target: nodes[1].id, bytes: 1024 }] };
