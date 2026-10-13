@@ -371,7 +371,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
               <svg
                 role="application"
                 tabIndex={0}
-                aria-label="Interactive network topology. Use plus or minus to zoom, arrow keys to pan, and zero to fit the map."
+                aria-label="Interactive network topology. Focus the map to use plus or minus to zoom, arrow keys to pan, and zero to fit. Tab to a host, use arrow keys or Home and End to move between hosts, Enter or Space to select, and Escape to clear selection."
                 onKeyDown={(event) => {
                   if (event.key === "+" || event.key === "=") {
                     event.preventDefault();
