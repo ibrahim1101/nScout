@@ -502,9 +502,21 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
                   return (
                     <g
                       key={n.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Inspect host ${n.label || n.id}${flagged ? ", security flagged" : ""}`}
+                      aria-pressed={active}
                       onClick={() => {
                         setSelectedId(n.id);
                         setSelectedEdge(null);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setSelectedId(n.id);
+                          setSelectedEdge(null);
+                        }
                       }}
                       className="cursor-pointer"
                     >
