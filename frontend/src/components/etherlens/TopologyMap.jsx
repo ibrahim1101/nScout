@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fmtBytes } from "./lib";
 import {
   Search,
@@ -28,6 +28,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
     [query, setQuery] = useState(""),
     [view, setView] = useState("map"),
     [zoom, setZoom] = useState(1),
+    [pan, setPan] = useState({ x: 0, y: 0 }),
     [focusOnly, setFocusOnly] = useState(false),
     [noiseFloor, setNoiseFloor] = useState("auto"),
     [protocol, setProtocol] = useState("all"),
@@ -158,6 +159,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
     edgeMap,
     flaggedIds,
   ]);
+  const dragRef = useRef(null);
   const [layoutMode, setLayoutMode] = useState("grouped");
   const layout = useMemo(() => buildTopologyLayout(visible.nodes, {
     mode: layoutMode,
@@ -190,6 +192,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
     setSecurityOnly(false);
     setPort("");
     setZoom(1);
+    setPan({ x: 0, y: 0 });
   };
   const investigate = (target) =>
     onInvestigate?.(
@@ -259,7 +262,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
             <button aria-label="Zoom out" title="Zoom out" onClick={() => setZoom((value) => Math.max(1, Number((value - 0.25).toFixed(2))))} disabled={zoom <= 1} className="tool"><ZoomOut size={14} /></button>
             <span aria-live="polite" className="text-xs tabular-nums self-center min-w-12 text-center">{Math.round(zoom * 100)}%</span>
             <button aria-label="Zoom in" title="Zoom in" onClick={() => setZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))))} disabled={zoom >= 3} className="tool"><ZoomIn size={14} /></button>
-            <button onClick={() => setZoom(1)} disabled={zoom === 1} className="tool">Fit map</button>
+            <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} disabled={zoom === 1 && pan.x === 0 && pan.y === 0} className="tool">Fit map</button>
             <button onClick={reset} className="tool">
               <RotateCcw size={14} />
               Reset
@@ -333,8 +336,29 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
           {view === "map" ? (
             <div className="relative overflow-hidden" style={{ height: "min(78vh, 900px)", minHeight: 460 }}>
               <svg
-                viewBox={`${(layout.w * (1 - 1 / zoom)) / 2} ${(layout.h * (1 - 1 / zoom)) / 2} ${layout.w / zoom} ${layout.h / zoom}`} preserveAspectRatio="xMidYMid meet"
+                aria-label="Interactive network topology"
+                viewBox={`${(layout.w * (1 - 1 / zoom)) / 2 + pan.x} ${(layout.h * (1 - 1 / zoom)) / 2 + pan.y} ${layout.w / zoom} ${layout.h / zoom}`}
+                preserveAspectRatio="xMidYMid meet"
                 className="w-full h-full"
+                style={{ cursor: zoom > 1 ? "grab" : "default", touchAction: "none" }}
+                onPointerDown={(event) => {
+                  if (zoom <= 1 || event.button !== 0 || event.target !== event.currentTarget) return;
+                  dragRef.current = { x: event.clientX, y: event.clientY, pan };
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                }}
+                onPointerMove={(event) => {
+                  const drag = dragRef.current;
+                  if (!drag) return;
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  if (!rect.width || !rect.height) return;
+                  setPan({
+                    x: drag.pan.x - (event.clientX - drag.x) * (layout.w / zoom) / rect.width,
+                    y: drag.pan.y - (event.clientY - drag.y) * (layout.h / zoom) / rect.height,
+                  });
+                }}
+                onPointerUp={() => { dragRef.current = null; }}
+                onPointerCancel={() => { dragRef.current = null; }}
+                onLostPointerCapture={() => { dragRef.current = null; }}
               >
                 {visible.edges.map((e, i) => {
                   const a = layout.positions[e.source],
