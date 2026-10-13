@@ -188,7 +188,8 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
       const p = layout.positions[node.id];
       if (!p) continue;
       const important = node.id === selected?.id || flaggedIds.has(String(node.id));
-      if (!important && nodes.length > 120) continue;
+      // In dense networks, retain a deterministic sample of ordinary labels instead of hiding all of them.
+      if (!important && nodes.length > 120 && nodes.indexOf(node) % Math.ceil(nodes.length / 120) !== 0) continue;
       const width = Math.min(26, String(node.label || node.id).length) * 6 + 12;
       const rect = { left: p.x - width / 2, right: p.x + width / 2, top: p.y + 16, bottom: p.y + 34 };
       if (!important && occupied.some((o) => rect.left < o.right && rect.right > o.left && rect.top < o.bottom && rect.bottom > o.top)) continue;
