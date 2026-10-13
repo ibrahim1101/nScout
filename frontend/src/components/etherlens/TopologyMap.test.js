@@ -70,6 +70,16 @@ describe("topology component render smoke tests", () => {
     expect(markup).toContain('Interactive network topology');
   });
 
+  test("renders host navigation targets in visible host order", () => {
+    const nodes = hosts(4);
+    const markup = renderToStaticMarkup(
+      React.createElement(TopologyMap, { topology: { nodes, edges: [] }, threats: [] })
+    );
+    const targets = [...markup.matchAll(/data-topology-host="([^"]+)"/g)].map((match) => match[1]);
+    expect(targets).toEqual(nodes.map((node) => node.id));
+    expect((markup.match(/tabindex="0"/g) || []).length).toBeGreaterThanOrEqual(nodes.length);
+  });
+
   test("renders a populated topology with security findings", () => {
     const nodes = hosts(24);
     const topology = { nodes, edges: [{ source: nodes[0].id, target: nodes[1].id, bytes: 1024 }] };
