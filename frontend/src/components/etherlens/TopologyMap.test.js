@@ -137,6 +137,10 @@ describe("topology keyboard interactions", () => {
         targets[0].dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
       });
       expect(targets[0].getAttribute("aria-pressed")).toBe("true");
+      await act(async () => {
+        targets[0].dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+      });
+      expect(targets[0].getAttribute("aria-pressed")).toBe("false");
     } finally {
       await act(async () => root.unmount());
       container.remove();
