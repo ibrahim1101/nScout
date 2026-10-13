@@ -18,7 +18,7 @@ export default function ThreatFeed({ threats, onSelectPacket }) {
   const filtered = threats.filter((t) => filter === "all" || t.severity === filter);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 2xl:grid-cols-3 gap-4">
       <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
         <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
           <h3 className="font-display font-bold text-sm">Threat Feed</h3>
