@@ -103,7 +103,7 @@ export default function LiveHostsWorkspace({
   });
   return (
     <div
-      className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.65fr)_minmax(390px,.85fr)] gap-5 items-start"
+      className="grid grid-cols-1 2xl:grid-cols-1 2xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,.85fr)] gap-5 items-start"
       data-testid="live-hosts-workspace"
     >
       <section className="space-y-3">
