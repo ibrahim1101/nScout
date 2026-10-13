@@ -368,7 +368,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
       <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_320px] gap-3">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
           {view === "map" ? (
-            <div className="relative overflow-hidden" style={{ height: "min(78vh, 900px)", minHeight: 460 }}>
+            <div className="relative overflow-hidden" style={{ height: "clamp(460px, calc(100dvh - 240px), 1400px)", minHeight: 460 }}>
               <svg
                 role="application"
                 tabIndex={0}
