@@ -46,3 +46,23 @@ describe("topology layout geometry", () => {
     expect(result.positions[nodes[9].id]).toBeDefined();
   });
 });
+
+describe("topology component render smoke tests", () => {
+  const React = require("react");
+  const { renderToStaticMarkup } = require("react-dom/server");
+  const TopologyMap = require("./TopologyMap").default;
+
+  test("renders an empty topology without initialization errors", () => {
+    expect(() => renderToStaticMarkup(
+      React.createElement(TopologyMap, { topology: { nodes: [], edges: [] }, threats: [] })
+    )).not.toThrow();
+  });
+
+  test("renders a populated topology with security findings", () => {
+    const nodes = hosts(24);
+    const topology = { nodes, edges: [{ source: nodes[0].id, target: nodes[1].id, bytes: 1024 }] };
+    expect(() => renderToStaticMarkup(
+      React.createElement(TopologyMap, { topology, threats: [{ src: nodes[0].id, dst: nodes[1].id }] })
+    )).not.toThrow();
+  });
+});
