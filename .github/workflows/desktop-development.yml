@@ -43,6 +43,7 @@ jobs:
         shell: bash
         run: |
           if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else yarn install; fi
+          CI=true yarn test --watch=false --runInBand --passWithNoTests=false
           yarn build
           test -f build/index.html
 
@@ -105,6 +106,7 @@ jobs:
           DISABLE_EMERGENT_OVERLAY: "true"
         run: |
           if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else yarn install; fi
+          CI=true yarn test --watch=false --runInBand --passWithNoTests=false
           yarn build
           test -f build/index.html
 
@@ -160,6 +162,7 @@ jobs:
           DISABLE_EMERGENT_OVERLAY: "true"
         run: |
           if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else yarn install; fi
+          CI=true yarn test --watch=false --runInBand --passWithNoTests=false
           yarn build
           test -f build/index.html
 
