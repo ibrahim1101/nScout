@@ -35,7 +35,7 @@ export default function PacketAnalyzer({
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
       <div
         className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col"
-        style={{ height: "calc(100vh - 260px)" }}
+        style={{ height: "clamp(480px, calc(100dvh - 260px), 1600px)" }}
       >
         <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div>
@@ -70,7 +70,7 @@ export default function PacketAnalyzer({
           status={status}
         />
       </div>
-      <div className="lg:col-span-5" style={{ height: "calc(100vh - 260px)" }}>
+      <div className="lg:col-span-5" style={{ height: "clamp(480px, calc(100dvh - 260px), 1600px)" }}>
         <DeepInspector packet={selected} onFollowFlow={onFollowFlow} />
       </div>
     </div>
