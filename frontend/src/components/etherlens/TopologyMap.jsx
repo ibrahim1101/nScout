@@ -181,6 +181,15 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
     }
     return shown;
   }, [visible.nodes, selected?.id, flaggedIds, layout]);
+  const clampPan = (value, scale) => {
+    const maxX = layout.w * (1 - 1 / scale) / 2;
+    const maxY = layout.h * (1 - 1 / scale) / 2;
+    return {
+      x: Math.max(-maxX, Math.min(maxX, value.x)),
+      y: Math.max(-maxY, Math.min(maxY, value.y)),
+    };
+  };
+  const boundedPan = clampPan(pan, zoom);
   const dragRef = useRef(null);
   const [layoutMode, setLayoutMode] = useState("grouped");
   const layout = useMemo(() => buildTopologyLayout(visible.nodes, {
@@ -359,13 +368,13 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
             <div className="relative overflow-hidden" style={{ height: "min(78vh, 900px)", minHeight: 460 }}>
               <svg
                 aria-label="Interactive network topology"
-                viewBox={`${(layout.w * (1 - 1 / zoom)) / 2 + pan.x} ${(layout.h * (1 - 1 / zoom)) / 2 + pan.y} ${layout.w / zoom} ${layout.h / zoom}`}
+                viewBox={`${(layout.w * (1 - 1 / zoom)) / 2 + boundedPan.x} ${(layout.h * (1 - 1 / zoom)) / 2 + boundedPan.y} ${layout.w / zoom} ${layout.h / zoom}`}
                 preserveAspectRatio="xMidYMid meet"
                 className="w-full h-full"
                 style={{ cursor: zoom > 1 ? "grab" : "default", touchAction: "none" }}
                 onPointerDown={(event) => {
                   if (zoom <= 1 || event.button !== 0 || event.target !== event.currentTarget) return;
-                  dragRef.current = { x: event.clientX, y: event.clientY, pan };
+                  dragRef.current = { x: event.clientX, y: event.clientY, pan: boundedPan };
                   event.currentTarget.setPointerCapture(event.pointerId);
                 }}
                 onPointerMove={(event) => {
@@ -373,10 +382,10 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
                   if (!drag) return;
                   const rect = event.currentTarget.getBoundingClientRect();
                   if (!rect.width || !rect.height) return;
-                  setPan({
+                  setPan(clampPan({
                     x: drag.pan.x - (event.clientX - drag.x) * (layout.w / zoom) / rect.width,
                     y: drag.pan.y - (event.clientY - drag.y) * (layout.h / zoom) / rect.height,
-                  });
+                  }, zoom));
                 }}
                 onPointerUp={() => { dragRef.current = null; }}
                 onPointerCancel={() => { dragRef.current = null; }}
