@@ -155,40 +155,12 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
     edgeMap,
     flaggedIds,
   ]);
-  const layout = useMemo(() => {
-    const w = 1100,
-      h = 610,
-      local = visible.nodes.filter((n) => n.type === "local"),
-      ext = visible.nodes.filter((n) => n.type !== "local"),
-      positions = {};
-    const place = (list, cx) =>
-      list.forEach((n, i) => {
-        const ring = Math.floor(i / 18),
-          ri = Math.min(18, list.length - ring * 18),
-          t = ((i % 18) / Math.max(1, ri)) * Math.PI * 2,
-          r = Math.min(245, 75 + ring * 70 + Math.min(70, ri * 4));
-        positions[n.id] = {
-          x: cx + r * Math.cos(t),
-          y: h / 2 + r * Math.sin(t),
-        };
-      });
-    if (focusOnly && selected) {
-      positions[selected.id] = { x: w / 2, y: h / 2 };
-      visible.nodes
-        .filter((n) => n.id !== selected.id)
-        .forEach((n, i, a) => {
-          const t = (i / Math.max(1, a.length)) * Math.PI * 2;
-          positions[n.id] = {
-            x: w / 2 + 205 * Math.cos(t),
-            y: h / 2 + 205 * Math.sin(t),
-          };
-        });
-    } else {
-      place(local, w * 0.3);
-      place(ext, w * 0.72);
-    }
-    return { positions, w, h };
-  }, [visible.nodes, focusOnly, selected]);
+  const [layoutMode, setLayoutMode] = useState("grouped");
+  const layout = useMemo(() => buildTopologyLayout(visible.nodes, {
+    mode: layoutMode,
+    focusId: focusOnly ? selected?.id : null,
+    flaggedIds,
+  }), [visible.nodes, layoutMode, focusOnly, selected?.id, flaggedIds]);
   const selectedEdges = selected ? edgeMap.get(selected.id) || [] : [],
     maxEdge = Math.max(1, ...visible.edges.map((e) => Number(e.bytes || 0)));
   const togglePause = () => {
@@ -232,7 +204,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-display font-bold text-sm">
-                Network Map 2.0
+                Network Map 3.0
               </h3>
               {paused && (
                 <Badge
@@ -275,6 +247,11 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
               <ShieldAlert size={14} />
               Security
             </button>
+            <select aria-label="Topology layout" className="filter-control" value={layoutMode} onChange={(e) => setLayoutMode(e.target.value)}>
+              <option value="grouped">Grouped</option>
+              <option value="columns">Columns</option>
+              <option value="radial">Radial</option>
+            </select>
             <button onClick={reset} className="tool">
               <RotateCcw size={14} />
               Reset
@@ -343,12 +320,12 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
           mode shows endpoints associated with current defensive findings.
         </div>
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-3">
+      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_320px] gap-3">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
           {view === "map" ? (
-            <div className="relative overflow-hidden" style={{ height: 610 }}>
+            <div className="relative overflow-hidden" style={{ height: "min(78vh, 900px)", minHeight: 460 }}>
               <svg
-                viewBox={`0 0 ${layout.w} ${layout.h}`}
+                viewBox={`0 0 ${layout.w} ${layout.h}`} preserveAspectRatio="xMidYMid meet"
                 className="w-full h-full"
               >
                 {visible.edges.map((e, i) => {
@@ -484,7 +461,7 @@ export default function TopologyMap({ topology, threats = [], onInvestigate }) {
                         fill="currentColor"
                         className="font-mono-code pointer-events-none"
                       >
-                        {n.id}
+                        {visible.nodes.length > 120 && !active ? "" : (n.alias || n.hostname || n.id).slice(0, 26)}
                       </text>
                     </g>
                   );
@@ -870,4 +847,44 @@ function Legend({ color, text }) {
 }
 function Empty({ text }) {
   return <div className="p-8 text-center text-xs text-slate-400">{text}</div>;
+}
+
+function buildTopologyLayout(nodes, { mode = "grouped", focusId, flaggedIds = new Set() } = {}) {
+  const groups = { local: [], gateway: [], external: [], security: [] };
+  for (const node of nodes) {
+    const id = String(node.id);
+    const group = flaggedIds.has(id) ? "security" : node.type === "local" ? (id.endsWith(".1") ? "gateway" : "local") : "external";
+    groups[group].push(node);
+  }
+  const count = nodes.length;
+  const maxGroup = Math.max(1, ...Object.values(groups).map((g) => g.length));
+  const columns = mode === "columns" || mode === "grouped";
+  const spacing = count > 150 ? 56 : 88;
+  const w = columns ? Math.max(1100, 4 * 245) : Math.max(1100, Math.ceil(Math.sqrt(count)) * spacing);
+  const h = columns ? Math.max(610, Math.ceil(maxGroup / 3) * spacing) : Math.max(610, Math.ceil(Math.sqrt(count)) * spacing);
+  const positions = {};
+  if (focusId && nodes.some((n) => n.id === focusId)) {
+    const others = nodes.filter((n) => n.id !== focusId);
+    positions[focusId] = { x: w / 2, y: h / 2 };
+    others.forEach((n, i) => {
+      const a = (2 * Math.PI * i) / Math.max(1, others.length);
+      const radius = Math.min(w, h) * 0.36;
+      positions[n.id] = { x: w / 2 + Math.cos(a) * radius, y: h / 2 + Math.sin(a) * radius };
+    });
+  } else if (columns) {
+    Object.values(groups).forEach((group, column) => {
+      const rows = Math.ceil(group.length / 3);
+      group.forEach((node, i) => {
+        positions[node.id] = { x: (column + 0.5) * w / 4 + ((i % 3) - 1) * 65, y: (Math.floor(i / 3) + 0.5) * h / Math.max(1, rows) };
+      });
+    });
+  } else {
+    const sorted = Object.values(groups).flat();
+    sorted.forEach((node, i) => {
+      const angle = i * Math.PI * (3 - Math.sqrt(5));
+      const radius = Math.sqrt((i + 0.5) / Math.max(1, sorted.length)) * Math.min(w, h) * 0.44;
+      positions[node.id] = { x: w / 2 + Math.cos(angle) * radius, y: h / 2 + Math.sin(angle) * radius };
+    });
+  }
+  return { w, h, positions };
 }
