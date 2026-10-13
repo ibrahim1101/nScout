@@ -849,7 +849,7 @@ function Empty({ text }) {
   return <div className="p-8 text-center text-xs text-slate-400">{text}</div>;
 }
 
-function buildTopologyLayout(nodes, { mode = "grouped", focusId, flaggedIds = new Set() } = {}) {
+export function buildTopologyLayout(nodes, { mode = "grouped", focusId, flaggedIds = new Set() } = {}) {
   const groups = { local: [], gateway: [], external: [], security: [] };
   for (const node of nodes) {
     const id = String(node.id);
@@ -866,10 +866,15 @@ function buildTopologyLayout(nodes, { mode = "grouped", focusId, flaggedIds = ne
   if (focusId && nodes.some((n) => n.id === focusId)) {
     const others = nodes.filter((n) => n.id !== focusId);
     positions[focusId] = { x: w / 2, y: h / 2 };
+    // Multiple concentric rings avoid stacking every focused neighbor at one radius.
+    const capacity = Math.max(8, Math.floor(Math.min(w, h) / 36));
     others.forEach((n, i) => {
-      const a = (2 * Math.PI * i) / Math.max(1, others.length);
-      const radius = Math.min(w, h) * 0.36;
-      positions[n.id] = { x: w / 2 + Math.cos(a) * radius, y: h / 2 + Math.sin(a) * radius };
+      const ring = Math.floor(i / capacity);
+      const slot = i % capacity;
+      const ringCount = Math.min(capacity, others.length - ring * capacity);
+      const angle = 2 * Math.PI * slot / ringCount;
+      const radius = Math.min(w, h) * (0.18 + 0.055 * ring);
+      positions[n.id] = { x: w / 2 + Math.cos(angle) * radius, y: h / 2 + Math.sin(angle) * radius };
     });
   } else if (columns) {
     Object.values(groups).forEach((group, column) => {
