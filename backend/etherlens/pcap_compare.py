@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import io
 from collections import Counter
-from pathlib import Path
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any, Dict, Iterable, List
 
 from scapy.all import PcapReader  # type: ignore
@@ -119,10 +119,13 @@ def summarize_pcap(data: bytes, filename: str, packet_limit: int = MAX_COMPARISO
     if not packets:
         raise ValueError("PCAP contains no readable packets")
     summary = intelligence.investigation_summary(packets, capture.list_threats())
-    start, end = packets[0].get("timestamp"), packets[-1].get("timestamp")
+    # Capture files may contain packets out of timestamp order. Use the
+    # actual observed bounds rather than assuming file order is chronological.
+    timestamps = [_number(packet["timestamp"]) for packet in packets if packet.get("timestamp") is not None]
+    start, end = (min(timestamps), max(timestamps)) if timestamps else (None, None)
     return {
         "file": {
-            "name": (Path(filename).name or "capture.pcap")[:255],
+            "name": (PurePosixPath(PureWindowsPath(filename).name).name or "capture.pcap")[:255],
             "size_bytes": len(data),
             "sha256": hashlib.sha256(data).hexdigest(),
             "packets_analyzed": len(packets),
