@@ -182,29 +182,43 @@ fn main() {
             let readiness_path = app_data.join("backend-ready.json");
             let _ = fs::remove_file(&readiness_path);
 
-            let readiness_arg = readiness_path.to_string_lossy().into_owned();
-            let sidecar = app
-                .shell()
-                .sidecar("nscout-backend")?
-                .args(vec![
-                    "--no-browser".to_string(),
-                    "--readiness-file".to_string(),
-                    readiness_arg,
-                ]);
-            let (_events, child) = match sidecar.spawn() {
-                Ok(spawned) => spawned,
-                Err(error) => {
-                    let _ = lifecycle::record(&lifecycle_path, "backend_spawn_failed", None);
-                    return Err(error.into());
-                }
-            };
-            let _ = lifecycle::record(&lifecycle_path, "backend_spawned", None);
-            *app.state::<BackendState>()
-                .child
-                .lock()
-                .expect("backend state lock") = Some(child);
-
-            wait_for_backend(app.handle().clone(), readiness_path, lifecycle_path);
+            // Sidecar creation/spawn can block for several seconds on Windows
+            // (for example while security software scans the packaged binary).
+            // Never perform that work on Tauri's UI setup thread.
+            let handle = app.handle().clone();
+            thread::spawn(move || {
+                let readiness_arg = readiness_path.to_string_lossy().into_owned();
+                let sidecar = match handle.shell().sidecar("nscout-backend") {
+                    Ok(command) => command.args(vec![
+                        "--no-browser".to_string(),
+                        "--readiness-file".to_string(),
+                        readiness_arg,
+                    ]),
+                    Err(_) => {
+                        let _ = lifecycle::record(&lifecycle_path, "backend_spawn_failed", Some("sidecar_setup"));
+                        if let Some(window) = handle.get_webview_window("main") {
+                            startup_error(&window, "The local backend could not be prepared. Close nScout and try again.");
+                        }
+                        return;
+                    }
+                };
+                let (_events, child) = match sidecar.spawn() {
+                    Ok(spawned) => spawned,
+                    Err(_) => {
+                        let _ = lifecycle::record(&lifecycle_path, "backend_spawn_failed", Some("sidecar_spawn"));
+                        if let Some(window) = handle.get_webview_window("main") {
+                            startup_error(&window, "The local backend could not be started. Close nScout and try again.");
+                        }
+                        return;
+                    }
+                };
+                let _ = lifecycle::record(&lifecycle_path, "backend_spawned", None);
+                *handle.state::<BackendState>()
+                    .child
+                    .lock()
+                    .expect("backend state lock") = Some(child);
+                wait_for_backend(handle, readiness_path, lifecycle_path);
+            });
             Ok(())
         })
         .build(tauri::generate_context!())
