@@ -774,9 +774,9 @@ function FlowsTab({ flows, onOpen }) {
           {flows.length} flows
         </span>
       </div>
-      <div className="overflow-auto el-scroll">
-        <table className="w-full text-sm">
-          <thead>
+      <div className="min-w-0 max-h-[min(65dvh,900px)] overflow-auto el-scroll" role="region" aria-label="TCP conversations table" tabIndex={0}>
+        <table className="w-full min-w-[720px] text-sm">
+          <thead className="sticky top-0 z-10 bg-white dark:bg-slate-900">
             <tr className="text-left text-slate-500 text-xs uppercase tracking-wider">
               <th className="px-4 py-2">Endpoint A</th>
               <th className="px-4 py-2">Endpoint B</th>
