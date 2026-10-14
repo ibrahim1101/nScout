@@ -165,7 +165,7 @@ fn main() {
         .expect("failed to build nScout desktop shell");
 
     app.run(|app_handle, event| {
-        if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
+        if matches!(event, RunEvent::Exit) {
             let lifecycle_path = app_handle
                 .state::<BackendState>()
                 .lifecycle_path
