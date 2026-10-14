@@ -31,7 +31,7 @@ function ChangedRows({ title, rows }) {
   const changed = (rows || []).filter(row => Number(row.delta));
   return <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
     <h4 className="text-xs font-bold mb-2">{title}</h4>
-    {changed.length ? <div className="space-y-1 max-h-48 overflow-auto el-scroll">{changed.slice(0, 25).map(row => <div key={row.name} className="grid grid-cols-[1fr_auto_auto] gap-3 text-xs py-1 border-b border-slate-100 dark:border-slate-800 last:border-0"><span className="truncate font-mono-code">{row.name}</span><span className="text-slate-500">{formatNumber(row.baseline)} → {formatNumber(row.current)}</span><span className={row.delta > 0 ? "text-amber-500" : "text-emerald-500"}>{row.delta > 0 ? "+" : ""}{formatNumber(row.delta)}</span></div>)}</div> : <p className="text-xs text-slate-400">No observed changes.</p>}
+    {changed.length ? <div className="space-y-1 max-h-48 overflow-auto el-scroll">{changed.slice(0, 25).map(row => <div key={row.name} className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_auto_auto] gap-2 sm:gap-3 text-xs py-1 border-b border-slate-100 dark:border-slate-800 last:border-0"><span className="truncate font-mono-code">{row.name}</span><span className="hidden sm:inline text-slate-500">{formatNumber(row.baseline)} → {formatNumber(row.current)}</span><span className={row.delta > 0 ? "text-amber-500" : "text-emerald-500"}>{row.delta > 0 ? "+" : ""}{formatNumber(row.delta)}</span></div>)}</div> : <p className="text-xs text-slate-400">No observed changes.</p>}
   </div>;
 }
 
