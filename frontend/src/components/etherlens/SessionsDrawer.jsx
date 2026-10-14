@@ -80,24 +80,24 @@ export default function SessionsDrawer({ open, onClose, onLoaded, status = {} })
           <button data-testid="sessions-close" onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md"><X size={16} /></button>
         </div>
 
-        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
+        <div className="min-w-0 px-3 sm:px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
           <div className="mb-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-3 text-xs">
             <div className="flex items-center justify-between gap-2"><span className="font-semibold inline-flex items-center gap-1.5"><Activity size={13}/>Current capture</span><span className="font-mono-code text-slate-500">{status.capture_id?status.capture_id.slice(0,8):"not started"}</span></div>
-            <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-500"><span>Interface: <b className="text-slate-700 dark:text-slate-300">{status.interface||"none"}</b></span><span>Switches: <b className="text-slate-700 dark:text-slate-300">{status.switch_count||0}</b></span><span>Buffer: <b className="text-slate-700 dark:text-slate-300">{Number(status.total_packets||0).toLocaleString()} / {Number(status.packet_limit||0).toLocaleString()}</b></span><span>Evicted: <b className="text-slate-700 dark:text-slate-300">{Number(status.dropped_packets||0).toLocaleString()}</b></span></div>
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-500 break-words"><span>Interface: <b className="text-slate-700 dark:text-slate-300">{status.interface||"none"}</b></span><span>Switches: <b className="text-slate-700 dark:text-slate-300">{status.switch_count||0}</b></span><span>Buffer: <b className="text-slate-700 dark:text-slate-300">{Number(status.total_packets||0).toLocaleString()} / {Number(status.packet_limit||0).toLocaleString()}</b></span><span>Evicted: <b className="text-slate-700 dark:text-slate-300">{Number(status.dropped_packets||0).toLocaleString()}</b></span></div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               data-testid="session-name-input"
               placeholder="Name this session (e.g. Monday incident)"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="filter-control flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm font-mono-code focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="filter-control min-w-0 w-full flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm font-mono-code focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
               data-testid="session-save-btn"
               onClick={save}
               disabled={saving}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-semibold"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-semibold"
             >
               <Save size={14} /> Save current
             </button>
@@ -105,7 +105,7 @@ export default function SessionsDrawer({ open, onClose, onLoaded, status = {} })
           {actionError && <div className="mt-2 text-xs text-rose-600 dark:text-rose-400">{actionError}</div>}
         </div>
 
-        <div className="flex-1 overflow-auto el-scroll divide-y divide-slate-100 dark:divide-slate-800">
+        <div className="min-h-0 flex-1 overflow-auto el-scroll divide-y divide-slate-100 dark:divide-slate-800">
           {emptyState && (
             <div className={`p-10 text-center text-sm flex flex-col items-center gap-2 ${emptyState.tone === "error" ? "text-rose-500" : emptyState.tone === "warning" ? "text-amber-500" : "text-slate-400"}`}>
               {emptyState.tone === "loading" ? <Loader2 size={28} className="animate-spin" /> : emptyState.tone === "empty" ? <Package size={28} /> : <AlertCircle size={28} />}
@@ -116,7 +116,7 @@ export default function SessionsDrawer({ open, onClose, onLoaded, status = {} })
           )}
           {sessions.map((s) => (
             <div key={s.id} data-testid={`session-row-${s.id}`} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/40">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-display font-semibold text-sm truncate">{s.name}</div>
                   <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono-code flex items-center gap-3 flex-wrap">
