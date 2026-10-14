@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import math
 from collections import Counter
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any, Dict, Iterable, List
@@ -111,7 +112,16 @@ def summarize_pcap(data: bytes, filename: str, packet_limit: int = MAX_COMPARISO
                 if index >= packet_limit:
                     truncated = True
                     break
-                timestamp = float(packet.time) if getattr(packet, "time", None) is not None else None
+                raw_timestamp = getattr(packet, "time", None)
+                if raw_timestamp is None:
+                    timestamp = None
+                else:
+                    try:
+                        timestamp = float(raw_timestamp)
+                    except (TypeError, ValueError, OverflowError) as exc:
+                        raise ValueError("PCAP contains an invalid packet timestamp") from exc
+                    if not math.isfinite(timestamp):
+                        raise ValueError("PCAP contains a non-finite packet timestamp")
                 capture.ingest(packet, timestamp)
     except Exception as exc:
         raise ValueError(f"Invalid or unsupported PCAP: {exc}") from exc
