@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Any, Callable, Dict, List
@@ -35,12 +36,23 @@ class InvestigationStore:
     def _write(self, workspace: InvestigationWorkspace) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         path = self._path(workspace.id)
-        temporary = path.with_suffix(".tmp")
-        temporary.write_text(
-            json.dumps(workspace.to_dict(), ensure_ascii=False, separators=(",", ":")),
-            encoding="utf-8",
-        )
-        os.replace(temporary, path)
+        # A unique temporary file prevents separate app processes from
+        # clobbering one another's pending writes. Keep it on the same
+        # filesystem so os.replace remains atomic.
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=self.root,
+                prefix=f"{path.stem}.", suffix=".tmp", delete=False,
+            ) as handle:
+                temporary = Path(handle.name)
+                json.dump(workspace.to_dict(), handle, ensure_ascii=False, separators=(",", ":"))
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
     def create(self, name: str, description: str = "") -> InvestigationWorkspace:
         name = name.strip()
