@@ -8,7 +8,7 @@ use std::process::Command;
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{atomic::{AtomicBool, Ordering}, Mutex},
     thread,
     time::Duration,
 };
@@ -20,6 +20,7 @@ const READINESS_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Default)]
 struct BackendState {
+    shutting_down: AtomicBool,
     child: Mutex<Option<CommandChild>>,
     lifecycle_path: Mutex<Option<PathBuf>>,
 }
@@ -79,6 +80,7 @@ fn startup_error(window: &tauri::WebviewWindow, detail: &str) {
 }
 
 fn stop_backend(app: &tauri::AppHandle, lifecycle_path: &Path, reason: &str) {
+    app.state::<BackendState>().shutting_down.store(true, Ordering::Release);
     let child = app
         .state::<BackendState>()
         .child
@@ -187,6 +189,9 @@ fn main() {
             // Never perform that work on Tauri's UI setup thread.
             let handle = app.handle().clone();
             thread::spawn(move || {
+                if handle.state::<BackendState>().shutting_down.load(Ordering::Acquire) {
+                    return;
+                }
                 let readiness_arg = readiness_path.to_string_lossy().into_owned();
                 let sidecar = match handle.shell().sidecar("nscout-backend") {
                     Ok(command) => command.args(vec![
@@ -213,10 +218,24 @@ fn main() {
                     }
                 };
                 let _ = lifecycle::record(&lifecycle_path, "backend_spawned", None);
-                *handle.state::<BackendState>()
-                    .child
-                    .lock()
-                    .expect("backend state lock") = Some(child);
+                // Exit can race a slow Windows sidecar spawn. Keep the state
+                // lock while checking shutdown so an exited shell cannot
+                // accidentally leave a newly spawned backend behind.
+                {
+                    let state = handle.state::<BackendState>();
+                    let mut slot = state.child.lock().expect("backend state lock");
+                    if state.shutting_down.load(Ordering::Acquire) {
+                        drop(slot);
+                        #[cfg(target_os = "windows")]
+                        let _ = Command::new("taskkill")
+                            .args(["/PID", &child.pid().to_string(), "/T", "/F"])
+                            .output();
+                        let _ = child.kill();
+                        let _ = lifecycle::record(&lifecycle_path, "backend_stopped", Some("exit_during_spawn"));
+                        return;
+                    }
+                    *slot = Some(child);
+                }
                 wait_for_backend(handle, readiness_path, lifecycle_path);
             });
             Ok(())
