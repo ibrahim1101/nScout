@@ -37,7 +37,11 @@ class _Redactor:
 
     def walk(self, value: Any) -> Any:
         if isinstance(value, dict):
-            return {key: self.walk(item) for key, item in value.items()}
+            # Analyst-defined identifiers (for example finding-state keys)
+            # can themselves contain IPs, MACs or domains. Redact keys as
+            # well as values to avoid leaking identifiers in JSON/XML exports.
+            return {self.text(key) if isinstance(key, str) else key: self.walk(item)
+                    for key, item in value.items()}
         if isinstance(value, (list, tuple)):
             return [self.walk(item) for item in value]
         return self.text(value) if isinstance(value, str) else value
