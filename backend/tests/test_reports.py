@@ -108,3 +108,21 @@ def test_tabular_exports_neutralize_formula_prefixes():
     assert "'=HYPERLINK" in csv_text
     with zipfile.ZipFile(io.BytesIO(xlsx_report(sample_summary(), workspace))) as archive:
         assert b"'=HYPERLINK" in archive.read("xl/worksheets/sheet1.xml")
+
+
+def test_redacted_report_hides_sensitive_identifiers_in_finding_state_keys():
+    workspace = sample_workspace()
+    workspace["finding_states"] = {
+        "10.0.0.2 -> api.example.test": {"state": "investigating", "note": "Source 10.0.0.2"}
+    }
+    summary = sample_summary()
+    document = report_document(summary, workspace, redact=True)
+    serialized = json.dumps(document)
+    assert "10.0.0.2" not in serialized
+    assert "api.example.test" not in serialized
+    assert "host-001" in serialized
+    assert any("host-" in key for key in document["case"]["finding_states"])
+    for exporter in (json_report, html_report, pdf_report, csv_report, xlsx_report, xml_report):
+        output = exporter(summary, workspace, redact=True)
+        assert b"10.0.0.2" not in output
+        assert b"api.example.test" not in output
