@@ -21,9 +21,11 @@ describe("responsive workspace overlays", () => {
       <GlobalSearchDrawer open onClose={() => {}} />
     );
     expect(html).toContain('aria-label="Global investigation search"');
-    expect(html).toContain("max-w-[1280px]");
+    expect(html).toContain("2xl:max-w-[min(96vw,1920px)]");
+    expect(html).toContain("h-full");
     expect(html).toContain("max-h-[calc(100dvh-1.5rem)]");
-    expect(html).toContain("max-h-[calc(100dvh-12rem)]");
+    expect(html).toContain("sm:max-h-[calc(100dvh-3rem)]");
+    expect(html).toContain("min-h-0 flex-1 overflow-auto el-scroll");
   });
 
   test("side drawers fill narrow windows and grow on wider displays", () => {
