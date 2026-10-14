@@ -645,7 +645,7 @@ function PcapWorkspace({
           </div>
           <ReportExports />
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3 mt-5">
           <PcapMetric label="Packets" value={packets.length} />
           <PcapMetric label="Connections" value={connections.length} />
           <PcapMetric label="Devices" value={devices.length} />
@@ -660,13 +660,13 @@ function PcapWorkspace({
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <PcapPanel title="Protocol breakdown">
           {Object.keys(protocolCounts).length ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-2">
               {Object.entries(protocolCounts)
                 .sort((a, b) => b[1] - a[1])
                 .map(([p, n]) => (
                   <div
                     key={p}
-                    className="rounded-lg bg-slate-50 dark:bg-slate-800 p-3"
+                    className="min-w-0 rounded-lg bg-slate-50 dark:bg-slate-800 p-3"
                   >
                     <div className="text-xs text-slate-500">{p}</div>
                     <div className="font-bold mt-1">
@@ -744,11 +744,11 @@ function PcapWorkspace({
 }
 function PcapMetric({ label, value, danger }) {
   return (
-    <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-3">
+    <div className="min-w-0 rounded-lg bg-slate-50 dark:bg-slate-800 p-3">
       <div className="text-[10px] uppercase tracking-wider text-slate-500">
         {label}
       </div>
-      <div className={`text-xl font-bold mt-1 ${danger ? "text-red-500" : ""}`}>
+      <div className={`text-xl font-bold mt-1 break-words ${danger ? "text-red-500" : ""}`}>
         {Number(value || 0).toLocaleString()}
       </div>
     </div>
