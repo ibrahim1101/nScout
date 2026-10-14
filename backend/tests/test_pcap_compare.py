@@ -75,3 +75,16 @@ def test_comparison_discloses_packet_limit_truncation():
     result = summarize_pcap(data, "bounded.pcap", packet_limit=2)
     assert result["file"]["packets_analyzed"] == 2
     assert result["file"]["truncated"] is True
+
+
+def test_pcap_timestamp_bounds_handle_out_of_order_packets_and_windows_filename():
+    first = Ether()/IP(src="10.0.0.1", dst="10.0.0.2")/TCP()
+    second = Ether()/IP(src="10.0.0.2", dst="10.0.0.1")/TCP()
+    third = Ether()/IP(src="10.0.0.1", dst="10.0.0.2")/TCP()
+    first.time, second.time, third.time = 105.0, 100.0, 103.0
+    data = _pcap_bytes([first, second, third])
+    result = summarize_pcap(data, r"C:\\Users\\Analyst\\captures\\test.pcap")
+    assert result["file"]["name"] == "test.pcap"
+    assert result["file"]["start_timestamp"] == 100.0
+    assert result["file"]["end_timestamp"] == 105.0
+    assert result["file"]["duration_seconds"] == 5.0
