@@ -115,8 +115,14 @@ fn wait_for_backend(app: tauri::AppHandle, readiness_path: PathBuf, lifecycle_pa
     thread::spawn(move || {
         for _ in 0..READINESS_ATTEMPTS {
             if let Ok(payload) = fs::read_to_string(&readiness_path) {
-                match serde_json::from_str::<Readiness>(&payload) {
-                    Ok(readiness) if validated_backend_url(&readiness).is_some() => {
+                // The sidecar writes its readiness file asynchronously. A partially
+                // written JSON document must not abort startup prematurely.
+                let Ok(readiness) = serde_json::from_str::<Readiness>(&payload) else {
+                    thread::sleep(READINESS_INTERVAL);
+                    continue;
+                };
+                match readiness {
+                    readiness if validated_backend_url(&readiness).is_some() => {
                         let _ = lifecycle::record(&lifecycle_path, "backend_ready", Some("loopback"));
                         if let Some(window) = app.get_webview_window("main") {
                             let url = serde_json::to_string(&readiness.url).unwrap();
@@ -125,7 +131,7 @@ fn wait_for_backend(app: tauri::AppHandle, readiness_path: PathBuf, lifecycle_pa
                         let _ = fs::remove_file(&readiness_path);
                         return;
                     }
-                    Ok(_) | Err(_) => {
+                    _ => {
                         let _ = lifecycle::record(&lifecycle_path, "startup_invalid_readiness", None);
                         if let Some(window) = app.get_webview_window("main") {
                             startup_error(&window, "The local backend returned an invalid readiness response. Close nScout and try again.");
