@@ -33,7 +33,7 @@ struct Readiness {
 fn startup_error(window: &tauri::WebviewWindow, detail: &str) {
     let message = serde_json::to_string(detail).unwrap_or_else(|_| "\"Unknown startup error\"".into());
     let script = format!(
-        "document.getElementById('startup-status').innerHTML = '<h1>nScout could not start</h1><p></p>'; document.querySelector('#startup-status p').textContent = {message};"
+        "const status = document.getElementById('startup-status'); if (status) {{ status.replaceChildren(); const heading = document.createElement('h1'); heading.textContent = 'nScout could not start'; const detail = document.createElement('p'); detail.textContent = {message}; status.append(heading, detail); }}"
     );
     let _ = window.eval(&script);
 }
