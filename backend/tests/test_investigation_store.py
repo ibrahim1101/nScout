@@ -172,3 +172,27 @@ def test_release_candidate_case_survives_restart_and_exports_redacted_report(tmp
 
     assert restarted_store.delete(case.id) is True
     assert restarted_store.list() == []
+
+
+def test_atomic_write_failure_preserves_previous_case_and_cleans_temp(tmp_path, monkeypatch):
+    import etherlens.investigation_store as module
+
+    store = InvestigationStore(tmp_path)
+    case = store.create("Original case")
+    original = (tmp_path / f"{case.id}.json").read_bytes()
+    real_replace = module.os.replace
+
+    def fail_replace(source, destination):
+        assert str(source).endswith(".tmp")
+        assert str(destination).endswith(f"{case.id}.json")
+        raise OSError("simulated interrupted replace")
+
+    monkeypatch.setattr(module.os, "replace", fail_replace)
+    case.name = "Updated case"
+    with pytest.raises(OSError, match="interrupted replace"):
+        store.save(case)
+    monkeypatch.setattr(module.os, "replace", real_replace)
+
+    assert (tmp_path / f"{case.id}.json").read_bytes() == original
+    assert store.get(case.id).name == "Original case"
+    assert list(tmp_path.glob("*.tmp")) == []
