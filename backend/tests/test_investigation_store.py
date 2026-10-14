@@ -219,7 +219,7 @@ def test_store_rejects_mismatched_case_identity_without_deleting_data(tmp_path):
     {"evidence": [None]},
     {"evidence": [{"type": "packet", "ref_id": "pkt", "unknown": True}]},
     {"notes": None},
-    {"finding_states": []},
+    {"finding_states": ["malformed-entry"]},
 ])
 def test_malformed_case_does_not_block_valid_case_listing(tmp_path, broken):
     store = InvestigationStore(tmp_path)
