@@ -196,3 +196,19 @@ def test_atomic_write_failure_preserves_previous_case_and_cleans_temp(tmp_path, 
     assert (tmp_path / f"{case.id}.json").read_bytes() == original
     assert store.get(case.id).name == "Original case"
     assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_store_rejects_mismatched_case_identity_without_deleting_data(tmp_path):
+    store = InvestigationStore(tmp_path)
+    first = store.create("First case")
+    second = store.create("Second case")
+    first_path = tmp_path / f"{first.id}.json"
+    payload = json.loads(first_path.read_text(encoding="utf-8"))
+    payload["id"] = second.id
+    first_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="does not match"):
+        store.get(first.id)
+    assert [row["id"] for row in store.list()] == [second.id]
+    assert store.get(second.id).name == "Second case"
+    assert first_path.exists()
