@@ -30,6 +30,46 @@ struct Readiness {
     url: String,
 }
 
+fn validated_backend_url(readiness: &Readiness) -> Option<&str> {
+    if readiness.status != "ready" {
+        return None;
+    }
+    let url = readiness.url.as_str();
+    let port = url.strip_prefix("http://127.0.0.1:")?;
+    if port.is_empty() || port.starts_with('0') || port.len() > 5 || !port.bytes().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    if port.parse::<u16>().ok()? == 0 {
+        return None;
+    }
+    Some(url)
+}
+
+#[cfg(test)]
+mod readiness_tests {
+    use super::*;
+
+    #[test]
+    fn accepts_only_exact_loopback_http_origin_with_valid_port() {
+        for url in ["http://127.0.0.1:1", "http://127.0.0.1:8765", "http://127.0.0.1:65535"] {
+            let readiness = Readiness { status: "ready".into(), url: url.into() };
+            assert_eq!(validated_backend_url(&readiness), Some(url));
+        }
+        for url in [
+            "http://127.0.0.1:", "http://127.0.0.1:0", "http://127.0.0.1:00080",
+            "http://127.0.0.1:65536", "http://127.0.0.1:80/path",
+            "http://127.0.0.1:80@evil.test", "http://127.0.0.1:80?redirect=evil",
+            "http://localhost:8765", "http://0.0.0.0:8765",
+            "https://127.0.0.1:8765", "http://127.0.0.1:8765.evil.test",
+        ] {
+            let readiness = Readiness { status: "ready".into(), url: url.into() };
+            assert!(validated_backend_url(&readiness).is_none(), "accepted {url}");
+        }
+        let not_ready = Readiness { status: "starting".into(), url: "http://127.0.0.1:8765".into() };
+        assert!(validated_backend_url(&not_ready).is_none());
+    }
+}
+
 fn startup_error(window: &tauri::WebviewWindow, detail: &str) {
     let message = serde_json::to_string(detail).unwrap_or_else(|_| "\"Unknown startup error\"".into());
     let script = format!(
@@ -76,7 +116,7 @@ fn wait_for_backend(app: tauri::AppHandle, readiness_path: PathBuf, lifecycle_pa
         for _ in 0..READINESS_ATTEMPTS {
             if let Ok(payload) = fs::read_to_string(&readiness_path) {
                 match serde_json::from_str::<Readiness>(&payload) {
-                    Ok(readiness) if readiness.status == "ready" && readiness.url.starts_with("http://127.0.0.1:") => {
+                    Ok(readiness) if validated_backend_url(&readiness).is_some() => {
                         let _ = lifecycle::record(&lifecycle_path, "backend_ready", Some("loopback"));
                         if let Some(window) = app.get_webview_window("main") {
                             let url = serde_json::to_string(&readiness.url).unwrap();
