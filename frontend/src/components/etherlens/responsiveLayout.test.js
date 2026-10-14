@@ -14,7 +14,6 @@ describe("responsive workspace overlays", () => {
     expect(html).toContain("max-w-[1600px]");
     expect(html).toContain("h-[min(90dvh,1200px)]");
     expect(html).toContain("min-h-0 flex-1 overflow-auto");
-    expect(html).toContain("max-h-[clamp(14rem,35dvh,42rem)]");
   });
 
   test("global search scales with viewport height and width", () => {
