@@ -89,7 +89,10 @@ class InvestigationStore:
                 raise InvestigationNotFound(workspace_id) from exc
             except (OSError, ValueError, TypeError) as exc:
                 raise ValueError("Investigation data is unreadable") from exc
-        workspace = InvestigationWorkspace.from_dict(data)
+        try:
+            workspace = InvestigationWorkspace.from_dict(data)
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError("Investigation data is unreadable") from exc
         if workspace.id != self._validated_id(workspace_id):
             raise ValueError("Investigation ID does not match its storage filename")
         return workspace
@@ -115,7 +118,7 @@ class InvestigationStore:
                     )
                     if workspace.id != self._validated_id(path.stem):
                         continue
-                except (OSError, ValueError, TypeError, InvestigationNotFound):
+                except (OSError, ValueError, TypeError, KeyError, AttributeError, InvestigationNotFound):
                     continue
                 records.append({
                     "id": workspace.id,
