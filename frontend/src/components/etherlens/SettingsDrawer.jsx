@@ -272,7 +272,7 @@ export default function SettingsDrawer({
             <X size={16} />
           </button>
         </div>
-        <div className="flex-1 overflow-auto el-scroll p-5 space-y-6">
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto el-scroll p-3 sm:p-5 space-y-6">
           <Group icon={BrainCircuit} title="AI integration">
             <Toggle
               label="Enable AI features"
@@ -454,14 +454,14 @@ export default function SettingsDrawer({
               Webhook URLs, AI server details and captured evidence are
               excluded.
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 data-testid="profile-name"
                 value={profileName}
                 onChange={(e) => setProfileName(e.target.value)}
                 maxLength={80}
                 placeholder="Profile name"
-                className="filter-control flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-transparent text-sm"
+                className="filter-control min-w-0 w-full flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-transparent text-sm"
               />
               <button
                 data-testid="profile-create"
@@ -583,7 +583,7 @@ export default function SettingsDrawer({
             </div>
           )}
         </div>
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="px-3 sm:px-5 py-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
           <span className="text-xs text-slate-500">
             App preferences stay local; webhook settings persist in nScout.
           </span>
@@ -634,20 +634,20 @@ function WebhookField({ label, value, onChange, onTest, testing, testId }) {
   return (
     <div className="pt-2">
       <h4 className="text-xs font-semibold mb-1">{label}</h4>
-      <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row gap-2">
         <input
           data-testid={testId}
           type="url"
           placeholder="https://…"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="filter-control flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm font-mono-code"
+          className="filter-control min-w-0 w-full flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm font-mono-code"
         />
         <button
           data-testid={`${testId}-test`}
           onClick={onTest}
           disabled={!value || testing}
-          className="px-3 py-2 rounded-md bg-slate-100 dark:bg-slate-800 text-sm font-semibold disabled:opacity-50"
+          className="px-3 py-2 rounded-md bg-slate-100 dark:bg-slate-800 text-sm font-semibold disabled:opacity-50 shrink-0"
         >
           {testing ? "Testing…" : "Test"}
         </button>
