@@ -51,7 +51,7 @@ export default function GlobalSearchDrawer({ open, onClose, onOpenResult }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-sm p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="Global investigation search" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="mx-auto w-full min-w-0 max-w-[1280px] max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl">
+      <div className="mx-auto w-full min-w-0 max-w-none 2xl:max-w-[min(96vw,1920px)] h-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl">
         <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 px-4">
           <Search size={18} className="shrink-0 text-blue-500" />
           <input
@@ -74,7 +74,7 @@ export default function GlobalSearchDrawer({ open, onClose, onOpenResult }) {
           {categories.length ? categories.map(([type, count]) => <span key={type} className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-1">{LABELS[type] || type} · {count}</span>) : <span>Type at least 2 characters. Raw payload and hex data are not indexed.</span>}
           {data.truncated && <span className="ml-auto text-amber-600 dark:text-amber-300">Showing the highest-ranked matches</span>}
         </div>
-        <div className="min-h-0 max-h-[calc(100dvh-12rem)] overflow-auto el-scroll">
+        <div className="min-h-0 flex-1 overflow-auto el-scroll">
           {error && <div className="m-4 flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-3 text-xs text-red-600 dark:text-red-300"><AlertCircle size={15} />{error}</div>}
           {!error && query.trim().length >= 2 && !loading && !data.results?.length && <div className="p-12 text-center"><FileSearch2 size={28} className="mx-auto text-slate-400" /><div className="mt-3 text-sm font-semibold">No investigation data matched</div><p className="mt-1 text-xs text-slate-500">Try an IP, domain, port, protocol, finding, case name, or analyst note.</p></div>}
           {(data.results || []).map((result) => (
