@@ -125,3 +125,50 @@ def test_investigation_api_rejects_large_snapshots(tmp_path, monkeypatch):
             server.EvidenceRequest(type="packet", ref_id="p1", snapshot={"raw": "x" * (129 * 1024)}),
         ))
     assert error.value.status_code == 413
+
+
+def test_release_candidate_case_survives_restart_and_exports_redacted_report(tmp_path):
+    """Exercise the persisted analyst workflow across a fresh store instance."""
+    from etherlens.reports import csv_report, html_report, json_report, pdf_report, report_document, xlsx_report, xml_report
+
+    case_dir = tmp_path / "investigations"
+    store = InvestigationStore(case_dir)
+    case = store.create("Outbound traffic review", "Review observed destination")
+    store.mutate(case.id, lambda item: item.add_evidence(
+        EvidenceItem("host", "192.0.2.10", title="Source host")
+    ))
+    store.mutate(case.id, lambda item: item.add_evidence(
+        EvidenceItem("packet", "pkt-42", title="Captured packet", snapshot={"hex": "sensitive-payload"})
+    ))
+    store.mutate(case.id, lambda item: item.add_note("Review traffic from 192.0.2.10"))
+    store.mutate(case.id, lambda item: item.set_finding_state(
+        "finding-42", "investigating", "Check the observed connection"
+    ))
+
+    restarted_store = InvestigationStore(case_dir)
+    restored = restarted_store.get(case.id)
+    assert len(restored.evidence) == 2
+    assert len(restored.notes) == 1
+    assert restored.finding_states["finding-42"]["state"] == "investigating"
+
+    summary = {
+        "overview": {"total_packets": 1, "total_bytes": 64, "protocols": []},
+        "connections": [], "devices": [], "hosts": [{"ip": "192.0.2.10"}],
+        "security": {"findings": [], "note": "Findings require analyst validation."},
+        "threats": [],
+    }
+    workspace = restored.to_dict()
+    document = report_document(summary, workspace, redact=True)
+    serialized = json.dumps(document)
+    assert "192.0.2.10" not in serialized
+    assert "sensitive-payload" not in serialized
+    assert document["case"]["finding_states"]["finding-42"]["state"] == "investigating"
+
+    for exporter in (json_report, html_report, pdf_report, csv_report, xlsx_report, xml_report):
+        output = exporter(summary, workspace, redact=True)
+        assert output
+        assert b"192.0.2.10" not in (output if isinstance(output, bytes) else output.encode())
+        assert b"sensitive-payload" not in (output if isinstance(output, bytes) else output.encode())
+
+    assert restarted_store.delete(case.id) is True
+    assert restarted_store.list() == []
