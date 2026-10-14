@@ -88,3 +88,24 @@ def test_pcap_timestamp_bounds_handle_out_of_order_packets_and_windows_filename(
     assert result["file"]["start_timestamp"] == 100.0
     assert result["file"]["end_timestamp"] == 105.0
     assert result["file"]["duration_seconds"] == 5.0
+
+
+def test_pcap_rejects_non_finite_packet_timestamps(monkeypatch):
+    import etherlens.pcap_compare as module
+
+    class FakePacket:
+        time = float("nan")
+
+    class FakeReader:
+        def __init__(self, stream):
+            pass
+
+        def __enter__(self):
+            return iter([FakePacket()])
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(module, "PcapReader", FakeReader)
+    with pytest.raises(ValueError, match="non-finite packet timestamp"):
+        summarize_pcap(b"synthetic", "invalid-time.pcap")
