@@ -212,3 +212,21 @@ def test_store_rejects_mismatched_case_identity_without_deleting_data(tmp_path):
     assert [row["id"] for row in store.list()] == [second.id]
     assert store.get(second.id).name == "Second case"
     assert first_path.exists()
+
+
+@pytest.mark.parametrize("broken", [
+    [],
+    {"evidence": [None]},
+    {"evidence": [{"type": "packet", "ref_id": "pkt", "unknown": True}]},
+    {"notes": None},
+    {"finding_states": []},
+])
+def test_malformed_case_does_not_block_valid_case_listing(tmp_path, broken):
+    store = InvestigationStore(tmp_path)
+    valid = store.create("Valid investigation")
+    broken_id = "00000000-0000-0000-0000-000000000001"
+    (tmp_path / f"{broken_id}.json").write_text(json.dumps(broken), encoding="utf-8")
+    assert [row["id"] for row in store.list()] == [valid.id]
+    with pytest.raises(ValueError, match="unreadable|does not match"):
+        store.get(broken_id)
+    assert store.get(valid.id).name == "Valid investigation"
