@@ -24,7 +24,7 @@ export default function FlowDrawer({ open, onClose, flow }) {
         data-testid="follow-flow-drawer"
         className="w-full min-w-0 max-w-[1600px] h-[min(90dvh,1200px)] max-h-full bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden"
       >
-        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="min-w-0 px-3 sm:px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-start gap-3 justify-between">
           <div>
             <h3 className="font-display font-bold text-sm">Follow TCP Stream</h3>
             {flow && (
@@ -39,7 +39,7 @@ export default function FlowDrawer({ open, onClose, flow }) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto el-scroll p-4 space-y-4">
+        <div className="min-h-0 flex-1 overflow-auto el-scroll p-3 sm:p-4 space-y-4">
           {loading && <div className="text-sm text-slate-400">Reassembling stream…</div>}
           {!loading && data && (
             <>
@@ -71,12 +71,12 @@ function StreamPane({ title, subtitle, stream, tone, testId }) {
     : "border-emerald-200 dark:border-emerald-500/30 bg-emerald-50/40 dark:bg-emerald-500/5";
   return (
     <div className={`rounded-lg border ${toneCls}`} data-testid={testId}>
-      <div className="px-3 py-2 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-200">
+      <div className="px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
         <div>{title}</div>
         <div className="font-mono-code text-slate-500">{stream.packets} pkts · {stream.bytes} bytes · {stream.mode}</div>
       </div>
       <div className="text-xs font-mono-code text-slate-500 px-3 pb-1">{subtitle}</div>
-      <pre className="px-3 pb-3 pt-1 font-mono-code text-[11.5px] leading-snug whitespace-pre-wrap break-all text-slate-800 dark:text-slate-200 max-h-56 overflow-auto el-scroll">
+      <pre className="px-3 pb-3 pt-1 font-mono-code text-[11.5px] leading-snug whitespace-pre-wrap break-all text-slate-800 dark:text-slate-200 max-h-[clamp(14rem,35dvh,42rem)] overflow-auto el-scroll">
         {stream.data || <span className="text-slate-400 italic">(empty / no application-layer payload)</span>}
       </pre>
     </div>
