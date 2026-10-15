@@ -46,7 +46,10 @@ def test_successful_upload_replaces_evidence_and_preserves_subscribers(monkeypat
         return 1
 
     monkeypatch.setattr(CaptureSession, "ingest_pcap_bytes", parse)
-    result = asyncio.run(server.upload_pcap(_upload(b"valid")))
+    # The parser is mocked, but the upload still must pass structural validation.
+    import struct
+    header = struct.pack("<IHHIIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1)
+    result = asyncio.run(server.upload_pcap(_upload(header)))
     assert result["packets"] == 1
     assert result["stats"]["mode"] == "pcap"
     assert result["stats"]["requested_mode"] == "pcap"
