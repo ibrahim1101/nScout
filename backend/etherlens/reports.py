@@ -41,8 +41,8 @@ class _Redactor:
 
     def text(self, value: Any) -> str:
         text = str(value if value is not None else "")
-        text = MAC_RE.sub(lambda match: self._label("mac", match.group(0).lower()), text)
         text = IPV6_RE.sub(self._ipv6, text)
+        text = MAC_RE.sub(lambda match: self._label("mac", match.group(0).lower()), text)
         text = IPV4_RE.sub(lambda match: self._label("host", match.group(0)), text)
         return DOMAIN_RE.sub(lambda match: self._label("domain", match.group(0).lower()), text)
 
