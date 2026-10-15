@@ -126,3 +126,29 @@ def test_redacted_report_hides_sensitive_identifiers_in_finding_state_keys():
         output = exporter(summary, workspace, redact=True)
         assert b"10.0.0.2" not in output
         assert b"api.example.test" not in output
+
+
+def test_ipv6_redaction_normalizes_equivalent_addresses_in_reports():
+    summary = sample_summary()
+    summary["hosts"] = [{"ip": "2001:0DB8:0:0:0:0:0:1", "hostname": "node.example.test"}]
+    summary["security"]["findings"][0]["detail"] = "Contact [2001:db8::1]:443 and fe80::abcd"
+    workspace = sample_workspace()
+    workspace["notes"][0]["text"] = "Observed 2001:db8::1 and fe80::abcd"
+    workspace["finding_states"] = {"2001:db8::1": {"state": "investigating"}}
+    document = report_document(summary, workspace, redact=True)
+    serialized = json.dumps(document)
+    assert "2001:db8" not in serialized.lower()
+    assert "fe80::abcd" not in serialized.lower()
+    assert document["investigation"]["hosts"][0]["ip"] == "host-001"
+    assert "host-001" in document["case"]["finding_states"]
+    assert document["redaction"]["host_count"] == 2
+    for exporter in (json_report, html_report, pdf_report, csv_report, xlsx_report, xml_report):
+        output = exporter(summary, workspace, redact=True).lower()
+        assert b"2001:db8" not in output
+        assert b"fe80::abcd" not in output
+
+
+def test_ipv6_redaction_preserves_non_address_colon_text():
+    from etherlens.reports import _Redactor
+    redactor = _Redactor()
+    assert redactor.text("12:34:56 is a time; abc:def is not IPv6") == "12:34:56 is a time; abc:def is not IPv6"
