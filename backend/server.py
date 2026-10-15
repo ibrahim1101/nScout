@@ -377,9 +377,10 @@ async def upload_pcap(file:UploadFile=File(...)):
  await session.stop()
  session.clear()
  # Preserve websocket subscribers and the session identity used by API routes.
- for field in ("packets","threats","by_id","flows","hosts","timeline","counter","dropped_packets","threat_state","last_packet_at","capture_id","capture_created_at"):
+ for field in ("packets","threats","by_id","flows","hosts","timeline","counter","dropped_packets","threat_state","last_packet_at","capture_id","capture_created_at","requested_mode"):
   setattr(session,field,getattr(staged,field))
  session.mode="pcap"
+ session.requested_mode="pcap"
  return {"status":"parsed","packets":n,"stats":session.stats(),"investigation":intelligence.investigation_summary(list(session.packets),session.list_threats(),_detection_preset)}
 @api.post("/pcap/compare")
 async def compare_pcaps(baseline:UploadFile=File(...),current:UploadFile=File(...)):
