@@ -152,3 +152,12 @@ def test_ipv6_redaction_preserves_non_address_colon_text():
     from etherlens.reports import _Redactor
     redactor = _Redactor()
     assert redactor.text("12:34:56 is a time; abc:def is not IPv6") == "12:34:56 is a time; abc:def is not IPv6"
+
+
+def test_ipv6_eight_short_groups_are_not_partially_redacted_as_mac():
+    from etherlens.reports import _Redactor
+    redactor = _Redactor()
+    original = "00:11:22:33:44:55:66:77"
+    assert redactor.text(original) == "host-001"
+    assert redactor.text("00:11:22:33:44:55") == "mac-001"
+    assert redactor.text("00:11:22:33:44:55:66:77") == "host-001"
