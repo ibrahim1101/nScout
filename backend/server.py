@@ -1,6 +1,6 @@
 """EtherLens AI backend – FastAPI app."""
 from __future__ import annotations
-import asyncio,json,logging,os
+import asyncio,json,logging,os,struct
 from pathlib import Path
 from typing import Any,Dict,List,Optional
 from dotenv import load_dotenv
@@ -363,11 +363,39 @@ async def topology(enrich:bool=False):
   ext=[n["id"] for n in data["nodes"] if n.get("type")!="local"]; gm=await geo.enrich(ext)
   for n in data["nodes"]:n["geo"]=gm.get(n["id"]) if n["id"] in gm else None
  return data
+def _validate_pcap_records(data:bytes)->None:
+ """Reject incomplete classic-PCAP records before replacing investigation evidence."""
+ if len(data)<24:
+  raise ValueError("Truncated PCAP global header")
+ magic=data[:4]
+ if magic in (b"\\xd4\\xc3\\xb2\\xa1",b"\\x4d\\x3c\\xb2\\xa1"):
+  endian="<"
+ elif magic in (b"\\xa1\\xb2\\xc3\\xd4",b"\\xa1\\xb2\\x3c\\x4d"):
+  endian=">"
+ else:
+  raise ValueError("Unsupported PCAP signature")
+ major,minor,_,_,snaplen,_=struct.unpack_from(endian+"HHIIII",data,4)
+ if (major,minor)!=(2,4) or not snaplen:
+  raise ValueError("Invalid PCAP global header")
+ offset=24
+ while offset<len(data):
+  if len(data)-offset<16:
+   raise ValueError("Truncated PCAP packet header")
+  _,_,captured,original=struct.unpack_from(endian+"IIII",data,offset)
+  offset+=16
+  if captured>snaplen or captured>original:
+   raise ValueError("Invalid PCAP packet length")
+  if captured>len(data)-offset:
+   raise ValueError("Truncated PCAP packet data")
+  offset+=captured
+
 @api.post("/pcap/upload")
 async def upload_pcap(file:UploadFile=File(...)):
  data=await file.read(MAX_PCAP_BYTES+1)
  if not data:raise HTTPException(status_code=400,detail="Empty file")
  if len(data)>MAX_PCAP_BYTES:raise HTTPException(status_code=413,detail="File too large (max 50MB)")
+ try:_validate_pcap_records(data)
+ except ValueError as e:raise HTTPException(status_code=400,detail=f"Invalid pcap: {e}") from e
  # Stage before touching the active session, so invalid uploads cannot destroy evidence.
  staged=CaptureSession()
  staged.configure_packet_limit(session.packet_limit)
