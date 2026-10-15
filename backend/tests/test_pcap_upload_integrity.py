@@ -83,9 +83,13 @@ def test_real_pcap_roundtrip_import(monkeypatch):
     active.ingest(Ether()/IP(src="10.0.0.3", dst="10.0.0.4")/TCP(), ts=80.0)
     monkeypatch.setattr(server, "session", active)
     monkeypatch.setattr(server.intelligence, "investigation_summary", lambda *args: {"ok": True})
+    # Scapy's wrpcap closes file-like objects; use its bytes-returning writer.
+    from scapy.utils import PcapWriter
     buffer = io.BytesIO()
-    wrpcap(buffer, [Ether()/IP(src="192.0.2.10", dst="192.0.2.20")/TCP()])
-    result = asyncio.run(server.upload_pcap(_upload(buffer.getvalue())))
+    writer = PcapWriter(buffer, sync=True)
+    writer.write(Ether(src="02:00:00:00:00:01", dst="02:00:00:00:00:02")/IP(src="192.0.2.10", dst="192.0.2.20")/TCP())
+    data = buffer.getvalue()
+    result = asyncio.run(server.upload_pcap(_upload(data)))
     assert result["packets"] == 1
     assert result["stats"]["total_packets"] == 1
     assert result["stats"]["mode"] == "pcap"
