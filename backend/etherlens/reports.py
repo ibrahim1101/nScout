@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import html
 import io
+import ipaddress
 import json
 import re
 import zipfile
@@ -15,6 +16,7 @@ from xml.sax.saxutils import escape
 
 REPORT_COLUMNS = ["section", "timestamp", "severity", "title", "source", "destination", "protocol", "details"]
 IPV4_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+IPV6_RE = re.compile(r"(?<![0-9A-Za-z_:])(?:[0-9A-Fa-f]*:){2,}[0-9A-Fa-f]*(?![0-9A-Za-z_:])")
 MAC_RE = re.compile(r"\b(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}\b")
 DOMAIN_RE = re.compile(r"\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,63}\b")
 
@@ -29,9 +31,18 @@ class _Redactor:
             values[value] = f"{kind}-{len(values) + 1:03d}" + (".invalid" if kind == "domain" else "")
         return values[value]
 
+    def _ipv6(self, match: re.Match[str]) -> str:
+        candidate = match.group(0)
+        try:
+            address = ipaddress.IPv6Address(candidate)
+        except ValueError:
+            return candidate
+        return self._label("host", str(address))
+
     def text(self, value: Any) -> str:
         text = str(value if value is not None else "")
         text = MAC_RE.sub(lambda match: self._label("mac", match.group(0).lower()), text)
+        text = IPV6_RE.sub(self._ipv6, text)
         text = IPV4_RE.sub(lambda match: self._label("host", match.group(0)), text)
         return DOMAIN_RE.sub(lambda match: self._label("domain", match.group(0).lower()), text)
 
