@@ -368,11 +368,10 @@ def _validate_pcap_records(data:bytes)->None:
  if len(data)<24:
   raise ValueError("Truncated PCAP global header")
  magic=data[:4]
- if magic in (b"\\xd4\\xc3\\xb2\\xa1",b"\\x4d\\x3c\\xb2\\xa1"):
+ if magic in (bytes.fromhex("d4c3b2a1"),bytes.fromhex("4d3cb2a1")):
   endian="<"
- elif magic in (b"\\xa1\\xb2\\xc3\\xd4",b"\\xa1\\xb2\\x3c\\x4d"):
-  endian=">"
- else:
+ elif magic in (bytes.fromhex("a1b2c3d4"),bytes.fromhex("a1b23c4d")):
+  endian=">" else:
   raise ValueError("Unsupported PCAP signature")
  major,minor,_,_,snaplen,_=struct.unpack_from(endian+"HHIIII",data,4)
  if (major,minor)!=(2,4) or not snaplen:
