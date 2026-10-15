@@ -4,7 +4,7 @@ import io
 
 import pytest
 from fastapi import HTTPException, UploadFile
-from scapy.all import Ether, IP, TCP
+from scapy.all import Ether, IP, TCP, wrpcap
 
 import server
 from etherlens.engine import CaptureSession
@@ -49,6 +49,7 @@ def test_successful_upload_replaces_evidence_and_preserves_subscribers(monkeypat
     result = asyncio.run(server.upload_pcap(_upload(b"valid")))
     assert result["packets"] == 1
     assert result["stats"]["mode"] == "pcap"
+    assert result["stats"]["requested_mode"] == "pcap"
     assert result["stats"]["capture_id"] == active.capture_id
     assert active.get_packet(original["id"]) is None
     assert active.packets[0]["src_ip"] == "192.0.2.1"
@@ -75,3 +76,18 @@ def test_oversized_upload_rejected_without_erasing_evidence(monkeypatch):
         asyncio.run(server.upload_pcap(_upload(b"12345")))
     assert error.value.status_code == 413
     assert len(active.packets) == 1
+
+
+def test_real_pcap_roundtrip_import(monkeypatch):
+    active = CaptureSession()
+    active.ingest(Ether()/IP(src="10.0.0.3", dst="10.0.0.4")/TCP(), ts=80.0)
+    monkeypatch.setattr(server, "session", active)
+    monkeypatch.setattr(server.intelligence, "investigation_summary", lambda *args: {"ok": True})
+    buffer = io.BytesIO()
+    wrpcap(buffer, [Ether()/IP(src="192.0.2.10", dst="192.0.2.20")/TCP()])
+    result = asyncio.run(server.upload_pcap(_upload(buffer.getvalue())))
+    assert result["packets"] == 1
+    assert result["stats"]["total_packets"] == 1
+    assert result["stats"]["mode"] == "pcap"
+    assert result["stats"]["requested_mode"] == "pcap"
+    assert active.packets[0]["src_ip"] == "192.0.2.10"
