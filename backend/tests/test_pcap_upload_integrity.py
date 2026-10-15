@@ -95,3 +95,38 @@ def test_real_pcap_roundtrip_import(monkeypatch):
     assert result["stats"]["mode"] == "pcap"
     assert result["stats"]["requested_mode"] == "pcap"
     assert active.packets[0]["src_ip"] == "192.0.2.10"
+
+
+@pytest.mark.parametrize("payload", [
+    b"not-a-pcap",
+    b"\\xd4\\xc3\\xb2",
+    b"\\xd4\\xc3\\xb2\\xa1" + b"\\x00" * 10,
+])
+def test_malformed_or_truncated_pcap_preserves_evidence(monkeypatch, payload):
+    active = CaptureSession()
+    previous = active.ingest(Ether()/IP(src="10.0.0.10", dst="10.0.0.11")/TCP(), ts=100.0)
+    original_id = active.capture_id
+    monkeypatch.setattr(server, "session", active)
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.upload_pcap(_upload(payload)))
+    assert error.value.status_code == 400
+    assert active.capture_id == original_id
+    assert active.get_packet(previous["id"]) is previous
+    assert len(active.packets) == 1
+
+
+def test_pcap_with_truncated_packet_record_preserves_evidence(monkeypatch):
+    import struct
+
+    active = CaptureSession()
+    previous = active.ingest(Ether()/IP()/TCP(), ts=100.0)
+    monkeypatch.setattr(server, "session", active)
+    # Valid little-endian PCAP header followed by a record claiming 60 captured
+    # bytes, with only three bytes actually present.
+    global_header = struct.pack("<IHHIIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1)
+    record_header = struct.pack("<IIII", 100, 0, 60, 60)
+    payload = global_header + record_header + b"\\x00\\x01\\x02"
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.upload_pcap(_upload(payload)))
+    assert error.value.status_code == 400
+    assert active.get_packet(previous["id"]) is previous
