@@ -371,7 +371,8 @@ def _validate_pcap_records(data:bytes)->None:
  if magic in (bytes.fromhex("d4c3b2a1"),bytes.fromhex("4d3cb2a1")):
   endian="<"
  elif magic in (bytes.fromhex("a1b2c3d4"),bytes.fromhex("a1b23c4d")):
-  endian=">" else:
+  endian=">"
+ else:
   raise ValueError("Unsupported PCAP signature")
  major,minor,_,_,snaplen,_=struct.unpack_from(endian+"HHIIII",data,4)
  if (major,minor)!=(2,4) or not snaplen:
