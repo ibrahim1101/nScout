@@ -365,12 +365,21 @@ async def topology(enrich:bool=False):
  return data
 @api.post("/pcap/upload")
 async def upload_pcap(file:UploadFile=File(...)):
- data=await file.read()
+ data=await file.read(MAX_PCAP_BYTES+1)
  if not data:raise HTTPException(status_code=400,detail="Empty file")
- if len(data)>50*1024*1024:raise HTTPException(status_code=413,detail="File too large (max 50MB)")
- await session.stop();session.clear()
- try:n=session.ingest_pcap_bytes(data)
+ if len(data)>MAX_PCAP_BYTES:raise HTTPException(status_code=413,detail="File too large (max 50MB)")
+ # Stage before touching the active session, so invalid uploads cannot destroy evidence.
+ staged=CaptureSession()
+ staged.configure_packet_limit(session.packet_limit)
+ try:n=await asyncio.to_thread(staged.ingest_pcap_bytes,data)
  except Exception as e:raise HTTPException(status_code=400,detail=f"Invalid pcap: {e}") from e
+ if not n:raise HTTPException(status_code=400,detail="PCAP contains no packets")
+ await session.stop()
+ session.clear()
+ # Preserve websocket subscribers and the session identity used by API routes.
+ for field in ("packets","threats","by_id","flows","hosts","timeline","counter","dropped_packets","threat_state","last_packet_at","capture_id","capture_created_at"):
+  setattr(session,field,getattr(staged,field))
+ session.mode="pcap"
  return {"status":"parsed","packets":n,"stats":session.stats(),"investigation":intelligence.investigation_summary(list(session.packets),session.list_threats(),_detection_preset)}
 @api.post("/pcap/compare")
 async def compare_pcaps(baseline:UploadFile=File(...),current:UploadFile=File(...)):
