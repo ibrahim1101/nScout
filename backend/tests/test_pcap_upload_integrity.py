@@ -102,8 +102,8 @@ def test_real_pcap_roundtrip_import(monkeypatch):
 
 @pytest.mark.parametrize("payload", [
     b"not-a-pcap",
-    b"\\xd4\\xc3\\xb2",
-    b"\\xd4\\xc3\\xb2\\xa1" + b"\\x00" * 10,
+    b"\xd4\xc3\xb2",
+    b"\xd4\xc3\xb2\xa1" + b"\x00" * 10,
 ])
 def test_malformed_or_truncated_pcap_preserves_evidence(monkeypatch, payload):
     active = CaptureSession()
@@ -128,7 +128,7 @@ def test_pcap_with_truncated_packet_record_preserves_evidence(monkeypatch):
     # bytes, with only three bytes actually present.
     global_header = struct.pack("<IHHIIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1)
     record_header = struct.pack("<IIII", 100, 0, 60, 60)
-    payload = global_header + record_header + b"\\x00\\x01\\x02"
+    payload = global_header + record_header + b"\x00\x01\x02"
     with pytest.raises(HTTPException) as error:
         asyncio.run(server.upload_pcap(_upload(payload)))
     assert error.value.status_code == 400
@@ -139,7 +139,7 @@ def _pcapng_sample(endian="<"):
     import struct
 
     def block(kind, body):
-        padding = b"\\x00" * ((-len(body)) % 4)
+        padding = b"\x00" * ((-len(body)) % 4)
         length = 12 + len(body) + len(padding)
         return struct.pack(endian + "II", kind, length) + body + padding + struct.pack(endian + "I", length)
 
@@ -173,9 +173,9 @@ def test_corrupt_pcapng_preserves_existing_evidence(monkeypatch, corrupt):
     if corrupt == "truncated":
         payload = payload[:-3]
     elif corrupt == "trailer":
-        payload[-4:] = b"\\x00" * 4
+        payload[-4:] = b"\x00" * 4
     else:
-        payload[8:12] = b"\\x00" * 4
+        payload[8:12] = b"\x00" * 4
     with pytest.raises(HTTPException) as error:
         asyncio.run(server.upload_pcap(_upload(bytes(payload))))
     assert error.value.status_code == 400
