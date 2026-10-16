@@ -207,3 +207,27 @@ def test_pcapng_invalid_enhanced_packet_lengths_preserve_evidence(monkeypatch, c
     assert error.value.status_code == 400
     assert active.capture_id == original_capture_id
     assert active.get_packet(previous["id"]) is previous
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_pcapng_enhanced_packet_options_remain_compatible(monkeypatch, endian):
+    import struct
+
+    active = CaptureSession()
+    active.ingest(Ether()/IP()/TCP(), ts=90.0)
+    monkeypatch.setattr(server, "session", active)
+    monkeypatch.setattr(server.intelligence, "investigation_summary", lambda *args: {"ok": True})
+    payload = _pcapng_sample(endian)
+    # Add a valid comment option and the end-of-options marker to the final EPB.
+    option = struct.pack(endian + "HH", 1, 4) + b"note"
+    end_options = struct.pack(endian + "HH", 0, 0)
+    extra = option + end_options
+    original_block_length = struct.unpack_from(endian + "I", payload, len(payload) - 4)[0]
+    start = len(payload) - original_block_length
+    new_length = original_block_length + len(extra)
+    enhanced = bytearray(payload[start:])
+    struct.pack_into(endian + "I", enhanced, 4, new_length)
+    enhanced = enhanced[:-4] + extra + struct.pack(endian + "I", new_length)
+    result = asyncio.run(server.upload_pcap(_upload(payload[:start] + enhanced)))
+    assert result["packets"] == 1
+    assert active.packets[0]["src_ip"] == "192.0.2.31"
