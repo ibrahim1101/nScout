@@ -257,3 +257,36 @@ def test_pcapng_invalid_options_preserve_evidence(monkeypatch, corruption):
     assert error.value.status_code == 400
     assert active.capture_id == capture_id
     assert active.get_packet(previous["id"]) is previous
+
+
+@pytest.mark.parametrize("block_type", [0x0A0D0D0A, 1])
+def test_pcapng_invalid_section_or_interface_options_preserve_evidence(monkeypatch, block_type):
+    import struct
+
+    active = CaptureSession()
+    previous = active.ingest(Ether()/IP()/TCP(), ts=90.0)
+    capture_id = active.capture_id
+    monkeypatch.setattr(server, "session", active)
+    payload = _pcapng_sample("<")
+    offset = 0
+    while offset < len(payload):
+        kind, length = struct.unpack_from("<II", payload, offset)
+        if kind == block_type:
+            # Option declares eight bytes but supplies only four before block trailer.
+            bad_option = struct.pack("<HH", 1, 8) + b"abcd"
+            block = bytearray(payload[offset:offset + length - 4])
+            struct.pack_into("<I", block, 4, length + len(bad_option))
+            malformed = (
+                payload[:offset] + block + bad_option
+                + struct.pack("<I", length + len(bad_option))
+                + payload[offset + length:]
+            )
+            break
+        offset += length
+    else:
+        pytest.fail("Requested PCAP-NG block missing")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.upload_pcap(_upload(malformed)))
+    assert error.value.status_code == 400
+    assert active.capture_id == capture_id
+    assert active.get_packet(previous["id"]) is previous
