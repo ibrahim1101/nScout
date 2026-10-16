@@ -399,6 +399,8 @@ def _validate_pcapng_blocks(data:bytes)->None:
    captured,original=struct.unpack_from(endian+"II",data,offset+20)
    if captured>original or captured>block_length-32:
     raise ValueError("Invalid PCAP-NG enhanced packet length")
+   if (captured+3)//4*4!=block_length-32:
+    raise ValueError("PCAP-NG enhanced packet payload size mismatch")
   elif block_type==3:
    if block_length<16:
     raise ValueError("Truncated PCAP-NG simple packet block")
