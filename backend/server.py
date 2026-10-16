@@ -363,6 +363,39 @@ async def topology(enrich:bool=False):
   ext=[n["id"] for n in data["nodes"] if n.get("type")!="local"]; gm=await geo.enrich(ext)
   for n in data["nodes"]:n["geo"]=gm.get(n["id"]) if n["id"] in gm else None
  return data
+def _validate_pcapng_blocks(data:bytes)->None:
+ """Validate PCAP-NG block framing and byte order before Scapy ingestion."""
+ offset=0
+ endian=None
+ seen_section=False
+ while offset<len(data):
+  if len(data)-offset<12:
+   raise ValueError("Truncated PCAP-NG block header")
+  is_section=data[offset:offset+4]==bytes.fromhex("0a0d0d0a")
+  if is_section:
+   bom=data[offset+8:offset+12]
+   if bom==bytes.fromhex("4d3c2b1a"):
+    endian="<"
+   elif bom==bytes.fromhex("1a2b3c4d"):
+    endian=">"
+   else:
+    raise ValueError("Invalid PCAP-NG byte-order magic")
+   seen_section=True
+  elif not seen_section:
+   raise ValueError("PCAP-NG missing section header")
+  block_type,block_length=struct.unpack_from(endian+"II",data,offset)
+  minimum=28 if is_section else 12
+  if block_length<minimum or block_length%4 or block_length>len(data)-offset:
+   raise ValueError("Invalid or truncated PCAP-NG block length")
+  if struct.unpack_from(endian+"I",data,offset+block_length-4)[0]!=block_length:
+   raise ValueError("PCAP-NG block length trailer mismatch")
+  if is_section:
+   major,minor=struct.unpack_from(endian+"HH",data,offset+12)
+   if (major,minor)!=(1,0):
+    raise ValueError("Unsupported PCAP-NG version")
+  offset+=block_length
+
+
 def _validate_pcap_records(data:bytes)->None:
  """Reject incomplete classic-PCAP records before replacing investigation evidence."""
  if len(data)<24:
@@ -394,7 +427,9 @@ async def upload_pcap(file:UploadFile=File(...)):
  data=await file.read(MAX_PCAP_BYTES+1)
  if not data:raise HTTPException(status_code=400,detail="Empty file")
  if len(data)>MAX_PCAP_BYTES:raise HTTPException(status_code=413,detail="File too large (max 50MB)")
- try:_validate_pcap_records(data)
+ try:
+  if data.startswith(bytes.fromhex("0a0d0d0a")):_validate_pcapng_blocks(data)
+  else:_validate_pcap_records(data)
  except ValueError as e:raise HTTPException(status_code=400,detail=f"Invalid pcap: {e}") from e
  # Stage before touching the active session, so invalid uploads cannot destroy evidence.
  staged=CaptureSession()
