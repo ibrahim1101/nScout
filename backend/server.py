@@ -393,6 +393,18 @@ def _validate_pcapng_blocks(data:bytes)->None:
    major,minor=struct.unpack_from(endian+"HH",data,offset+12)
    if (major,minor)!=(1,0):
     raise ValueError("Unsupported PCAP-NG version")
+  elif block_type==6:
+   if block_length<32:
+    raise ValueError("Truncated PCAP-NG enhanced packet block")
+   captured,original=struct.unpack_from(endian+"II",data,offset+20)
+   if captured>original or captured>block_length-32:
+    raise ValueError("Invalid PCAP-NG enhanced packet length")
+  elif block_type==3:
+   if block_length<16:
+    raise ValueError("Truncated PCAP-NG simple packet block")
+   original=struct.unpack_from(endian+"I",data,offset+8)[0]
+   if original==0 or block_length-16==0:
+    raise ValueError("Empty PCAP-NG simple packet")
   offset+=block_length
 
 
