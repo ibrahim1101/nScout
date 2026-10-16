@@ -486,7 +486,10 @@ async def upload_pcap(file:UploadFile=File(...)):
  return {"status":"parsed","packets":n,"stats":session.stats(),"investigation":intelligence.investigation_summary(list(session.packets),session.list_threats(),_detection_preset)}
 @api.post("/pcap/compare")
 async def compare_pcaps(baseline:UploadFile=File(...),current:UploadFile=File(...)):
- baseline_data,current_data=await baseline.read(),await current.read()
+ # Bound each read before allocating the complete comparison input in memory.
+ baseline_data=await baseline.read(MAX_PCAP_BYTES+1)
+ if len(baseline_data)>MAX_PCAP_BYTES:raise HTTPException(status_code=413,detail="Each PCAP must be 50 MB or smaller")
+ current_data=await current.read(MAX_PCAP_BYTES+1)
  if not baseline_data or not current_data:raise HTTPException(status_code=400,detail="Both PCAP files are required")
  if len(baseline_data)>MAX_PCAP_BYTES or len(current_data)>MAX_PCAP_BYTES:raise HTTPException(status_code=413,detail="Each PCAP must be 50 MB or smaller")
  if _pcap_compare_lock.locked():raise HTTPException(status_code=429,detail="Another PCAP comparison is already running")
