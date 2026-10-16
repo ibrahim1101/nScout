@@ -231,3 +231,29 @@ def test_pcapng_enhanced_packet_options_remain_compatible(monkeypatch, endian):
     result = asyncio.run(server.upload_pcap(_upload(payload[:start] + enhanced)))
     assert result["packets"] == 1
     assert active.packets[0]["src_ip"] == "192.0.2.31"
+
+
+@pytest.mark.parametrize("corruption", ["truncated_option", "invalid_end_marker"])
+def test_pcapng_invalid_options_preserve_evidence(monkeypatch, corruption):
+    import struct
+
+    active = CaptureSession()
+    previous = active.ingest(Ether()/IP()/TCP(), ts=90.0)
+    capture_id = active.capture_id
+    monkeypatch.setattr(server, "session", active)
+    payload = _pcapng_sample("<")
+    block_length = struct.unpack_from("<I", payload, len(payload) - 4)[0]
+    start = len(payload) - block_length
+    block = bytearray(payload[start:-4])
+    if corruption == "truncated_option":
+        options = struct.pack("<HH", 1, 100) + b"abcd"
+    else:
+        options = struct.pack("<HH", 0, 4) + b"abcd"
+    new_length = block_length + len(options)
+    struct.pack_into("<I", block, 4, new_length)
+    invalid = payload[:start] + block + options + struct.pack("<I", new_length)
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.upload_pcap(_upload(invalid)))
+    assert error.value.status_code == 400
+    assert active.capture_id == capture_id
+    assert active.get_packet(previous["id"]) is previous
