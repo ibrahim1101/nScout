@@ -327,3 +327,42 @@ def test_classic_pcap_truncated_record_preserves_evidence_for_both_endians(monke
     assert error.value.status_code == 400
     assert active.capture_id == capture_id
     assert active.get_packet(previous["id"]) is previous
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("nanosecond", [False, True])
+def test_classic_pcap_endian_and_timestamp_precision_import(monkeypatch, endian, nanosecond):
+    """Classic PCAP imports must work with either byte order and timestamp precision."""
+    import struct
+
+    active = CaptureSession()
+    active.ingest(Ether()/IP(src="10.0.0.1", dst="10.0.0.2")/TCP(), ts=90.0)
+    monkeypatch.setattr(server, "session", active)
+    monkeypatch.setattr(server.intelligence, "investigation_summary", lambda *args: {"ok": True})
+    packet = bytes(Ether(src="02:00:00:00:00:01", dst="02:00:00:00:00:02")
+                   / IP(src="192.0.2.40", dst="192.0.2.41") / TCP())
+    magic = 0xA1B23C4D if nanosecond else 0xA1B2C3D4
+    header = struct.pack(endian + "IHHIIII", magic, 2, 4, 0, 0, 65535, 1)
+    record = struct.pack(endian + "IIII", 100, 0, len(packet), len(packet))
+    result = asyncio.run(server.upload_pcap(_upload(header + record + packet)))
+    assert result["packets"] == 1
+    assert active.packets[0]["src_ip"] == "192.0.2.40"
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_classic_pcap_invalid_packet_length_preserves_evidence(monkeypatch, endian):
+    """Malformed record lengths must never replace the investigation capture."""
+    import struct
+
+    active = CaptureSession()
+    original = active.ingest(Ether()/IP()/TCP(), ts=90.0)
+    capture_id = active.capture_id
+    monkeypatch.setattr(server, "session", active)
+    header = struct.pack(endian + "IHHIIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1)
+    record = struct.pack(endian + "IIII", 100, 0, 80, 40)
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.upload_pcap(_upload(header + record + b"\x00" * 80)))
+    assert error.value.status_code == 400
+    assert active.capture_id == capture_id
+    assert active.get_packet(original["id"]) is original
