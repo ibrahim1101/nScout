@@ -181,3 +181,29 @@ def test_corrupt_pcapng_preserves_existing_evidence(monkeypatch, corrupt):
     assert error.value.status_code == 400
     assert active.capture_id == capture_id
     assert active.get_packet(previous["id"]) is previous
+
+
+@pytest.mark.parametrize("captured,original", [(65535, 65535), (60, 30)])
+def test_pcapng_invalid_enhanced_packet_lengths_preserve_evidence(monkeypatch, captured, original):
+    import struct
+    active = CaptureSession()
+    previous = active.ingest(Ether()/IP()/TCP(), ts=90.0)
+    original_capture_id = active.capture_id
+    monkeypatch.setattr(server, "session", active)
+    payload = bytearray(_pcapng_sample())
+    # Enhanced Packet Block is last; its captured/original lengths start 20/24 bytes
+    # after the block header. Locate it by walking the valid little-endian blocks.
+    offset = 0
+    while offset < len(payload):
+        kind, length = struct.unpack_from("<II", payload, offset)
+        if kind == 6:
+            struct.pack_into("<II", payload, offset + 20, captured, original)
+            break
+        offset += length
+    else:
+        pytest.fail("Enhanced Packet Block missing from test fixture")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.upload_pcap(_upload(bytes(payload))))
+    assert error.value.status_code == 400
+    assert active.capture_id == original_capture_id
+    assert active.get_packet(previous["id"]) is previous
