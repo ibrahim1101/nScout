@@ -407,3 +407,30 @@ def test_compare_pcap_reads_no_more_than_limit_plus_one(monkeypatch):
     assert error.value.status_code == 413
     assert baseline.read_sizes == [5]
     assert current.read_sizes == []
+
+
+
+@pytest.mark.parametrize("invalid_side", ["baseline", "current"])
+@pytest.mark.parametrize("format_name", ["pcap", "pcapng"])
+def test_compare_rejects_malformed_capture_before_engine(monkeypatch, invalid_side, format_name):
+    """A malformed comparison input must never reach the comparison engine."""
+    import struct
+
+    monkeypatch.setattr(server, "MAX_PCAP_BYTES", 1024 * 1024)
+
+    def unexpected_comparison(*args, **kwargs):
+        pytest.fail("Malformed comparison input reached the comparison engine")
+
+    monkeypatch.setattr(server, "compare_pcap_bytes", unexpected_comparison)
+    if format_name == "pcap":
+        valid = struct.pack("<IHHIIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1)
+        invalid = valid + struct.pack("<IIII", 100, 0, 60, 60) + b"abc"
+    else:
+        valid = _pcapng_sample()
+        invalid = valid[:-3]
+    baseline = _upload(invalid if invalid_side == "baseline" else valid)
+    current = _upload(invalid if invalid_side == "current" else valid)
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.compare_pcaps(baseline, current))
+    assert error.value.status_code == 400
+    assert "Invalid pcap" in str(error.value.detail)
