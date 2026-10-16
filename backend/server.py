@@ -363,6 +363,23 @@ async def topology(enrich:bool=False):
   ext=[n["id"] for n in data["nodes"] if n.get("type")!="local"]; gm=await geo.enrich(ext)
   for n in data["nodes"]:n["geo"]=gm.get(n["id"]) if n["id"] in gm else None
  return data
+def _validate_pcapng_options(data:bytes,offset:int,end:int,endian:str)->None:
+ """Check option framing while permitting valid optional metadata."""
+ while offset<end:
+  if end-offset<4:
+   raise ValueError("Truncated PCAP-NG option header")
+  code,length=struct.unpack_from(endian+"HH",data,offset)
+  offset+=4
+  padded=(length+3)&~3
+  if padded>end-offset:
+   raise ValueError("Truncated PCAP-NG option value")
+  if code==0:
+   if length!=0 or offset!=end:
+    raise ValueError("Invalid PCAP-NG end-of-options marker")
+   return
+  offset+=padded
+
+
 def _validate_pcapng_blocks(data:bytes)->None:
  """Validate PCAP-NG block framing and byte order before Scapy ingestion."""
  offset=0
@@ -399,6 +416,11 @@ def _validate_pcapng_blocks(data:bytes)->None:
    captured,original=struct.unpack_from(endian+"II",data,offset+20)
    if captured>original or captured>block_length-32:
     raise ValueError("Invalid PCAP-NG enhanced packet length")
+   options_start=offset+28+((captured+3)&~3)
+   options_end=offset+block_length-4
+   if options_start>options_end:
+    raise ValueError("Truncated PCAP-NG enhanced packet payload")
+   _validate_pcapng_options(data,options_start,options_end,endian)
   elif block_type==3:
    if block_length<16:
     raise ValueError("Truncated PCAP-NG simple packet block")
