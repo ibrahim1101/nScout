@@ -492,6 +492,12 @@ async def compare_pcaps(baseline:UploadFile=File(...),current:UploadFile=File(..
  current_data=await current.read(MAX_PCAP_BYTES+1)
  if not baseline_data or not current_data:raise HTTPException(status_code=400,detail="Both PCAP files are required")
  if len(baseline_data)>MAX_PCAP_BYTES or len(current_data)>MAX_PCAP_BYTES:raise HTTPException(status_code=413,detail="Each PCAP must be 50 MB or smaller")
+ # Apply the same strict framing checks as single-capture imports.
+ try:
+  for payload in (baseline_data,current_data):
+   if payload.startswith(bytes.fromhex("0a0d0d0a")):_validate_pcapng_blocks(payload)
+   else:_validate_pcap_records(payload)
+ except ValueError as exc:raise HTTPException(status_code=400,detail=f"Invalid pcap: {exc}") from exc
  if _pcap_compare_lock.locked():raise HTTPException(status_code=429,detail="Another PCAP comparison is already running")
  try:
   async with _pcap_compare_lock:return await asyncio.to_thread(compare_pcap_bytes,baseline_data,current_data,baseline.filename or "baseline.pcap",current.filename or "current.pcap")
