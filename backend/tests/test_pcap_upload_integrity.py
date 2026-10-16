@@ -366,3 +366,44 @@ def test_classic_pcap_invalid_packet_length_preserves_evidence(monkeypatch, endi
     assert error.value.status_code == 400
     assert active.capture_id == capture_id
     assert active.get_packet(original["id"]) is original
+
+
+
+@pytest.mark.parametrize("oversized_side", ["baseline", "current"])
+def test_compare_pcap_rejects_oversized_input_before_comparison(monkeypatch, oversized_side):
+    """Both comparison inputs must be bounded before reaching the comparison engine."""
+    monkeypatch.setattr(server, "MAX_PCAP_BYTES", 4)
+
+    def unexpected_comparison(*args, **kwargs):
+        pytest.fail("Comparison engine must not run for oversized uploads")
+
+    monkeypatch.setattr(server, "compare_pcap_bytes", unexpected_comparison)
+    baseline = _upload(b"12345" if oversized_side == "baseline" else b"abcd")
+    current = _upload(b"12345" if oversized_side == "current" else b"abcd")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.compare_pcaps(baseline, current))
+    assert error.value.status_code == 413
+
+
+def test_compare_pcap_reads_no_more_than_limit_plus_one(monkeypatch):
+    """An oversized stream must not be consumed beyond the detection threshold."""
+    monkeypatch.setattr(server, "MAX_PCAP_BYTES", 4)
+
+    class BoundedUpload:
+        def __init__(self, payload):
+            self.payload = payload
+            self.read_sizes = []
+            self.filename = "capture.pcap"
+
+        async def read(self, size=-1):
+            self.read_sizes.append(size)
+            assert size == 5, "Comparison must not read the full upload"
+            return self.payload[:size]
+
+    baseline = BoundedUpload(b"123456789")
+    current = BoundedUpload(b"abcd")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.compare_pcaps(baseline, current))
+    assert error.value.status_code == 413
+    assert baseline.read_sizes == [5]
+    assert current.read_sizes == []
