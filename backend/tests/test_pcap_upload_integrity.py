@@ -290,3 +290,40 @@ def test_pcapng_invalid_section_or_interface_options_preserve_evidence(monkeypat
     assert error.value.status_code == 400
     assert active.capture_id == capture_id
     assert active.get_packet(previous["id"]) is previous
+
+
+@pytest.mark.parametrize("endian,nanosecond", [
+    ("<", False), (">", False), ("<", True), (">", True),
+])
+def test_classic_pcap_magic_variants_roundtrip(monkeypatch, endian, nanosecond):
+    import struct
+
+    active = CaptureSession()
+    active.ingest(Ether()/IP()/TCP(), ts=90.0)
+    monkeypatch.setattr(server, "session", active)
+    monkeypatch.setattr(server.intelligence, "investigation_summary", lambda *args: {"ok": True})
+    packet = bytes(Ether(src="02:00:00:00:00:01", dst="02:00:00:00:00:02")
+                   / IP(src="192.0.2.41", dst="192.0.2.42") / TCP())
+    magic = 0xA1B23C4D if nanosecond else 0xA1B2C3D4
+    header = struct.pack(endian + "IHHIIII", magic, 2, 4, 0, 0, 65535, 1)
+    record = struct.pack(endian + "IIII", 100, 0, len(packet), len(packet))
+    result = asyncio.run(server.upload_pcap(_upload(header + record + packet)))
+    assert result["packets"] == 1
+    assert active.packets[0]["src_ip"] == "192.0.2.41"
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_classic_pcap_truncated_record_preserves_evidence_for_both_endians(monkeypatch, endian):
+    import struct
+
+    active = CaptureSession()
+    previous = active.ingest(Ether()/IP()/TCP(), ts=90.0)
+    capture_id = active.capture_id
+    monkeypatch.setattr(server, "session", active)
+    header = struct.pack(endian + "IHHIIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1)
+    record = struct.pack(endian + "IIII", 100, 0, 64, 64)
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.upload_pcap(_upload(header + record + bytes(4))))
+    assert error.value.status_code == 400
+    assert active.capture_id == capture_id
+    assert active.get_packet(previous["id"]) is previous
