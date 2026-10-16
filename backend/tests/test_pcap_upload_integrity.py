@@ -133,3 +133,51 @@ def test_pcap_with_truncated_packet_record_preserves_evidence(monkeypatch):
         asyncio.run(server.upload_pcap(_upload(payload)))
     assert error.value.status_code == 400
     assert active.get_packet(previous["id"]) is previous
+
+
+def _pcapng_sample(endian="<"):
+    import struct
+
+    def block(kind, body):
+        padding = b"\\x00" * ((-len(body)) % 4)
+        length = 12 + len(body) + len(padding)
+        return struct.pack(endian + "II", kind, length) + body + padding + struct.pack(endian + "I", length)
+
+    bom = struct.pack(endian + "I", 0x1A2B3C4D)
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    packet = bytes(Ether(src="02:00:00:00:00:01", dst="02:00:00:00:00:02") / IP(src="192.0.2.31", dst="192.0.2.32") / TCP())
+    enhanced = block(6, struct.pack(endian + "IIIII", 0, 0, 0, len(packet), len(packet)) + packet)
+    return section + interface + enhanced
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_real_pcapng_import_both_endian_modes(monkeypatch, endian):
+    active = CaptureSession()
+    active.ingest(Ether()/IP()/TCP(), ts=90.0)
+    monkeypatch.setattr(server, "session", active)
+    monkeypatch.setattr(server.intelligence, "investigation_summary", lambda *args: {"ok": True})
+    result = asyncio.run(server.upload_pcap(_upload(_pcapng_sample(endian))))
+    assert result["packets"] == 1
+    assert result["stats"]["mode"] == "pcap"
+    assert active.packets[0]["src_ip"] == "192.0.2.31"
+
+
+@pytest.mark.parametrize("corrupt", ["truncated", "trailer", "byte_order"])
+def test_corrupt_pcapng_preserves_existing_evidence(monkeypatch, corrupt):
+    active = CaptureSession()
+    previous = active.ingest(Ether()/IP()/TCP(), ts=90.0)
+    capture_id = active.capture_id
+    monkeypatch.setattr(server, "session", active)
+    payload = bytearray(_pcapng_sample())
+    if corrupt == "truncated":
+        payload = payload[:-3]
+    elif corrupt == "trailer":
+        payload[-4:] = b"\\x00" * 4
+    else:
+        payload[8:12] = b"\\x00" * 4
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.upload_pcap(_upload(bytes(payload))))
+    assert error.value.status_code == 400
+    assert active.capture_id == capture_id
+    assert active.get_packet(previous["id"]) is previous
