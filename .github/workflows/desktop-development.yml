@@ -212,8 +212,22 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           cargo test --manifest-path src-tauri/Cargo.toml
-          npm run tauri build -- --bundles app,dmg \
+          # hdiutil can intermittently report "Resource busy" on shared macOS runners.
+          # Build the app once; retry only the DMG packaging operation.
+          npm run tauri build -- --bundles app \
             --config src-tauri/tauri.macos.conf.json
+          for attempt in 1 2 3; do
+            if npm run tauri build -- --bundles dmg \
+              --config src-tauri/tauri.macos.conf.json; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::macOS DMG packaging failed after three attempts"
+              exit 1
+            fi
+            echo "::warning::DMG packaging attempt $attempt failed; retrying after cooldown"
+            sleep $((attempt * 15))
+          done
 
       - name: Upload development macOS packages
         uses: actions/upload-artifact@v4
