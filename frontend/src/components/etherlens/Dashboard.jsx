@@ -7,30 +7,830 @@ import IntelligenceWorkspace from "./IntelligenceWorkspace";
 import TopologyMap from "./TopologyMap";
 import ThreatFeed from "./ThreatFeed";
 import FlowDrawer from "./FlowDrawer";
-import SettingsDrawer from "./SettingsDrawer";
+import SettingsDrawer, { readPrefs } from "./SettingsDrawer";
 import SessionsDrawer from "./SessionsDrawer";
-import { Activity, Network, ShieldAlert, LayoutDashboard, GitBranch, ScanSearch, FileSearch2 } from "lucide-react";
+import GlobalSearchDrawer from "./GlobalSearchDrawer";
+import InvestigationWorkspace from "./InvestigationWorkspace";
+import LiveHostsWorkspace from "./LiveHostsWorkspace";
+import PcapComparison from "./PcapComparison";
+import ReportExports from "./ReportExports";
+import {
+  readWorkspaceRecovery,
+  saveWorkspaceRecovery,
+} from "./workspaceRecovery";
+import {
+  KEYBOARD_SHORTCUTS,
+  isInteractiveTarget,
+  shortcutMatches,
+} from "./keyboardShortcuts";
+import {
+  BookmarkError,
+  bookmarkActiveInvestigation,
+} from "./investigationBookmarks";
+import {
+  Activity,
+  Network,
+  ShieldAlert,
+  LayoutDashboard,
+  GitBranch,
+  ScanSearch,
+  FileSearch2,
+  BriefcaseBusiness,
+  Server,
+} from "lucide-react";
 
-const TABS=[{id:"analyzer",label:"Packets",icon:Activity},{id:"intelligence",label:"Intelligence",icon:ScanSearch},{id:"pcap",label:"PCAP Investigation",icon:FileSearch2},{id:"analytics",label:"Analytics",icon:LayoutDashboard},{id:"flows",label:"Flows",icon:GitBranch},{id:"topology",label:"Topology",icon:Network},{id:"threats",label:"Threats",icon:ShieldAlert}];
+const TABS = [
+  { id: "analyzer", label: "Packets", icon: Activity },
+  { id: "intelligence", label: "Intelligence", icon: ScanSearch },
+  { id: "hosts", label: "Live Hosts", icon: Server },
+  { id: "investigations", label: "Investigations", icon: BriefcaseBusiness },
+  { id: "pcap", label: "PCAP Investigation", icon: FileSearch2 },
+  { id: "analytics", label: "Analytics", icon: LayoutDashboard },
+  { id: "flows", label: "Flows", icon: GitBranch },
+  { id: "topology", label: "Topology", icon: Network },
+  { id: "threats", label: "Threats", icon: ShieldAlert },
+];
 
-export default function Dashboard({theme,setTheme}){
- const [tab,setTab]=useState("analyzer"),[status,setStatus]=useState({running:false,mode:"idle",total_packets:0,pps:0,mbps:0,threats:0,protocol_counts:{}}),[interfaces,setInterfaces]=useState([]),[iface,setIface]=useState("simulated"),[filter,setFilter]=useState(""),[protocolFilter,setProtocolFilter]=useState(""),[packets,setPackets]=useState([]),[threats,setThreats]=useState([]),[selected,setSelected]=useState(null),[timeline,setTimeline]=useState([]),[topTalkers,setTopTalkers]=useState([]),[hostProfiles,setHostProfiles]=useState([]),[topology,setTopology]=useState({nodes:[],edges:[]}),[flows,setFlows]=useState([]),[activeFlow,setActiveFlow]=useState(null),[settingsOpen,setSettingsOpen]=useState(false),[sessionsOpen,setSessionsOpen]=useState(false),[notice,setNotice]=useState(""),[pcapInvestigation,setPcapInvestigation]=useState(null),[pcapName,setPcapName]=useState(""),[intelligenceTarget,setIntelligenceTarget]=useState(null);
- const wsRef=useRef(null);
- useEffect(()=>{api.get("/interfaces").then(r=>setInterfaces(r.data.interfaces||[])).catch(()=>{});},[]);
- useEffect(()=>{const ws=new WebSocket(wsUrl());wsRef.current=ws;ws.onmessage=e=>{try{const msg=JSON.parse(e.data);if(msg.type==="threat")setThreats(prev=>[msg.data,...prev].slice(0,200));else if(msg.type==="stats")setStatus(msg.data);else if(msg.type==="notice"){setNotice(msg.data.message);setTimeout(()=>setNotice(""),6000);}}catch(_){}};ws.onclose=()=>{wsRef.current=null;};return()=>ws.close();},[]);
- useEffect(()=>{const refresh=async()=>{try{const [tl,tt,topo,th,pk,st,fl]=await Promise.all([api.get("/stats/timeline"),api.get("/stats/top-talkers?limit=10"),api.get("/topology?enrich=true"),api.get("/threats"),api.get("/packets?limit=800"),api.get("/capture/status"),api.get("/flows?limit=50")]);setTimeline(tl.data.series||[]);setTopTalkers(tt.data.talkers||[]);setTopology(topo.data||{nodes:[],edges:[]});setThreats(th.data.threats||[]);setPackets(pk.data.packets||[]);setStatus(st.data||{});setFlows(fl.data.flows||[]);}catch(_){}};refresh();const id=setInterval(refresh,1200);return()=>clearInterval(id);},[]);
- useEffect(()=>{if(tab!=="analytics")return;const refreshHosts=async()=>{try{const response=await api.get("/intelligence/hosts");setHostProfiles(response.data.hosts||[]);}catch(_){}};refreshHosts();const id=setInterval(refreshHosts,5000);return()=>clearInterval(id);},[tab]);
- const startCapture=useCallback(async()=>{setPackets([]);setThreats([]);setSelected(null);setTimeline([]);setPcapInvestigation(null);setPcapName("");setIntelligenceTarget(null);try{await api.post("/capture/start",{interface:iface});}catch(_){setNotice("Failed to start capture");}},[iface]);
- const stopCapture=useCallback(async()=>{try{await api.post("/capture/stop");}catch(_){}},[]);
- const clearCapture=useCallback(async()=>{setPackets([]);setThreats([]);setSelected(null);setPcapInvestigation(null);setPcapName("");setIntelligenceTarget(null);await api.post("/capture/clear");},[]);
- const uploadPcap=useCallback(async file=>{const fd=new FormData();fd.append("file",file);try{const u=await api.post("/pcap/upload",fd,{headers:{"Content-Type":"multipart/form-data"}}),[r,th]=await Promise.all([api.get("/packets?limit=1000"),api.get("/threats")]);setPackets(r.data.packets||[]);setThreats(th.data.threats||[]);setPcapInvestigation(u.data.investigation||null);setPcapName(file.name);setIntelligenceTarget(null);setNotice(`Loaded ${file.name} — ${u.data.packets||0} packets analyzed`);setTab("pcap");setTimeout(()=>setNotice(""),5000);}catch(e){setNotice(`PCAP parse failed: ${e?.response?.data?.detail||e.message}`);setTimeout(()=>setNotice(""),6000);}},[]);
- const filtered=packets.filter(p=>{if(protocolFilter&&p.protocol!==protocolFilter)return false;if(!filter)return true;const q=filter.toLowerCase();return[p.src_ip,p.dst_ip,p.protocol,p.info,p.src_port,p.dst_port].some(v=>String(v||"").toLowerCase().includes(q));});
- const openPacket=packetOrId=>{const id=typeof packetOrId==="string"?packetOrId:packetOrId?.id,p=packets.find(x=>x.id===id)||packetOrId;if(p?.id){setSelected(p);setTab("analyzer");}};
- const openTopologyInvestigation=target=>{setIntelligenceTarget(target||null);setTab("intelligence");};
- return <div className="min-h-screen bg-slate-50 dark:bg-[#090D16] text-slate-900 dark:text-slate-100"><HeaderNav theme={theme} setTheme={setTheme} interfaces={interfaces} iface={iface} setIface={setIface} status={status} onStart={startCapture} onStop={stopCapture} onClear={clearCapture} onUpload={uploadPcap} filter={filter} setFilter={setFilter} protocolFilter={protocolFilter} setProtocolFilter={setProtocolFilter} onOpenSettings={()=>setSettingsOpen(true)} onOpenSessions={()=>setSessionsOpen(true)}/>{notice&&<div data-testid="toast-notice" className="mx-auto max-w-[1700px] px-4 sm:px-6 lg:px-8 mt-3"><div className="rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-900 dark:text-amber-200 px-4 py-2 text-sm">{notice}</div></div>}<nav className="mx-auto max-w-[1700px] px-4 sm:px-6 lg:px-8 mt-4"><div className="flex gap-1 border-b border-slate-200 dark:border-slate-800 overflow-x-auto el-scroll">{TABS.map(({id,label,icon:Icon})=><button key={id} data-testid={`tab-${id}`} onClick={()=>setTab(id)} className={`relative shrink-0 flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${tab===id?"text-blue-600 dark:text-blue-400":"text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"}`}><Icon size={16}/>{label}{tab===id&&<span className="absolute bottom-[-1px] left-2 right-2 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full"/>}{id==="threats"&&threats.length>0&&<span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-red-500 text-white">{threats.length}</span>}</button>)}</div></nav><main className="mx-auto max-w-[1700px] px-4 sm:px-6 lg:px-8 py-4">{tab==="analyzer"&&<PacketAnalyzer packets={filtered} selected={selected} setSelected={setSelected} status={status} onFollowFlow={setActiveFlow}/>} {tab==="intelligence"&&<IntelligenceWorkspace threats={threats} onSelectPacket={openPacket} target={intelligenceTarget} onTargetConsumed={()=>setIntelligenceTarget(null)}/>} {tab==="pcap"&&<PcapWorkspace name={pcapName} investigation={pcapInvestigation} packets={packets} threats={threats} onSelectPacket={openPacket}/>} {tab==="analytics"&&<AnalyticsDashboard status={status} timeline={timeline} topTalkers={topTalkers} hosts={hostProfiles} threats={threats} onInvestigate={openTopologyInvestigation} onOpenThreats={()=>{setIntelligenceTarget({panel:"security"});setTab("intelligence");}}/>} {tab==="flows"&&<FlowsTab flows={flows} onOpen={setActiveFlow}/>} {tab==="topology"&&<TopologyMap topology={topology} threats={threats} onInvestigate={openTopologyInvestigation}/>} {tab==="threats"&&<ThreatFeed threats={threats} onSelectPacket={openPacket}/>}</main><FlowDrawer open={!!activeFlow} onClose={()=>setActiveFlow(null)} flow={activeFlow}/><SettingsDrawer open={settingsOpen} onClose={()=>setSettingsOpen(false)}/><SessionsDrawer open={sessionsOpen} onClose={()=>setSessionsOpen(false)} onLoaded={info=>{setNotice(`Loaded "${info.name}" — ${info.packet_count} packets`);setTimeout(()=>setNotice(""),5000);}}/></div>;
+export default function Dashboard({ theme, setTheme }) {
+  const initialPrefs = readPrefs(),
+    recovered = readWorkspaceRecovery(initialPrefs.autoRestore);
+  const [tab, setTab] = useState(recovered?.tab || "analyzer"),
+    [status, setStatus] = useState({
+      running: false,
+      mode: "idle",
+      total_packets: 0,
+      pps: 0,
+      mbps: 0,
+      threats: 0,
+      protocol_counts: {},
+    }),
+    [interfaces, setInterfaces] = useState([]),
+    [iface, setIface] = useState("simulated"),
+    [filter, setFilter] = useState(recovered?.filter || ""),
+    [protocolFilter, setProtocolFilter] = useState(
+      recovered?.protocolFilter || "",
+    ),
+    [packets, setPackets] = useState([]),
+    [threats, setThreats] = useState([]),
+    [selected, setSelected] = useState(null),
+    [timeline, setTimeline] = useState([]),
+    [topTalkers, setTopTalkers] = useState([]),
+    [hostProfiles, setHostProfiles] = useState([]),
+    [hostStatus, setHostStatus] = useState({
+      loading: false,
+      loaded: false,
+      error: "",
+    }),
+    [topology, setTopology] = useState({ nodes: [], edges: [] }),
+    [flows, setFlows] = useState([]),
+    [activeFlow, setActiveFlow] = useState(null),
+    [settingsOpen, setSettingsOpen] = useState(false),
+    [settingsSection, setSettingsSection] = useState(null),
+    [sessionsOpen, setSessionsOpen] = useState(false),
+    [globalSearchOpen, setGlobalSearchOpen] = useState(false),
+    [investigationTarget, setInvestigationTarget] = useState(""),
+    [notice, setNotice] = useState(
+      recovered ? "Restored previous workspace navigation and filters" : "",
+    ),
+    [pcapInvestigation, setPcapInvestigation] = useState(null),
+    [pcapName, setPcapName] = useState(""),
+    [intelligenceTarget, setIntelligenceTarget] = useState(null),
+    [prefs, setPrefs] = useState(initialPrefs);
+  const wsRef = useRef(null);
+  const recoveredAtStart = useRef(recovered).current;
+  useEffect(() => {
+    api
+      .get("/interfaces")
+      .then((r) => setInterfaces(r.data.interfaces || []))
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    const update = (event) => setPrefs(event.detail || readPrefs());
+    window.addEventListener("nscout:preferences", update);
+    return () => window.removeEventListener("nscout:preferences", update);
+  }, []);
+  useEffect(() => {
+    if (!recoveredAtStart) return;
+    const id = setTimeout(() => setNotice(""), 5000);
+    return () => clearTimeout(id);
+  }, [recoveredAtStart]);
+  useEffect(() => {
+    const id = setTimeout(
+      () =>
+        saveWorkspaceRecovery(
+          { tab, filter, protocolFilter },
+          prefs.autoRestore,
+        ),
+      150,
+    );
+    return () => clearTimeout(id);
+  }, [tab, filter, protocolFilter, prefs.autoRestore]);
+  useEffect(() => {
+    const ws = new WebSocket(wsUrl());
+    wsRef.current = ws;
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "threat")
+          setThreats((prev) => [msg.data, ...prev].slice(0, 200));
+        else if (msg.type === "stats") setStatus(msg.data);
+        else if (msg.type === "notice") {
+          setNotice(msg.data.message);
+          setTimeout(() => setNotice(""), 6000);
+        }
+      } catch (_) {}
+    };
+    ws.onclose = () => {
+      wsRef.current = null;
+    };
+    return () => ws.close();
+  }, []);
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const [tl, tt, topo, th, pk, st, fl] = await Promise.all([
+          api.get("/stats/timeline"),
+          api.get("/stats/top-talkers?limit=10"),
+          api.get("/topology?enrich=true"),
+          api.get("/threats"),
+          api.get("/packets?limit=800"),
+          api.get("/capture/status"),
+          api.get("/flows?limit=50"),
+        ]);
+        setTimeline(tl.data.series || []);
+        setTopTalkers(tt.data.talkers || []);
+        setTopology(topo.data || { nodes: [], edges: [] });
+        setThreats(th.data.threats || []);
+        setPackets(pk.data.packets || []);
+        setStatus(st.data || {});
+        setFlows(fl.data.flows || []);
+      } catch (_) {}
+    };
+    refresh();
+    const id = setInterval(refresh, 1200);
+    return () => clearInterval(id);
+  }, []);
+  const refreshHosts = useCallback(async () => {
+    setHostStatus((current) => ({ ...current, loading: true }));
+    try {
+      const response = await api.get("/intelligence/hosts");
+      setHostProfiles(response.data.hosts || []);
+      setHostStatus({ loading: false, loaded: true, error: "" });
+    } catch (error) {
+      setHostStatus((current) => ({
+        ...current,
+        loading: false,
+        error:
+          error?.response?.data?.detail ||
+          error.message ||
+          "Could not load observed hosts.",
+      }));
+    }
+  }, []);
+  useEffect(() => {
+    if (!["analytics", "investigations", "hosts"].includes(tab)) return;
+    refreshHosts();
+    const id = setInterval(refreshHosts, 5000);
+    return () => clearInterval(id);
+  }, [tab, refreshHosts]);
+  const startCapture = useCallback(async () => {
+    setPackets([]);
+    setThreats([]);
+    setSelected(null);
+    setTimeline([]);
+    setPcapInvestigation(null);
+    setPcapName("");
+    setIntelligenceTarget(null);
+    try {
+      await api.post("/capture/start", {
+        interface: iface,
+        packet_limit: prefs.packetLimit,
+      });
+    } catch (error) {
+      setNotice(
+        `Could not start live capture: ${error?.response?.data?.detail || error.message}`,
+      );
+      setTimeout(() => setNotice(""), 8000);
+    }
+  }, [iface, prefs.packetLimit]);
+  const changeInterface = useCallback(
+    async (next) => {
+      const previous = iface;
+      setIface(next);
+      if (!status.running || next === previous) return;
+      try {
+        const response = await api.post("/capture/switch", {
+          interface: next,
+          preserve_packets: prefs.preservePackets,
+          packet_limit: prefs.packetLimit,
+        });
+        if (!prefs.preservePackets) {
+          setPackets([]);
+          setThreats([]);
+          setSelected(null);
+          setTimeline([]);
+          setPcapInvestigation(null);
+          setPcapName("");
+          setIntelligenceTarget(null);
+        }
+        setNotice(
+          `Capture switched to ${next}${prefs.preservePackets ? ` — ${response.data.preserved_packets || 0} packets preserved` : " — previous packets cleared"}`,
+        );
+        setTimeout(() => setNotice(""), 5000);
+      } catch (e) {
+        setIface(previous);
+        setNotice(
+          `Could not switch capture interface: ${e?.response?.data?.detail || e.message}`,
+        );
+        setTimeout(() => setNotice(""), 6000);
+      }
+    },
+    [iface, status.running, prefs.preservePackets, prefs.packetLimit],
+  );
+  const stopCapture = useCallback(async () => {
+    try {
+      await api.post("/capture/stop");
+    } catch (_) {}
+  }, []);
+  const clearCapture = useCallback(async () => {
+    setPackets([]);
+    setThreats([]);
+    setSelected(null);
+    setPcapInvestigation(null);
+    setPcapName("");
+    setIntelligenceTarget(null);
+    await api.post("/capture/clear");
+  }, []);
+  useEffect(() => {
+    const handle = (event) => {
+      const shortcut = KEYBOARD_SHORTCUTS.find((item) =>
+        shortcutMatches(event, item),
+      );
+      if (
+        !shortcut ||
+        (!shortcut.allowInForm && isInteractiveTarget(event.target))
+      )
+        return;
+      event.preventDefault();
+      if (shortcut.id === "focus-filter") {
+        document.querySelector("[data-testid='display-filter-input']")?.focus();
+      } else if (shortcut.id === "global-search") {
+        setGlobalSearchOpen(true);
+      } else if (shortcut.id === "open-settings") {
+        setSettingsSection(null);
+        setSettingsOpen(true);
+      } else if (shortcut.id === "open-sessions") {
+        setSessionsOpen(true);
+      } else if (shortcut.id === "toggle-capture") {
+        status.running ? stopCapture() : startCapture();
+      } else if (shortcut.id === "close-panels") {
+        setSettingsOpen(false);
+        setSessionsOpen(false);
+        setGlobalSearchOpen(false);
+        setActiveFlow(null);
+      } else if (shortcut.id === "shortcut-help") {
+        setSettingsSection("shortcuts");
+        setSettingsOpen(true);
+      } else if (shortcut.tabIndex !== undefined) {
+        setTab(TABS[shortcut.tabIndex].id);
+      }
+    };
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, [startCapture, status.running, stopCapture]);
+  const uploadPcap = useCallback(async (file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const u = await api.post("/pcap/upload", fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        }),
+        [r, th] = await Promise.all([
+          api.get("/packets?limit=1000"),
+          api.get("/threats"),
+        ]);
+      setPackets(r.data.packets || []);
+      setThreats(th.data.threats || []);
+      setPcapInvestigation(u.data.investigation || null);
+      setPcapName(file.name);
+      setIntelligenceTarget(null);
+      setNotice(
+        `Loaded ${file.name} — ${u.data.packets || 0} packets analyzed`,
+      );
+      setTab("pcap");
+      setTimeout(() => setNotice(""), 5000);
+    } catch (e) {
+      setNotice(`PCAP parse failed: ${e?.response?.data?.detail || e.message}`);
+      setTimeout(() => setNotice(""), 6000);
+    }
+  }, []);
+  const filtered = packets.filter((p) => {
+    if (protocolFilter && p.protocol !== protocolFilter) return false;
+    if (!filter) return true;
+    const q = filter.toLowerCase();
+    return [
+      p.src_ip,
+      p.dst_ip,
+      p.protocol,
+      p.info,
+      p.src_port,
+      p.dst_port,
+    ].some((v) =>
+      String(v || "")
+        .toLowerCase()
+        .includes(q),
+    );
+  });
+  const openPacket = async (packetOrId) => {
+    const id = typeof packetOrId === "string" ? packetOrId : packetOrId?.id;
+    let p =
+      packets.find((x) => String(x.id) === String(id)) ||
+      (typeof packetOrId === "object" ? packetOrId : null);
+    if (id && (!p || Object.keys(p).length <= 1)) {
+      try {
+        p = (await api.get(`/packets/${encodeURIComponent(id)}`)).data;
+      } catch (_) {}
+    }
+    if (p?.id) {
+      setSelected(p);
+      setTab("analyzer");
+    }
+  };
+  const openTopologyInvestigation = (target) => {
+    setIntelligenceTarget(target || null);
+    setTab("intelligence");
+  };
+  const openSearchResult = (result) => {
+    const target = result?.target || {};
+    if (target.investigation_id) {
+      setInvestigationTarget(target.investigation_id);
+      setTab("investigations");
+      return;
+    }
+    if (result.type === "connection" && target.connection) {
+      setActiveFlow(target.connection);
+      setTab("flows");
+      return;
+    }
+    if (result.type === "host" && target.host_ip) {
+      setFilter(target.host_ip);
+      setTab("analyzer");
+      return;
+    }
+    if (result.type === "finding") {
+      setIntelligenceTarget({ panel: "security" });
+      setTab("intelligence");
+      return;
+    }
+    if (result.type === "dns" && !target.packet_id) {
+      setIntelligenceTarget({ panel: "dns" });
+      setTab("intelligence");
+      return;
+    }
+    if (result.type === "timeline" && !target.packet_id) {
+      setIntelligenceTarget({ panel: "timeline" });
+      setTab("intelligence");
+      return;
+    }
+    if (target.packet_id) openPacket(target.packet_id);
+  };
+  const bookmarkEvidence = useCallback(async (evidence) => {
+    try {
+      const saved = await bookmarkActiveInvestigation(api, evidence);
+      setNotice(
+        `Bookmarked ${saved.payload.title || saved.payload.type} to the active investigation.`,
+      );
+      setTimeout(() => setNotice(""), 5000);
+      return true;
+    } catch (error) {
+      if (
+        error instanceof BookmarkError &&
+        error.code === "no_active_investigation"
+      ) {
+        setNotice(error.message);
+        setTab("investigations");
+      } else {
+        setNotice(
+          `Could not bookmark evidence: ${error?.response?.data?.detail || error.message || "unknown error"}`,
+        );
+      }
+      setTimeout(() => setNotice(""), 6000);
+      return false;
+    }
+  }, []);
+  return (
+    <div className="min-h-screen w-full min-w-0 bg-slate-50 dark:bg-[#090D16] text-slate-900 dark:text-slate-100">
+      <HeaderNav
+        theme={theme}
+        setTheme={setTheme}
+        interfaces={interfaces}
+        iface={iface}
+        setIface={changeInterface}
+        status={status}
+        onStart={startCapture}
+        onStop={stopCapture}
+        onClear={clearCapture}
+        onUpload={uploadPcap}
+        filter={filter}
+        setFilter={setFilter}
+        protocolFilter={protocolFilter}
+        setProtocolFilter={setProtocolFilter}
+        onOpenSettings={() => {
+          setSettingsSection(null);
+          setSettingsOpen(true);
+        }}
+        onOpenShortcuts={() => {
+          setSettingsSection("shortcuts");
+          setSettingsOpen(true);
+        }}
+        onOpenSessions={() => setSessionsOpen(true)}
+        onOpenGlobalSearch={() => setGlobalSearchOpen(true)}
+      />
+      {["degraded", "error", "warning"].includes(
+        status.capture_health?.state,
+      ) && (
+        <div
+          data-testid="capture-health-banner"
+          className="mx-auto w-full max-w-none px-5 sm:px-7 lg:px-10 mt-3"
+        >
+          <div className="rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-900 dark:text-amber-200 px-4 py-2 text-sm">
+            <b>Capture health: </b>
+            {status.capture_health.reason}
+          </div>
+        </div>
+      )}
+      {notice && (
+        <div
+          data-testid="toast-notice"
+          className="mx-auto w-full max-w-none px-5 sm:px-7 lg:px-10 mt-3"
+        >
+          <div className="rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-900 dark:text-amber-200 px-4 py-2 text-sm">
+            {notice}
+          </div>
+        </div>
+      )}
+      <nav className="mx-auto w-full max-w-none px-5 sm:px-7 lg:px-10 mt-4">
+        <div className="flex flex-wrap gap-1.5 rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/70" aria-label="Investigation workspace navigation">
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              data-testid={`tab-${id}`}
+              onClick={() => setTab(id)}
+              className={`relative shrink-0 flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${tab === id ? "bg-blue-50 text-blue-700 shadow-sm dark:bg-blue-500/15 dark:text-blue-300" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"}`} aria-current={tab === id ? "page" : undefined}
+            >
+              <Icon size={16} />
+              {label}
+              {id === "threats" && threats.length > 0 && (
+                <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-red-500 text-white">
+                  {threats.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </nav>
+      <main className="mx-auto w-full min-w-0 max-w-none px-5 sm:px-7 lg:px-10 py-4">
+        {tab === "analyzer" && (
+          <PacketAnalyzer
+            packets={filtered}
+            selected={selected}
+            setSelected={setSelected}
+            status={status}
+            onFollowFlow={setActiveFlow}
+          />
+        )}{" "}
+        {tab === "intelligence" && (
+          <IntelligenceWorkspace
+            threats={threats}
+            onSelectPacket={openPacket}
+            onBookmark={bookmarkEvidence}
+            target={intelligenceTarget}
+            onTargetConsumed={() => setIntelligenceTarget(null)}
+          />
+        )}{" "}
+        {tab === "hosts" && (
+          <LiveHostsWorkspace
+            hosts={hostProfiles}
+            status={hostStatus}
+            onRefresh={refreshHosts}
+            onBookmark={bookmarkEvidence}
+            onInspectTraffic={(host) => {
+              setFilter(host);
+              setTab("analyzer");
+            }}
+          />
+        )}{" "}
+        {tab === "investigations" && (
+          <InvestigationWorkspace
+            selectedPacket={selected}
+            hosts={hostProfiles}
+            findings={threats}
+            onOpenPacket={openPacket}
+            targetInvestigationId={investigationTarget}
+          />
+        )}{" "}
+        {tab === "pcap" && (
+          <PcapWorkspace
+            name={pcapName}
+            investigation={pcapInvestigation}
+            packets={packets}
+            threats={threats}
+            onSelectPacket={openPacket}
+          />
+        )}{" "}
+        {tab === "analytics" && (
+          <AnalyticsDashboard
+            status={status}
+            timeline={timeline}
+            topTalkers={topTalkers}
+            hosts={hostProfiles}
+            threats={threats}
+            onInvestigate={openTopologyInvestigation}
+            onOpenThreats={() => {
+              setIntelligenceTarget({ panel: "security" });
+              setTab("intelligence");
+            }}
+          />
+        )}{" "}
+        {tab === "flows" && <FlowsTab flows={flows} onOpen={setActiveFlow} />}{" "}
+        {tab === "topology" && (
+          <TopologyMap
+            topology={topology}
+            threats={threats}
+            onInvestigate={openTopologyInvestigation}
+          />
+        )}{" "}
+        {tab === "threats" && (
+          <ThreatFeed threats={threats} onSelectPacket={openPacket} />
+        )}
+      </main>
+      <FlowDrawer
+        open={!!activeFlow}
+        onClose={() => setActiveFlow(null)}
+        flow={activeFlow}
+      />
+      <SettingsDrawer
+        open={settingsOpen}
+        initialSection={settingsSection}
+        onClose={() => setSettingsOpen(false)}
+      />
+      <SessionsDrawer
+        open={sessionsOpen}
+        status={status}
+        onClose={() => setSessionsOpen(false)}
+        onLoaded={(info) => {
+          setNotice(`Loaded "${info.name}" — ${info.packet_count} packets`);
+          setTimeout(() => setNotice(""), 5000);
+        }}
+      />
+      <GlobalSearchDrawer
+        open={globalSearchOpen}
+        onClose={() => setGlobalSearchOpen(false)}
+        onOpenResult={openSearchResult}
+      />
+    </div>
+  );
 }
-function PcapWorkspace({name,investigation,packets,threats,onSelectPacket}){if(!investigation)return <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center"><FileSearch2 size={34} className="mx-auto text-slate-400"/><h2 className="font-display font-bold mt-3">PCAP Investigation Workspace</h2><p className="text-sm text-slate-500 mt-2">Upload a PCAP, PCAPNG or CAP file from the header. nScout will parse it locally and build an investigation summary.</p></div>;const protocolCounts=investigation?.dashboard?.protocol_counts||investigation?.protocols||{},devices=investigation?.devices||[],connections=investigation?.connections||[],dnsEvents=investigation?.dns?.events||[],findings=investigation?.security?.findings||investigation?.security_findings||threats||[];return <div className="space-y-4"><div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-[11px] uppercase tracking-wider text-slate-500">Offline investigation</div><h2 className="font-display font-bold text-lg mt-1">{name||"Imported capture"}</h2><p className="text-xs text-slate-500 mt-1">Evidence is derived from the imported packet capture. Encrypted application payload is not decrypted.</p></div><div className="flex gap-2"><a href={`${api.defaults.baseURL}/investigation/report.pdf`} className="px-3 py-2 rounded-md bg-blue-600 text-white text-xs font-semibold">PDF Report</a><a href={`${api.defaults.baseURL}/investigation/report.html`} className="px-3 py-2 rounded-md bg-slate-900 dark:bg-slate-700 text-white text-xs font-semibold">HTML</a><a href={`${api.defaults.baseURL}/investigation/report.json`} className="px-3 py-2 rounded-md bg-slate-100 dark:bg-slate-800 text-xs font-semibold">JSON</a></div></div><div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-5"><PcapMetric label="Packets" value={packets.length}/><PcapMetric label="Connections" value={connections.length}/><PcapMetric label="Devices" value={devices.length}/><PcapMetric label="DNS Events" value={dnsEvents.length}/><PcapMetric label="Findings" value={findings.length} danger={findings.length>0}/></div></div><div className="grid grid-cols-1 xl:grid-cols-2 gap-4"><PcapPanel title="Protocol breakdown">{Object.keys(protocolCounts).length?<div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{Object.entries(protocolCounts).sort((a,b)=>b[1]-a[1]).map(([p,n])=><div key={p} className="rounded-lg bg-slate-50 dark:bg-slate-800 p-3"><div className="text-xs text-slate-500">{p}</div><div className="font-bold mt-1">{Number(n||0).toLocaleString()}</div></div>)}</div>:<Empty text="No protocol summary available."/>}</PcapPanel><PcapPanel title="Security findings">{findings.length?<div className="space-y-2 max-h-64 overflow-auto el-scroll">{findings.slice(0,30).map((f,i)=><button key={f.id||i} onClick={()=>f.packet_id&&onSelectPacket?.({id:f.packet_id})} className="w-full text-left rounded-lg border border-slate-100 dark:border-slate-800 p-3 hover:bg-slate-50 dark:hover:bg-slate-800"><div className="text-xs font-semibold">{f.title||f.type||"Investigation lead"}</div><div className="text-[11px] text-slate-500 mt-1">{f.description||f.detail||"Review supporting packet evidence."}</div></button>)}</div>:<Empty text="No security findings were produced for this capture."/>}</PcapPanel><PcapPanel title="DNS activity">{dnsEvents.length?<div className="space-y-1 max-h-64 overflow-auto el-scroll font-mono-code text-xs">{dnsEvents.slice(0,40).map((d,i)=><div key={i} className="border-b border-slate-100 dark:border-slate-800 py-2">{d.response?"↩":"→"} {d.query||"unknown"} {Array.isArray(d.answers)&&d.answers.length?`→ ${d.answers.join(", ")}`:""}</div>)}</div>:<Empty text="No DNS activity observed."/>}</PcapPanel><PcapPanel title="Interesting packets"><div className="space-y-1 max-h-64 overflow-auto el-scroll">{packets.slice(0,40).map(p=><button key={p.id} onClick={()=>onSelectPacket?.(p)} className="w-full text-left px-2 py-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-mono-code"><span className="text-slate-400">#{p.number}</span> {p.src_ip} → {p.dst_ip} <span className="text-blue-500">{p.protocol}</span></button>)}</div></PcapPanel></div></div>}
-function PcapMetric({label,value,danger}){return <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-3"><div className="text-[10px] uppercase tracking-wider text-slate-500">{label}</div><div className={`text-xl font-bold mt-1 ${danger?"text-red-500":""}`}>{Number(value||0).toLocaleString()}</div></div>}
-function PcapPanel({title,children}){return <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4"><h3 className="font-display font-bold text-sm mb-3">{title}</h3>{children}</div>}
-function Empty({text}){return <div className="py-8 text-center text-sm text-slate-400">{text}</div>}
-function FlowsTab({flows,onOpen}){return <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden"><div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between"><h3 className="font-display font-bold text-sm">TCP Conversations</h3><span className="text-xs text-slate-500 font-mono-code">{flows.length} flows</span></div><div className="overflow-auto el-scroll"><table className="w-full text-sm"><thead><tr className="text-left text-slate-500 text-xs uppercase tracking-wider"><th className="px-4 py-2">Endpoint A</th><th className="px-4 py-2">Endpoint B</th><th className="px-4 py-2">Protocols</th><th className="px-4 py-2 text-right">Packets</th><th className="px-4 py-2 text-right">Bytes</th><th/></tr></thead><tbody className="font-mono-code">{!flows.length&&<tr><td colSpan={6} className="py-10 text-center text-slate-400">No TCP flows captured yet</td></tr>}{flows.map((f,i)=><tr key={i} className="row-hover border-t border-slate-100 dark:border-slate-800"><td className="px-4 py-2">{f.a_ip}:<span className="text-slate-400">{f.a_port}</span></td><td className="px-4 py-2">{f.b_ip}:<span className="text-slate-400">{f.b_port}</span></td><td className="px-4 py-2">{(f.protocols||[]).map(p=><span key={p} className={`proto-badge proto-${p} mr-1`}>{p}</span>)}</td><td className="px-4 py-2 text-right">{(f.packets||0).toLocaleString()}</td><td className="px-4 py-2 text-right">{(f.bytes||0).toLocaleString()} B</td><td className="px-4 py-2 text-right"><button onClick={()=>onOpen(f)} className="text-xs px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold">Follow</button></td></tr>)}</tbody></table></div></div>}
+function PcapWorkspace({
+  name,
+  investigation,
+  packets,
+  threats,
+  onSelectPacket,
+}) {
+  if (!investigation)
+    return (
+      <div className="space-y-4">
+        <PcapComparison />
+        <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center">
+          <FileSearch2 size={34} className="mx-auto text-slate-400" />
+          <h2 className="font-display font-bold mt-3">
+            PCAP Investigation Workspace
+          </h2>
+          <p className="text-sm text-slate-500 mt-2">
+            Upload a PCAP, PCAPNG or CAP file from the header. nScout will parse
+            it locally and build an investigation summary.
+          </p>
+        </div>
+      </div>
+    );
+  const protocolCounts =
+      investigation?.dashboard?.protocol_counts ||
+      investigation?.protocols ||
+      {},
+    devices = investigation?.devices || [],
+    connections = investigation?.connections || [],
+    dnsEvents = investigation?.dns?.events || [],
+    findings =
+      investigation?.security?.findings ||
+      investigation?.security_findings ||
+      threats ||
+      [];
+  return (
+    <div className="space-y-4">
+      <PcapComparison />
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-slate-500">
+              Offline investigation
+            </div>
+            <h2 className="font-display font-bold text-lg mt-1">
+              {name || "Imported capture"}
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Evidence is derived from the imported packet capture. Encrypted
+              application payload is not decrypted.
+            </p>
+          </div>
+          <ReportExports />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3 mt-5">
+          <PcapMetric label="Packets" value={packets.length} />
+          <PcapMetric label="Connections" value={connections.length} />
+          <PcapMetric label="Devices" value={devices.length} />
+          <PcapMetric label="DNS Events" value={dnsEvents.length} />
+          <PcapMetric
+            label="Findings"
+            value={findings.length}
+            danger={findings.length > 0}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <PcapPanel title="Protocol breakdown">
+          {Object.keys(protocolCounts).length ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-2">
+              {Object.entries(protocolCounts)
+                .sort((a, b) => b[1] - a[1])
+                .map(([p, n]) => (
+                  <div
+                    key={p}
+                    className="min-w-0 rounded-lg bg-slate-50 dark:bg-slate-800 p-3"
+                  >
+                    <div className="text-xs text-slate-500">{p}</div>
+                    <div className="font-bold mt-1">
+                      {Number(n || 0).toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <Empty text="No protocol summary available." />
+          )}
+        </PcapPanel>
+        <PcapPanel title="Security findings">
+          {findings.length ? (
+            <div className="space-y-2 max-h-64 overflow-auto el-scroll">
+              {findings.slice(0, 30).map((f, i) => (
+                <button
+                  key={f.id || i}
+                  onClick={() =>
+                    f.packet_id && onSelectPacket?.({ id: f.packet_id })
+                  }
+                  className="w-full text-left rounded-lg border border-slate-100 dark:border-slate-800 p-3 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  <div className="text-xs font-semibold">
+                    {f.title || f.type || "Investigation lead"}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-1">
+                    {f.description ||
+                      f.detail ||
+                      "Review supporting packet evidence."}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <Empty text="No security findings were produced for this capture." />
+          )}
+        </PcapPanel>
+        <PcapPanel title="DNS activity">
+          {dnsEvents.length ? (
+            <div className="space-y-1 max-h-64 overflow-auto el-scroll font-mono-code text-xs">
+              {dnsEvents.slice(0, 40).map((d, i) => (
+                <div
+                  key={i}
+                  className="border-b border-slate-100 dark:border-slate-800 py-2"
+                >
+                  {d.response ? "↩" : "→"} {d.query || "unknown"}{" "}
+                  {Array.isArray(d.answers) && d.answers.length
+                    ? `→ ${d.answers.join(", ")}`
+                    : ""}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Empty text="No DNS activity observed." />
+          )}
+        </PcapPanel>
+        <PcapPanel title="Interesting packets">
+          <div className="space-y-1 max-h-64 overflow-auto el-scroll">
+            {packets.slice(0, 40).map((p) => (
+              <button
+                key={p.id}
+                onClick={() => onSelectPacket?.(p)}
+                className="w-full text-left px-2 py-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-mono-code"
+              >
+                <span className="text-slate-400">#{p.number}</span> {p.src_ip} →{" "}
+                {p.dst_ip} <span className="text-blue-500">{p.protocol}</span>
+              </button>
+            ))}
+          </div>
+        </PcapPanel>
+      </div>
+    </div>
+  );
+}
+function PcapMetric({ label, value, danger }) {
+  return (
+    <div className="min-w-0 rounded-lg bg-slate-50 dark:bg-slate-800 p-3">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500">
+        {label}
+      </div>
+      <div className={`text-xl font-bold mt-1 break-words ${danger ? "text-red-500" : ""}`}>
+        {Number(value || 0).toLocaleString()}
+      </div>
+    </div>
+  );
+}
+function PcapPanel({ title, children }) {
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+      <h3 className="font-display font-bold text-sm mb-3">{title}</h3>
+      {children}
+    </div>
+  );
+}
+function Empty({ text }) {
+  return <div className="py-8 text-center text-sm text-slate-400">{text}</div>;
+}
+function FlowsTab({ flows, onOpen }) {
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <h3 className="font-display font-bold text-sm">TCP Conversations</h3>
+        <span className="text-xs text-slate-500 font-mono-code">
+          {flows.length} flows
+        </span>
+      </div>
+      <div className="min-w-0 max-h-[min(65dvh,900px)] overflow-auto el-scroll" role="region" aria-label="TCP conversations table" tabIndex={0}>
+        <table className="w-full min-w-[720px] text-sm">
+          <thead className="sticky top-0 z-10 bg-white dark:bg-slate-900">
+            <tr className="text-left text-slate-500 text-xs uppercase tracking-wider">
+              <th className="px-4 py-2">Endpoint A</th>
+              <th className="px-4 py-2">Endpoint B</th>
+              <th className="px-4 py-2">Protocols</th>
+              <th className="px-4 py-2 text-right">Packets</th>
+              <th className="px-4 py-2 text-right">Bytes</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody className="font-mono-code">
+            {!flows.length && (
+              <tr>
+                <td colSpan={6} className="py-10 text-center text-slate-400">
+                  No TCP flows captured yet
+                </td>
+              </tr>
+            )}
+            {flows.map((f, i) => (
+              <tr
+                key={i}
+                className="row-hover border-t border-slate-100 dark:border-slate-800"
+              >
+                <td className="px-4 py-2">
+                  {f.a_ip}:<span className="text-slate-400">{f.a_port}</span>
+                </td>
+                <td className="px-4 py-2">
+                  {f.b_ip}:<span className="text-slate-400">{f.b_port}</span>
+                </td>
+                <td className="px-4 py-2">
+                  {(f.protocols || []).map((p) => (
+                    <span key={p} className={`proto-badge proto-${p} mr-1`}>
+                      {p}
+                    </span>
+                  ))}
+                </td>
+                <td className="px-4 py-2 text-right">
+                  {(f.packets || 0).toLocaleString()}
+                </td>
+                <td className="px-4 py-2 text-right">
+                  {(f.bytes || 0).toLocaleString()} B
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <button
+                    onClick={() => onOpen(f)}
+                    className="text-xs px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                  >
+                    Follow
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

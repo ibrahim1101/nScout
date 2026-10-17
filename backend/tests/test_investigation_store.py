@@ -1,0 +1,232 @@
+import asyncio
+import json
+
+import pytest
+from fastapi import HTTPException
+
+from etherlens.investigation_store import InvestigationNotFound, InvestigationStore
+from etherlens.investigation_workspace import EvidenceItem
+
+
+def test_store_persists_lists_mutates_and_deletes(tmp_path):
+    store = InvestigationStore(tmp_path / "investigations")
+    workspace = store.create("DNS review", "Investigate fan-out")
+    store.mutate(workspace.id, lambda item: item.add_note("Check resolver history"))
+    store.mutate(workspace.id, lambda item: item.add_evidence(
+        EvidenceItem("host", "192.0.2.10", title="Observed resolver")
+    ))
+
+    restored = store.get(workspace.id)
+    assert restored.name == "DNS review"
+    assert restored.notes[0]["text"] == "Check resolver history"
+    assert restored.evidence[0].ref_id == "192.0.2.10"
+    assert store.list()[0]["evidence"]["host"] == 1
+    assert store.list()[0]["note_count"] == 1
+    assert store.delete(workspace.id) is True
+    assert store.delete(workspace.id) is False
+    with pytest.raises(InvestigationNotFound):
+        store.get(workspace.id)
+
+
+def test_store_rejects_invalid_ids_and_skips_corrupt_files(tmp_path):
+    store = InvestigationStore(tmp_path)
+    (tmp_path / "corrupt.json").write_text("not json", encoding="utf-8")
+    assert store.list() == []
+    with pytest.raises(InvestigationNotFound):
+        store.get("../outside")
+
+
+def test_store_atomic_write_leaves_no_temporary_file(tmp_path):
+    store = InvestigationStore(tmp_path)
+    workspace = store.create("Atomic case")
+    data = json.loads((tmp_path / f"{workspace.id}.json").read_text(encoding="utf-8"))
+    assert data["id"] == workspace.id
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_investigation_api_lifecycle(tmp_path, monkeypatch):
+    import server
+
+    store = InvestigationStore(tmp_path)
+    monkeypatch.setattr(server, "_investigation_store", store)
+
+    async def scenario():
+        created = await server.investigations_create(
+            server.CreateInvestigationRequest(name="Incident 42", description="Triage")
+        )
+        workspace_id = created["investigation"]["id"]
+        await server.investigations_add_evidence(
+            workspace_id,
+            server.EvidenceRequest(type="packet", ref_id="pkt-42", snapshot={"protocol": "DNS"}),
+        )
+        await server.investigations_add_evidence(
+            workspace_id,
+            server.EvidenceRequest(type="http", ref_id="pkt-http", snapshot={"method": "GET"}),
+        )
+        await server.investigations_add_evidence(
+            workspace_id,
+            server.EvidenceRequest(type="tls", ref_id="pkt-tls", snapshot={"sni": "example.test"}),
+        )
+        await server.investigations_add_note(
+            workspace_id,
+            server.InvestigationNoteRequest(text="Compare with baseline"),
+        )
+        await server.investigations_set_finding_state(
+            workspace_id,
+            "finding-42",
+            server.FindingStateRequest(state="investigating", note="Needs review"),
+        )
+        updated = await server.investigations_update(
+            workspace_id,
+            server.UpdateInvestigationRequest(name="Incident 42A"),
+        )
+        listed = await server.investigations_list()
+        loaded = await server.investigations_get(workspace_id)
+        return workspace_id, updated, listed, loaded
+
+    workspace_id, updated, listed, loaded = asyncio.run(scenario())
+    assert updated["investigation"]["name"] == "Incident 42A"
+    assert listed["investigations"][0]["evidence"]["packet"] == 1
+    assert listed["investigations"][0]["evidence"]["http"] == 1
+    assert listed["investigations"][0]["evidence"]["tls"] == 1
+    assert loaded["investigation"]["notes"][0]["text"] == "Compare with baseline"
+    assert loaded["investigation"]["finding_states"]["finding-42"]["state"] == "investigating"
+    asyncio.run(server.investigations_delete(workspace_id))
+
+
+def test_investigation_api_maps_validation_and_missing_errors(tmp_path, monkeypatch):
+    import server
+
+    monkeypatch.setattr(server, "_investigation_store", InvestigationStore(tmp_path))
+
+    with pytest.raises(HTTPException) as missing:
+        asyncio.run(server.investigations_get("00000000-0000-0000-0000-000000000000"))
+    assert missing.value.status_code == 404
+
+    created = asyncio.run(server.investigations_create(server.CreateInvestigationRequest(name="Case")))
+    workspace_id = created["investigation"]["id"]
+    with pytest.raises(HTTPException) as invalid:
+        asyncio.run(server.investigations_add_evidence(
+            workspace_id,
+            server.EvidenceRequest(type="unsupported", ref_id="x"),
+        ))
+    assert invalid.value.status_code == 400
+
+
+def test_investigation_api_rejects_large_snapshots(tmp_path, monkeypatch):
+    import server
+
+    monkeypatch.setattr(server, "_investigation_store", InvestigationStore(tmp_path))
+    created = asyncio.run(server.investigations_create(server.CreateInvestigationRequest(name="Case")))
+    workspace_id = created["investigation"]["id"]
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.investigations_add_evidence(
+            workspace_id,
+            server.EvidenceRequest(type="packet", ref_id="p1", snapshot={"raw": "x" * (129 * 1024)}),
+        ))
+    assert error.value.status_code == 413
+
+
+def test_release_candidate_case_survives_restart_and_exports_redacted_report(tmp_path):
+    """Exercise the persisted analyst workflow across a fresh store instance."""
+    from etherlens.reports import csv_report, html_report, json_report, pdf_report, report_document, xlsx_report, xml_report
+
+    case_dir = tmp_path / "investigations"
+    store = InvestigationStore(case_dir)
+    case = store.create("Outbound traffic review", "Review observed destination")
+    store.mutate(case.id, lambda item: item.add_evidence(
+        EvidenceItem("host", "192.0.2.10", title="Source host")
+    ))
+    store.mutate(case.id, lambda item: item.add_evidence(
+        EvidenceItem("packet", "pkt-42", title="Captured packet", snapshot={"hex": "sensitive-payload"})
+    ))
+    store.mutate(case.id, lambda item: item.add_note("Review traffic from 192.0.2.10"))
+    store.mutate(case.id, lambda item: item.set_finding_state(
+        "finding-42", "investigating", "Check the observed connection"
+    ))
+
+    restarted_store = InvestigationStore(case_dir)
+    restored = restarted_store.get(case.id)
+    assert len(restored.evidence) == 2
+    assert len(restored.notes) == 1
+    assert restored.finding_states["finding-42"]["state"] == "investigating"
+
+    summary = {
+        "overview": {"total_packets": 1, "total_bytes": 64, "protocols": []},
+        "connections": [], "devices": [], "hosts": [{"ip": "192.0.2.10"}],
+        "security": {"findings": [], "note": "Findings require analyst validation."},
+        "threats": [],
+    }
+    workspace = restored.to_dict()
+    document = report_document(summary, workspace, redact=True)
+    serialized = json.dumps(document)
+    assert "192.0.2.10" not in serialized
+    assert "sensitive-payload" not in serialized
+    assert document["case"]["finding_states"]["finding-42"]["state"] == "investigating"
+
+    for exporter in (json_report, html_report, pdf_report, csv_report, xlsx_report, xml_report):
+        output = exporter(summary, workspace, redact=True)
+        assert output
+        assert b"192.0.2.10" not in (output if isinstance(output, bytes) else output.encode())
+        assert b"sensitive-payload" not in (output if isinstance(output, bytes) else output.encode())
+
+    assert restarted_store.delete(case.id) is True
+    assert restarted_store.list() == []
+
+
+def test_atomic_write_failure_preserves_previous_case_and_cleans_temp(tmp_path, monkeypatch):
+    import etherlens.investigation_store as module
+
+    store = InvestigationStore(tmp_path)
+    case = store.create("Original case")
+    original = (tmp_path / f"{case.id}.json").read_bytes()
+    real_replace = module.os.replace
+
+    def fail_replace(source, destination):
+        assert str(source).endswith(".tmp")
+        assert str(destination).endswith(f"{case.id}.json")
+        raise OSError("simulated interrupted replace")
+
+    monkeypatch.setattr(module.os, "replace", fail_replace)
+    case.name = "Updated case"
+    with pytest.raises(OSError, match="interrupted replace"):
+        store.save(case)
+    monkeypatch.setattr(module.os, "replace", real_replace)
+
+    assert (tmp_path / f"{case.id}.json").read_bytes() == original
+    assert store.get(case.id).name == "Original case"
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_store_rejects_mismatched_case_identity_without_deleting_data(tmp_path):
+    store = InvestigationStore(tmp_path)
+    first = store.create("First case")
+    second = store.create("Second case")
+    first_path = tmp_path / f"{first.id}.json"
+    payload = json.loads(first_path.read_text(encoding="utf-8"))
+    payload["id"] = second.id
+    first_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="does not match"):
+        store.get(first.id)
+    assert [row["id"] for row in store.list()] == [second.id]
+    assert store.get(second.id).name == "Second case"
+    assert first_path.exists()
+
+
+@pytest.mark.parametrize("broken", [
+    [],
+    {"evidence": [None]},
+    {"evidence": [{"type": "packet", "ref_id": "pkt", "unknown": True}]},
+    {"notes": None},
+    {"finding_states": ["malformed-entry"]},
+])
+def test_malformed_case_does_not_block_valid_case_listing(tmp_path, broken):
+    store = InvestigationStore(tmp_path)
+    valid = store.create("Valid investigation")
+    broken_id = "00000000-0000-0000-0000-000000000001"
+    (tmp_path / f"{broken_id}.json").write_text(json.dumps(broken), encoding="utf-8")
+    assert [row["id"] for row in store.list()] == [valid.id]
+    with pytest.raises(ValueError, match="unreadable|does not match"):
+        store.get(broken_id)
+    assert store.get(valid.id).name == "Valid investigation"
