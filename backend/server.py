@@ -435,6 +435,20 @@ def _validate_pcapng_blocks(data:bytes)->None:
   offset+=block_length
 
 
+def _pcapng_has_packet_blocks(data:bytes)->bool:
+ """Check for packet-bearing PCAP-NG blocks after structural validation."""
+ offset=0
+ endian=None
+ while offset<len(data):
+  if data[offset:offset+4]==bytes.fromhex("0a0d0d0a"):
+   endian="<" if data[offset+8:offset+12]==bytes.fromhex("4d3c2b1a") else ">"
+  block_type,block_length=struct.unpack_from(endian+"II",data,offset)
+  if block_type in (3,6):
+   return True
+  offset+=block_length
+ return False
+
+
 def _validate_pcap_records(data:bytes)->None:
  """Reject incomplete classic-PCAP records before replacing investigation evidence."""
  if len(data)<24:
@@ -498,7 +512,11 @@ async def compare_pcaps(baseline:UploadFile=File(...),current:UploadFile=File(..
    if payload.startswith(bytes.fromhex("0a0d0d0a")):_validate_pcapng_blocks(payload)
    else:_validate_pcap_records(payload)
    # A header-only capture is structurally valid but provides no comparison evidence.
-   if len(payload)==24 and not payload.startswith(bytes.fromhex("0a0d0d0a")):
+   if payload.startswith(bytes.fromhex("0a0d0d0a")):
+    # PCAP-NG may contain only section/interface metadata and no packet blocks.
+    if not _pcapng_has_packet_blocks(payload):
+     raise ValueError(f"{label} PCAP-NG contains no packets")
+   elif len(payload)==24:
     raise ValueError(f"{label} PCAP contains no packets")
  except ValueError as exc:raise HTTPException(status_code=400,detail=f"Invalid pcap: {exc}") from exc
  if _pcap_compare_lock.locked():raise HTTPException(status_code=429,detail="Another PCAP comparison is already running")
