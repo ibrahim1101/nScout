@@ -494,9 +494,12 @@ async def compare_pcaps(baseline:UploadFile=File(...),current:UploadFile=File(..
  if len(baseline_data)>MAX_PCAP_BYTES or len(current_data)>MAX_PCAP_BYTES:raise HTTPException(status_code=413,detail="Each PCAP must be 50 MB or smaller")
  # Apply the same strict framing checks as single-capture imports.
  try:
-  for payload in (baseline_data,current_data):
+  for label,payload in (("baseline",baseline_data),("current",current_data)):
    if payload.startswith(bytes.fromhex("0a0d0d0a")):_validate_pcapng_blocks(payload)
    else:_validate_pcap_records(payload)
+   # A header-only capture is structurally valid but provides no comparison evidence.
+   if len(payload)==24 and not payload.startswith(bytes.fromhex("0a0d0d0a")):
+    raise ValueError(f"{label} PCAP contains no packets")
  except ValueError as exc:raise HTTPException(status_code=400,detail=f"Invalid pcap: {exc}") from exc
  if _pcap_compare_lock.locked():raise HTTPException(status_code=429,detail="Another PCAP comparison is already running")
  try:
