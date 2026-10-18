@@ -485,3 +485,23 @@ def test_pcapng_obsolete_packet_block_rejects_invalid_framing(endian, defect):
         packet = block(2, struct.pack(endian + "HHIIII", 0, 0, 0, 0, captured, original) + b"abcd")
     with pytest.raises(ValueError, match="obsolete packet"):
         server._validate_pcapng_blocks(section + interface + packet)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_pcapng_obsolete_packet_block_valid_framing(endian):
+    """A well-framed obsolete packet block is accepted and counted as evidence."""
+    import struct
+
+    def block(block_type, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", block_type, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    payload = b"abcd"
+    packet = block(2, struct.pack(endian + "HHIIII", 0, 0, 0, 0, len(payload), len(payload)) + payload)
+    capture = section + interface + packet
+    server._validate_pcapng_blocks(capture)
+    assert server._pcapng_has_packet_blocks(capture)
