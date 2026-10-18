@@ -598,3 +598,20 @@ def test_pcapng_interface_ids_restart_at_each_section(endian, packet_type):
     capture = section + interface + interface + section + interface + packet
     server._validate_pcapng_blocks(capture)
     assert server._pcapng_has_packet_blocks(capture)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_pcapng_rejects_zero_interface_snapshot_length(endian):
+    """A PCAP-NG interface must declare a nonzero capture snapshot length."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 0))
+    with pytest.raises(ValueError, match="interface snapshot length"):
+        server._validate_pcapng_blocks(section + interface)
