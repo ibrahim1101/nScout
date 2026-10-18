@@ -615,3 +615,20 @@ def test_pcapng_rejects_zero_interface_snapshot_length(endian):
     interface = block(1, struct.pack(endian + "HHI", 1, 0, 0))
     with pytest.raises(ValueError, match="interface snapshot length"):
         server._validate_pcapng_blocks(section + interface)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("snaplen", [64, 65535])
+def test_pcapng_accepts_nonzero_interface_snapshot_length(endian, snaplen):
+    """Ordinary nonzero interface snapshot lengths must remain valid."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, snaplen))
+    server._validate_pcapng_blocks(section + interface)
