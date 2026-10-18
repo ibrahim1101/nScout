@@ -426,6 +426,19 @@ def _validate_pcapng_blocks(data:bytes)->None:
    if options_start>options_end:
     raise ValueError("Truncated PCAP-NG enhanced packet payload")
    _validate_pcapng_options(data,options_start,options_end,endian)
+  elif block_type==2:
+   # Obsolete Packet Block: interface/reserved (4), timestamp (8),
+   # captured/original lengths (8), packet data, then optional options.
+   if block_length<32:
+    raise ValueError("Truncated PCAP-NG obsolete packet block")
+   captured,original=struct.unpack_from(endian+"II",data,offset+20)
+   if captured==0 or captured>original:
+    raise ValueError("Invalid PCAP-NG obsolete packet length")
+   options_start=offset+28+((captured+3)&~3)
+   options_end=offset+block_length-4
+   if options_start>options_end:
+    raise ValueError("Truncated PCAP-NG obsolete packet payload")
+   _validate_pcapng_options(data,options_start,options_end,endian)
   elif block_type==3:
    if block_length<16:
     raise ValueError("Truncated PCAP-NG simple packet block")
