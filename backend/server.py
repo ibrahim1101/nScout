@@ -443,7 +443,7 @@ def _pcapng_has_packet_blocks(data:bytes)->bool:
   if data[offset:offset+4]==bytes.fromhex("0a0d0d0a"):
    endian="<" if data[offset+8:offset+12]==bytes.fromhex("4d3c2b1a") else ">"
   block_type,block_length=struct.unpack_from(endian+"II",data,offset)
-  if block_type in (3,6):
+  if block_type in (2,3,6):
    return True
   offset+=block_length
  return False
