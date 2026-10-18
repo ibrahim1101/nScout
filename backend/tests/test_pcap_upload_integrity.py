@@ -434,3 +434,30 @@ def test_compare_rejects_malformed_capture_before_engine(monkeypatch, invalid_si
         asyncio.run(server.compare_pcaps(baseline, current))
     assert error.value.status_code == 400
     assert "Invalid pcap" in str(error.value.detail)
+
+
+
+@pytest.mark.parametrize("empty_side", ["baseline", "current"])
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_compare_rejects_metadata_only_pcapng(monkeypatch, empty_side, endian):
+    """A valid PCAP-NG section and interface without packets is not evidence."""
+    import struct
+
+    valid = _pcapng_sample(endian)
+    offset = 0
+    # Preserve only the section and interface blocks from the valid fixture.
+    for _ in range(2):
+        length = struct.unpack_from(endian + "I", valid, offset + 4)[0]
+        offset += length
+    metadata_only = valid[:offset]
+
+    def unexpected_comparison(*args, **kwargs):
+        pytest.fail("Metadata-only PCAP-NG reached comparison engine")
+
+    monkeypatch.setattr(server, "compare_pcap_bytes", unexpected_comparison)
+    baseline = _upload(metadata_only if empty_side == "baseline" else valid)
+    current = _upload(metadata_only if empty_side == "current" else valid)
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.compare_pcaps(baseline, current))
+    assert error.value.status_code == 400
+    assert f"{empty_side} PCAP-NG contains no packets" in str(error.value.detail)
