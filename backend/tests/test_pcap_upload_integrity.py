@@ -505,3 +505,23 @@ def test_pcapng_obsolete_packet_block_valid_framing(endian):
     capture = section + interface + packet
     server._validate_pcapng_blocks(capture)
     assert server._pcapng_has_packet_blocks(capture)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("lengths", [(0, 0), (0, 4), (4, 0)])
+def test_pcapng_obsolete_packet_rejects_zero_lengths(endian, lengths):
+    """Type-2 blocks must not treat empty packet records as evidence."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    captured, original = lengths
+    packet = block(2, struct.pack(endian + "HHIIII", 0, 0, 0, 0, captured, original) + b"abcd")
+    with pytest.raises(ValueError, match="Invalid PCAP-NG obsolete packet length"):
+        server._validate_pcapng_blocks(section + interface + packet)
