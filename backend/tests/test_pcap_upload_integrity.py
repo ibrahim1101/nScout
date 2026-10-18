@@ -461,3 +461,27 @@ def test_compare_rejects_metadata_only_pcapng(monkeypatch, empty_side, endian):
         asyncio.run(server.compare_pcaps(baseline, current))
     assert error.value.status_code == 400
     assert f"{empty_side} PCAP-NG contains no packets" in str(error.value.detail)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("defect", ["short_block", "truncated_payload", "captured_exceeds_original"])
+def test_pcapng_obsolete_packet_block_rejects_invalid_framing(endian, defect):
+    """Type-2 packet blocks must be validated, not merely counted as packets."""
+    import struct
+
+    def block(block_type, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", block_type, size) + body + struct.pack(endian + "I", size)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    if defect == "short_block":
+        packet = block(2, b"\x00" * 16)
+    else:
+        captured = 8 if defect == "truncated_payload" else 4
+        original = 8 if defect == "truncated_payload" else 2
+        packet = block(2, struct.pack(endian + "HHIIII", 0, 0, 0, 0, captured, original) + b"abcd")
+    with pytest.raises(ValueError, match="obsolete packet"):
+        server._validate_pcapng_blocks(section + interface + packet)
