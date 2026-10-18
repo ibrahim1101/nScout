@@ -551,3 +551,27 @@ def test_pcapng_rejects_packet_interface_without_definition(endian, packet_type)
     # A new section invalidates interface IDs declared in the previous section.
     with pytest.raises(ValueError, match="interface ID"):
         server._validate_pcapng_blocks(section + interface + section + packet)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("packet_type", [2, 6])
+def test_pcapng_accepts_defined_packet_interface(endian, packet_type):
+    """Valid packet blocks may reference the second interface of a section."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    payload = b"abcd"
+    if packet_type == 2:
+        packet = block(2, struct.pack(endian + "HHIIII", 1, 0, 0, 0, 4, 4) + payload)
+    else:
+        packet = block(6, struct.pack(endian + "IIIII", 1, 0, 0, 4, 4) + payload)
+    capture = section + interface + interface + packet
+    server._validate_pcapng_blocks(capture)
+    assert server._pcapng_has_packet_blocks(capture)
