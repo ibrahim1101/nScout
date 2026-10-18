@@ -416,6 +416,9 @@ def _validate_pcapng_blocks(data:bytes)->None:
   elif block_type==1:
    if block_length<20:
     raise ValueError("Truncated PCAP-NG interface description block")
+   snaplen=struct.unpack_from(endian+"I",data,offset+12)[0]
+   if snaplen==0:
+    raise ValueError("Invalid PCAP-NG interface snapshot length")
    _validate_pcapng_options(data,offset+16,offset+block_length-4,endian)
    interface_count+=1
   elif block_type==6:
