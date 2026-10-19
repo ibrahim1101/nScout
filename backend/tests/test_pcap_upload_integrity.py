@@ -655,3 +655,25 @@ def test_pcapng_rejects_packet_larger_than_interface_snaplen(endian, packet_type
         packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + payload)
     with pytest.raises(ValueError, match="packet length"):
         server._validate_pcapng_blocks(section + interface + packet)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("packet_type", [2, 6])
+def test_pcapng_accepts_packet_at_interface_snaplen(endian, packet_type):
+    """Captured lengths equal to the interface snapshot limit are valid."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 4))
+    payload = b"abcd"
+    if packet_type == 2:
+        packet = block(2, struct.pack(endian + "HHIIII", 0, 0, 0, 0, 4, 4) + payload)
+    else:
+        packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + payload)
+    server._validate_pcapng_blocks(section + interface + packet)
