@@ -386,6 +386,7 @@ def _validate_pcapng_blocks(data:bytes)->None:
  endian=None
  seen_section=False
  interface_count=0
+ interface_snaplens=[]
  while offset<len(data):
   if len(data)-offset<12:
    raise ValueError("Truncated PCAP-NG block header")
@@ -400,6 +401,7 @@ def _validate_pcapng_blocks(data:bytes)->None:
     raise ValueError("Invalid PCAP-NG byte-order magic")
    seen_section=True
    interface_count=0
+   interface_snaplens=[]
   elif not seen_section:
    raise ValueError("PCAP-NG missing section header")
   block_type,block_length=struct.unpack_from(endian+"II",data,offset)
@@ -420,6 +422,7 @@ def _validate_pcapng_blocks(data:bytes)->None:
    if snaplen==0:
     raise ValueError("Invalid PCAP-NG interface snapshot length")
    _validate_pcapng_options(data,offset+16,offset+block_length-4,endian)
+   interface_snaplens.append(snaplen)
    interface_count+=1
   elif block_type==6:
    if block_length<32:
@@ -428,7 +431,7 @@ def _validate_pcapng_blocks(data:bytes)->None:
    if interface_id>=interface_count:
     raise ValueError("Invalid PCAP-NG enhanced packet interface ID")
    captured,original=struct.unpack_from(endian+"II",data,offset+20)
-   if captured>original or captured>block_length-32:
+   if captured>original or captured>interface_snaplens[interface_id] or captured>block_length-32:
     raise ValueError("Invalid PCAP-NG enhanced packet length")
    options_start=offset+28+((captured+3)&~3)
    options_end=offset+block_length-4
@@ -444,7 +447,7 @@ def _validate_pcapng_blocks(data:bytes)->None:
    if interface_id>=interface_count:
     raise ValueError("Invalid PCAP-NG obsolete packet interface ID")
    captured,original=struct.unpack_from(endian+"II",data,offset+20)
-   if captured==0 or original==0 or captured>original:
+   if captured==0 or original==0 or captured>original or captured>interface_snaplens[interface_id]:
     raise ValueError("Invalid PCAP-NG obsolete packet length")
    options_start=offset+28+((captured+3)&~3)
    options_end=offset+block_length-4
