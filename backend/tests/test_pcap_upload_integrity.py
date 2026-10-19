@@ -677,3 +677,33 @@ def test_pcapng_accepts_packet_at_interface_snaplen(endian, packet_type):
     else:
         packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + payload)
     server._validate_pcapng_blocks(section + interface + packet)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("packet_type", [2, 6])
+def test_pcapng_uses_referenced_interface_snaplen(endian, packet_type):
+    """Packet limits are looked up by interface ID, not the latest interface."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interfaces = (
+        block(1, struct.pack(endian + "HHI", 1, 0, 2))
+        + block(1, struct.pack(endian + "HHI", 1, 0, 8))
+    )
+
+    def packet(interface_id):
+        if packet_type == 2:
+            body = struct.pack(endian + "HHIIII", interface_id, 0, 0, 0, 4, 4)
+        else:
+            body = struct.pack(endian + "IIIII", interface_id, 0, 0, 4, 4)
+        return block(packet_type, body + b"abcd")
+
+    server._validate_pcapng_blocks(section + interfaces + packet(1))
+    with pytest.raises(ValueError, match="packet length"):
+        server._validate_pcapng_blocks(section + interfaces + packet(0))
