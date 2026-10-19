@@ -707,3 +707,30 @@ def test_pcapng_uses_referenced_interface_snaplen(endian, packet_type):
     server._validate_pcapng_blocks(section + interfaces + packet(1))
     with pytest.raises(ValueError, match="packet length"):
         server._validate_pcapng_blocks(section + interfaces + packet(0))
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("packet_type", [2, 6])
+def test_pcapng_resets_snapshot_limits_between_sections(endian, packet_type):
+    """Interface snapshot limits must not leak from one section to the next."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    large_interface = block(1, struct.pack(endian + "HHI", 1, 0, 8))
+    small_interface = block(1, struct.pack(endian + "HHI", 1, 0, 2))
+    if packet_type == 2:
+        packet = block(2, struct.pack(endian + "HHIIII", 0, 0, 0, 0, 4, 4) + b"abcd")
+    else:
+        packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"abcd")
+
+    server._validate_pcapng_blocks(section + large_interface + packet)
+    with pytest.raises(ValueError, match="packet length"):
+        server._validate_pcapng_blocks(
+            section + large_interface + packet + section + small_interface + packet
+        )
