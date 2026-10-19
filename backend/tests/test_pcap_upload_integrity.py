@@ -734,3 +734,32 @@ def test_pcapng_resets_snapshot_limits_between_sections(endian, packet_type):
         server._validate_pcapng_blocks(
             section + large_interface + packet + section + small_interface + packet
         )
+
+
+
+@pytest.mark.parametrize("payload", [
+    bytes.fromhex("0a0d0d0a"),
+    bytes.fromhex("0a0d0d0a") + bytes(4),
+    bytes.fromhex("0a0d0d0a") + bytes.fromhex("1c000000") + bytes.fromhex("4d3c"),
+    bytes.fromhex("0a0d0d0a") + bytes.fromhex("1c000000") + bytes.fromhex("00000000") + bytes(16),
+])
+def test_pcapng_rejects_truncated_or_invalid_section_byte_order(payload):
+    """Malformed section byte-order metadata must raise ValueError, never IndexError."""
+    with pytest.raises(ValueError):
+        server._validate_pcapng_blocks(payload)
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_pcapng_rejects_truncated_section_header(endian):
+    """A section claiming a complete 28-byte header cannot be truncated."""
+    import struct
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    payload = (
+        bytes.fromhex("0a0d0d0a")
+        + struct.pack(endian + "I", 28)
+        + bom
+        + struct.pack(endian + "HH", 1, 0)
+    )
+    with pytest.raises(ValueError, match="block length"):
+        server._validate_pcapng_blocks(payload)
