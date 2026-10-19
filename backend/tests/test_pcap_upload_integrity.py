@@ -843,3 +843,26 @@ def test_pcapng_rejects_malformed_interface_options(endian, bad_option):
         server._validate_pcapng_blocks(
             section + block(1, interface_body + bad_option + padding)
         )
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("option_value", [b"abc", b"abcd"])
+def test_pcapng_accepts_valid_padded_interface_options(endian, option_value):
+    """Correctly padded interface options and end markers remain accepted."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    option = (
+        struct.pack(endian + "HH", 2, len(option_value))
+        + option_value
+        + bytes((-len(option_value)) % 4)
+        + struct.pack(endian + "HH", 0, 0)
+    )
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535) + option)
+    server._validate_pcapng_blocks(section + interface)
