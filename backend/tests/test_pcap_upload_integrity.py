@@ -822,8 +822,8 @@ def test_pcapng_rejects_mismatched_interface_block_trailer(endian):
 
 @pytest.mark.parametrize("endian", ["<", ">"])
 @pytest.mark.parametrize("bad_option", [
-    bytes.fromhex("0100"),
-    bytes.fromhex("01000400") + bytes.fromhex("aabb"),
+    bytes.fromhex("01010404"),
+    bytes.fromhex("01010808") + bytes.fromhex("aabb"),
     bytes.fromhex("00000100") + bytes.fromhex("00000000"),
     bytes.fromhex("00000000") + bytes.fromhex("01000000"),
 ])
