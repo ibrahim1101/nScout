@@ -781,3 +781,39 @@ def test_pcapng_rejects_incomplete_trailing_block_header(endian, trailing_bytes)
     interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
     with pytest.raises(ValueError, match="Truncated PCAP-NG block header"):
         server._validate_pcapng_blocks(section + interface + bytes(trailing_bytes))
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("declared_length", [0, 8, 13, 1024])
+def test_pcapng_rejects_invalid_interface_block_lengths(endian, declared_length):
+    """Interface blocks cannot have undersized, unaligned, or oversized lengths."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    malformed = interface[:4] + struct.pack(endian + "I", declared_length) + interface[8:]
+    with pytest.raises(ValueError, match="block length"):
+        server._validate_pcapng_blocks(section + malformed)
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_pcapng_rejects_mismatched_interface_block_trailer(endian):
+    """The final block-length field must match the block header."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    malformed = interface[:-4] + struct.pack(endian + "I", 24)
+    with pytest.raises(ValueError, match="trailer mismatch"):
+        server._validate_pcapng_blocks(section + malformed)
