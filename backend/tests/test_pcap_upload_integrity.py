@@ -817,3 +817,29 @@ def test_pcapng_rejects_mismatched_interface_block_trailer(endian):
     malformed = interface[:-4] + struct.pack(endian + "I", 24)
     with pytest.raises(ValueError, match="trailer mismatch"):
         server._validate_pcapng_blocks(section + malformed)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("bad_option", [
+    bytes.fromhex("0100"),
+    bytes.fromhex("01000400") + bytes.fromhex("aabb"),
+    bytes.fromhex("00000100") + bytes.fromhex("00000000"),
+    bytes.fromhex("00000000") + bytes.fromhex("01000000"),
+])
+def test_pcapng_rejects_malformed_interface_options(endian, bad_option):
+    """Malformed option framing and end markers must be rejected."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface_body = struct.pack(endian + "HHI", 1, 0, 65535)
+    padding = bytes((-len(bad_option)) % 4)
+    with pytest.raises(ValueError, match="PCAP-NG option|end-of-options"):
+        server._validate_pcapng_blocks(
+            section + block(1, interface_body + bad_option + padding)
+        )
