@@ -763,3 +763,21 @@ def test_pcapng_rejects_truncated_section_header(endian):
     )
     with pytest.raises(ValueError, match="block length"):
         server._validate_pcapng_blocks(payload)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("trailing_bytes", [1, 4, 8, 11])
+def test_pcapng_rejects_incomplete_trailing_block_header(endian, trailing_bytes):
+    """Any trailing bytes shorter than a full block header invalidate the capture."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    with pytest.raises(ValueError, match="Truncated PCAP-NG block header"):
+        server._validate_pcapng_blocks(section + interface + bytes(trailing_bytes))
