@@ -919,3 +919,29 @@ def test_pcapng_accepts_valid_packet_options(endian, packet_type, option_value):
     )
     packet = block(packet_type, header + b"data" + option)
     server._validate_pcapng_blocks(section + interface + packet)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("bad_option", [
+    bytes.fromhex("01010404"),
+    bytes.fromhex("01010808") + bytes.fromhex("aabb"),
+    bytes.fromhex("00000100") + bytes.fromhex("00000000"),
+    bytes.fromhex("00000000") + bytes.fromhex("01000000"),
+])
+def test_pcapng_rejects_malformed_section_options(endian, bad_option):
+    """Section headers must reject malformed option framing and terminators."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    padding = bytes((-len(bad_option)) % 4)
+    section = block(
+        0x0A0D0D0A,
+        bom + struct.pack(endian + "HHq", 1, 0, -1) + bad_option + padding,
+    )
+    with pytest.raises(ValueError, match="PCAP-NG option|end-of-options"):
+        server._validate_pcapng_blocks(section)
