@@ -970,3 +970,40 @@ def test_pcapng_accepts_valid_section_header_options(endian, option_value):
         bom + struct.pack(endian + "HHq", 1, 0, -1) + option,
     )
     server._validate_pcapng_blocks(section)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("major,minor", [(0, 0), (1, 1), (2, 0), (65535, 65535)])
+def test_pcapng_rejects_unsupported_section_versions(endian, major, minor):
+    """Only supported PCAP-NG section version 1.0 may be imported."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(
+        0x0A0D0D0A,
+        bom + struct.pack(endian + "HHq", major, minor, -1),
+    )
+    with pytest.raises(ValueError, match="Unsupported PCAP-NG version"):
+        server._validate_pcapng_blocks(section)
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_pcapng_rejects_unsupported_version_in_later_section(endian):
+    """A later section must be version-checked independently of earlier sections."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    valid = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    invalid = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 2, 0, -1))
+    server._validate_pcapng_blocks(valid)
+    with pytest.raises(ValueError, match="Unsupported PCAP-NG version"):
+        server._validate_pcapng_blocks(valid + invalid)
