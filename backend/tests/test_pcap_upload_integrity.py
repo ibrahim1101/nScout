@@ -890,3 +890,32 @@ def test_pcapng_rejects_malformed_packet_options(endian, packet_type):
     packet = block(packet_type, header + b"data" + malformed_option)
     with pytest.raises(ValueError, match="Truncated PCAP-NG option value"):
         server._validate_pcapng_blocks(section + interface + packet)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("packet_type", [2, 6])
+@pytest.mark.parametrize("option_value", [b"abc", b"abcd"])
+def test_pcapng_accepts_valid_packet_options(endian, packet_type, option_value):
+    """Packet options with correct padding and terminators must be accepted."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    if packet_type == 2:
+        header = struct.pack(endian + "HHIIII", 0, 0, 0, 0, 4, 4)
+    else:
+        header = struct.pack(endian + "IIIII", 0, 0, 0, 4, 4)
+    option = (
+        struct.pack(endian + "HH", 1, len(option_value))
+        + option_value
+        + bytes((-len(option_value)) % 4)
+        + struct.pack(endian + "HH", 0, 0)
+    )
+    packet = block(packet_type, header + b"data" + option)
+    server._validate_pcapng_blocks(section + interface + packet)
