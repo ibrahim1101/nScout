@@ -945,3 +945,28 @@ def test_pcapng_rejects_malformed_section_options(endian, bad_option):
     )
     with pytest.raises(ValueError, match="PCAP-NG option|end-of-options"):
         server._validate_pcapng_blocks(section)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("option_value", [b"abc", b"abcd"])
+def test_pcapng_accepts_valid_section_header_options(endian, option_value):
+    """Valid section-header options with correct padding must be accepted."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    option = (
+        struct.pack(endian + "HH", 2, len(option_value))
+        + option_value
+        + bytes((-len(option_value)) % 4)
+        + struct.pack(endian + "HH", 0, 0)
+    )
+    section = block(
+        0x0A0D0D0A,
+        bom + struct.pack(endian + "HHq", 1, 0, -1) + option,
+    )
+    server._validate_pcapng_blocks(section)
