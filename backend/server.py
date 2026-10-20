@@ -457,9 +457,15 @@ def _validate_pcapng_blocks(data:bytes)->None:
   elif block_type==3:
    if block_length<16:
     raise ValueError("Truncated PCAP-NG simple packet block")
+   if not interface_snaplens:
+    raise ValueError("PCAP-NG simple packet missing interface")
    original=struct.unpack_from(endian+"I",data,offset+8)[0]
-   if original==0 or block_length-16==0:
+   captured=min(original,interface_snaplens[0])
+   padded=(captured+3)&~3
+   if original==0 or captured==0:
     raise ValueError("Empty PCAP-NG simple packet")
+   if block_length!=16+padded:
+    raise ValueError("Invalid PCAP-NG simple packet length")
   offset+=block_length
 
 
