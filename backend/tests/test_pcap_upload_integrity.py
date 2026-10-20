@@ -1051,3 +1051,38 @@ def test_pcapng_rejects_invalid_simple_packet_lengths(endian, original, snaplen,
     simple_packet = block(3, struct.pack(endian + "I", original) + payload)
     with pytest.raises(ValueError, match="simple packet"):
         server._validate_pcapng_blocks(section + interface + simple_packet)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_pcapng_rejects_simple_packet_without_interface(endian):
+    """Simple packets refer to interface zero and require its declaration."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    packet = block(3, struct.pack(endian + "I", 4) + b"data")
+    with pytest.raises(ValueError, match="simple packet missing interface"):
+        server._validate_pcapng_blocks(section + packet)
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_pcapng_rejects_simple_packet_after_section_resets_interfaces(endian):
+    """An interface in a previous section cannot authorize a simple packet."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    packet = block(3, struct.pack(endian + "I", 4) + b"data")
+    server._validate_pcapng_blocks(section + interface + packet)
+    with pytest.raises(ValueError, match="simple packet missing interface"):
+        server._validate_pcapng_blocks(section + interface + packet + section + packet)
