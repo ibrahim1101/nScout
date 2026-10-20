@@ -1007,3 +1007,47 @@ def test_pcapng_rejects_unsupported_version_in_later_section(endian):
     server._validate_pcapng_blocks(valid)
     with pytest.raises(ValueError, match="Unsupported PCAP-NG version"):
         server._validate_pcapng_blocks(valid + invalid)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("original,snaplen,payload", [
+    (4, 4, b"abcd"),
+    (8, 4, b"abcd"),
+    (3, 8, b"abc" + bytes(1)),
+])
+def test_pcapng_accepts_valid_simple_packet_lengths(endian, original, snaplen, payload):
+    """Simple packet data is bounded by original length and interface snaplen."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, snaplen))
+    simple_packet = block(3, struct.pack(endian + "I", original) + payload)
+    server._validate_pcapng_blocks(section + interface + simple_packet)
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("original,snaplen,payload", [
+    (4, 4, b""),
+    (4, 4, b"abcdefgh"),
+    (0, 4, b"abcd"),
+])
+def test_pcapng_rejects_invalid_simple_packet_lengths(endian, original, snaplen, payload):
+    """Simple packet blocks cannot omit, overrun, or claim zero-length data."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, snaplen))
+    simple_packet = block(3, struct.pack(endian + "I", original) + payload)
+    with pytest.raises(ValueError, match="simple packet"):
+        server._validate_pcapng_blocks(section + interface + simple_packet)
