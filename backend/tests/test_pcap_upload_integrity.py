@@ -1474,3 +1474,21 @@ def test_pcapng_rejects_empty_enhanced_packet(endian, captured, original):
     enhanced = block(6, struct.pack(endian + "IIIII", 0, 0, 0, captured, original))
     with pytest.raises(ValueError, match="Invalid PCAP-NG enhanced packet length"):
         server._validate_pcapng_blocks(section + interface + enhanced)
+
+
+
+@pytest.mark.parametrize("endian,magic", [
+    ("<", bytes.fromhex("d4c3b2a1")),
+    (">", bytes.fromhex("a1b2c3d4")),
+    ("<", bytes.fromhex("4d3cb2a1")),
+    (">", bytes.fromhex("a1b23c4d")),
+])
+@pytest.mark.parametrize("captured,original", [(0, 0), (0, 4)])
+def test_classic_pcap_rejects_empty_packet_record(endian, magic, captured, original):
+    """Empty packet records are invalid in both byte orders and time precisions."""
+    import struct
+
+    header = magic + struct.pack(endian + "HHIIII", 2, 4, 0, 0, 65535, 1)
+    record = struct.pack(endian + "IIII", 0, 0, captured, original)
+    with pytest.raises(ValueError, match="Invalid PCAP packet length"):
+        server._validate_pcap_records(header + record)
