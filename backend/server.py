@@ -501,7 +501,7 @@ def _validate_pcap_records(data:bytes)->None:
    raise ValueError("Truncated PCAP packet header")
   _,_,captured,original=struct.unpack_from(endian+"IIII",data,offset)
   offset+=16
-  if captured>snaplen or captured>original:
+  if captured==0 or original==0 or captured>snaplen or captured>original:
    raise ValueError("Invalid PCAP packet length")
   if captured>len(data)-offset:
    raise ValueError("Truncated PCAP packet data")
