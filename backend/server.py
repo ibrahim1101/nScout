@@ -445,7 +445,7 @@ def _validate_pcapng_blocks(data:bytes)->None:
    if interface_id>=interface_count:
     raise ValueError("Invalid PCAP-NG obsolete packet interface ID")
    captured,original=struct.unpack_from(endian+"II",data,offset+20)
-   if captured==0 or original==0 or captured>original or captured>interface_snaplens[interface_id]:
+   if captured==0 or original==0 or captured>original or (interface_snaplens[interface_id]!=0 and captured>interface_snaplens[interface_id]):
     raise ValueError("Invalid PCAP-NG obsolete packet length")
    options_start=offset+28+((captured+3)&~3)
    options_end=offset+block_length-4
