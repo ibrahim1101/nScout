@@ -1345,3 +1345,27 @@ def test_pcapng_section_options_allow_nonzero_padding(endian, value_length):
     section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1) + option)
     interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
     server._validate_pcapng_blocks(section + interface)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("block_kind", ["section", "interface", "enhanced", "obsolete"])
+def test_pcapng_accepts_options_without_end_marker(endian, block_kind):
+    """An option list may end at the block boundary without an end marker."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    options = struct.pack(endian + "HH", 2, 3) + b"abc" + bytes([255])
+    section_body = bom + struct.pack(endian + "HHq", 1, 0, -1)
+    section = block(0x0A0D0D0A, section_body + (options if block_kind == "section" else b""))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535) + (options if block_kind == "interface" else b""))
+    capture = section + interface
+    if block_kind == "enhanced":
+        capture += block(6, struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"data" + options)
+    elif block_kind == "obsolete":
+        capture += block(2, struct.pack(endian + "HHIIII", 0, 0, 0, 0, 4, 4) + b"data" + options)
+    server._validate_pcapng_blocks(capture)
