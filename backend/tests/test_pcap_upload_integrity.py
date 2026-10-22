@@ -1492,3 +1492,20 @@ def test_classic_pcap_rejects_empty_packet_record(endian, magic, captured, origi
     record = struct.pack(endian + "IIII", 0, 0, captured, original)
     with pytest.raises(ValueError, match="Invalid PCAP packet length"):
         server._validate_pcap_records(header + record)
+
+
+
+@pytest.mark.parametrize("endian,magic", [
+    ("<", bytes.fromhex("d4c3b2a1")),
+    (">", bytes.fromhex("a1b2c3d4")),
+    ("<", bytes.fromhex("4d3cb2a1")),
+    (">", bytes.fromhex("a1b23c4d")),
+])
+@pytest.mark.parametrize("captured,original", [(1, 1), (1, 4)])
+def test_classic_pcap_accepts_minimal_nonempty_packet(endian, magic, captured, original):
+    """A one-byte captured packet is valid, including when truncated on capture."""
+    import struct
+
+    header = magic + struct.pack(endian + "HHIIII", 2, 4, 0, 0, 65535, 1)
+    record = struct.pack(endian + "IIII", 0, 0, captured, original)
+    server._validate_pcap_records(header + record + b"x")
