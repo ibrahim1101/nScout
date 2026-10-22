@@ -602,8 +602,8 @@ def test_pcapng_interface_ids_restart_at_each_section(endian, packet_type):
 
 
 @pytest.mark.parametrize("endian", ["<", ">"])
-def test_pcapng_rejects_zero_interface_snapshot_length(endian):
-    """A PCAP-NG interface must declare a nonzero capture snapshot length."""
+def test_pcapng_accepts_unlimited_interface_snapshot_length(endian):
+    """Zero snaplen means unlimited in PCAP-NG interface descriptions."""
     import struct
 
     def block(kind, body):
@@ -613,8 +613,10 @@ def test_pcapng_rejects_zero_interface_snapshot_length(endian):
     bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
     section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
     interface = block(1, struct.pack(endian + "HHI", 1, 0, 0))
-    with pytest.raises(ValueError, match="interface snapshot length"):
-        server._validate_pcapng_blocks(section + interface)
+    enhanced = block(6, struct.pack(endian + "IIIII", 0, 0, 0, 8, 8) + b"abcdefgh")
+    obsolete = block(2, struct.pack(endian + "HHIIII", 0, 0, 0, 0, 8, 8) + b"abcdefgh")
+    simple = block(3, struct.pack(endian + "I", 8) + b"abcdefgh")
+    server._validate_pcapng_blocks(section + interface + enhanced + obsolete + simple)
 
 
 
