@@ -1086,3 +1086,39 @@ def test_pcapng_rejects_simple_packet_after_section_resets_interfaces(endian):
     server._validate_pcapng_blocks(section + interface + packet)
     with pytest.raises(ValueError, match="simple packet missing interface"):
         server._validate_pcapng_blocks(section + interface + packet + section + packet)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_pcapng_simple_packet_uses_first_interface_snaplen(endian):
+    """A simple packet uses interface zero, not the most recently declared interface."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    first_interface = block(1, struct.pack(endian + "HHI", 1, 0, 4))
+    second_interface = block(1, struct.pack(endian + "HHI", 1, 0, 8))
+    packet = block(3, struct.pack(endian + "I", 8) + b"abcd")
+    server._validate_pcapng_blocks(section + first_interface + second_interface + packet)
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_pcapng_simple_packet_rejects_payload_using_second_interface_snaplen(endian):
+    """A larger snaplen on interface one cannot expand simple packet data."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    first_interface = block(1, struct.pack(endian + "HHI", 1, 0, 4))
+    second_interface = block(1, struct.pack(endian + "HHI", 1, 0, 8))
+    packet = block(3, struct.pack(endian + "I", 8) + b"abcdefgh")
+    with pytest.raises(ValueError, match="Invalid PCAP-NG simple packet length"):
+        server._validate_pcapng_blocks(section + first_interface + second_interface + packet)
