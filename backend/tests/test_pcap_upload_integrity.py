@@ -1205,3 +1205,31 @@ def test_pcapng_mixed_endian_sections_enforce_new_snaplen(first_endian, second_e
     oversized = block(second_endian, 6, struct.pack(second_endian + "IIIII", 0, 0, 0, 8, 8) + b"abcdefgh")
     with pytest.raises(ValueError, match="Invalid PCAP-NG enhanced packet length"):
         server._validate_pcapng_blocks(first + second + oversized)
+
+
+
+@pytest.mark.parametrize("first_endian,second_endian", [("<", ">"), (">", "<")])
+@pytest.mark.parametrize("packet_type", [2, 6])
+def test_pcapng_mixed_endian_section_rejects_previous_interface_id(first_endian, second_endian, packet_type):
+    """An interface declared in one section cannot be referenced by a later section."""
+    import struct
+
+    def block(endian, kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    def section(endian):
+        bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+        return block(endian, 0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+
+    first = section(first_endian)
+    first += block(first_endian, 1, struct.pack(first_endian + "HHI", 1, 0, 65535))
+    first += block(first_endian, 1, struct.pack(first_endian + "HHI", 1, 0, 65535))
+    second = section(second_endian)
+    second += block(second_endian, 1, struct.pack(second_endian + "HHI", 1, 0, 65535))
+    if packet_type == 2:
+        packet = block(second_endian, 2, struct.pack(second_endian + "HHIIII", 1, 0, 0, 0, 4, 4) + b"data")
+    else:
+        packet = block(second_endian, 6, struct.pack(second_endian + "IIIII", 1, 0, 0, 4, 4) + b"data")
+    with pytest.raises(ValueError, match="interface ID"):
+        server._validate_pcapng_blocks(first + second + packet)
