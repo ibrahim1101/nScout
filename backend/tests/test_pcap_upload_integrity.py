@@ -1429,3 +1429,29 @@ def test_pcapng_rejects_invalid_end_marker_after_valid_option(endian, block_kind
         capture += block(2, struct.pack(endian + "HHIIII", 0, 0, 0, 0, 4, 4) + b"data" + options)
     with pytest.raises(ValueError, match="Invalid PCAP-NG end-of-options marker"):
         server._validate_pcapng_blocks(capture)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("block_kind", ["section", "interface", "enhanced", "obsolete"])
+def test_pcapng_rejects_truncated_option_value_after_valid_option(endian, block_kind):
+    """A second option header cannot claim a value beyond its block boundary."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    options = struct.pack(endian + "HH", 2, 1) + b"a" + bytes(3)
+    options += struct.pack(endian + "HH", 3, 5)
+    section_body = bom + struct.pack(endian + "HHq", 1, 0, -1)
+    section = block(0x0A0D0D0A, section_body + (options if block_kind == "section" else b""))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535) + (options if block_kind == "interface" else b""))
+    capture = section + interface
+    if block_kind == "enhanced":
+        capture += block(6, struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"data" + options)
+    elif block_kind == "obsolete":
+        capture += block(2, struct.pack(endian + "HHIIII", 0, 0, 0, 0, 4, 4) + b"data" + options)
+    with pytest.raises(ValueError, match="Truncated PCAP-NG option value"):
+        server._validate_pcapng_blocks(capture)
