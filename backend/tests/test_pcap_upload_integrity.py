@@ -1163,3 +1163,45 @@ def test_pcapng_limited_snaplen_resets_after_unlimited_section(endian):
     server._validate_pcapng_blocks(section + unlimited + packet)
     with pytest.raises(ValueError, match="Invalid PCAP-NG enhanced packet length"):
         server._validate_pcapng_blocks(section + unlimited + packet + section + limited + packet)
+
+
+
+@pytest.mark.parametrize("first_endian,second_endian", [("<", ">"), (">", "<")])
+def test_pcapng_accepts_mixed_endian_sections(first_endian, second_endian):
+    """Each PCAP-NG section independently determines the byte order of its blocks."""
+    import struct
+
+    def capture_section(endian):
+        def block(kind, body):
+            length = 12 + len(body)
+            return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+        bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+        section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+        interface = block(1, struct.pack(endian + "HHI", 1, 0, 4))
+        packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"data")
+        return section + interface + packet
+
+    capture = capture_section(first_endian) + capture_section(second_endian)
+    server._validate_pcapng_blocks(capture)
+    assert server._pcapng_has_packet_blocks(capture)
+
+
+@pytest.mark.parametrize("first_endian,second_endian", [("<", ">"), (">", "<")])
+def test_pcapng_mixed_endian_sections_enforce_new_snaplen(first_endian, second_endian):
+    """A new section's byte order and interface snapshot limit both take effect."""
+    import struct
+
+    def block(endian, kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    def section(endian):
+        bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+        return block(endian, 0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+
+    first = section(first_endian) + block(first_endian, 1, struct.pack(first_endian + "HHI", 1, 0, 8))
+    second = section(second_endian) + block(second_endian, 1, struct.pack(second_endian + "HHI", 1, 0, 4))
+    oversized = block(second_endian, 6, struct.pack(second_endian + "IIIII", 0, 0, 0, 8, 8) + b"abcdefgh")
+    with pytest.raises(ValueError, match="Invalid PCAP-NG enhanced packet length"):
+        server._validate_pcapng_blocks(first + second + oversized)
