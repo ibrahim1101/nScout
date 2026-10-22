@@ -1509,3 +1509,25 @@ def test_classic_pcap_accepts_minimal_nonempty_packet(endian, magic, captured, o
     header = magic + struct.pack(endian + "HHIIII", 2, 4, 0, 0, 65535, 1)
     record = struct.pack(endian + "IIII", 0, 0, captured, original)
     server._validate_pcap_records(header + record + b"x")
+
+
+
+@pytest.mark.parametrize("endian,magic", [
+    ("<", bytes.fromhex("d4c3b2a1")),
+    (">", bytes.fromhex("a1b2c3d4")),
+    ("<", bytes.fromhex("4d3cb2a1")),
+    (">", bytes.fromhex("a1b23c4d")),
+])
+@pytest.mark.parametrize("captured,valid", [(4, True), (5, False)])
+def test_classic_pcap_snapshot_length_boundary(endian, magic, captured, valid):
+    """Captured lengths at snaplen are allowed; larger records are rejected."""
+    import struct
+
+    header = magic + struct.pack(endian + "HHIIII", 2, 4, 0, 0, 4, 1)
+    record = struct.pack(endian + "IIII", 0, 0, captured, captured)
+    payload = header + record + b"x" * captured
+    if valid:
+        server._validate_pcap_records(payload)
+    else:
+        with pytest.raises(ValueError, match="Invalid PCAP packet length"):
+            server._validate_pcap_records(payload)
