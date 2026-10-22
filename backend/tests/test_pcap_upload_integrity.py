@@ -1531,3 +1531,26 @@ def test_classic_pcap_snapshot_length_boundary(endian, magic, captured, valid):
     else:
         with pytest.raises(ValueError, match="Invalid PCAP packet length"):
             server._validate_pcap_records(payload)
+
+
+
+@pytest.mark.parametrize("endian,magic", [
+    ("<", bytes.fromhex("d4c3b2a1")),
+    (">", bytes.fromhex("a1b2c3d4")),
+    ("<", bytes.fromhex("4d3cb2a1")),
+    (">", bytes.fromhex("a1b23c4d")),
+])
+@pytest.mark.parametrize("last_packet_truncated", [False, True])
+def test_classic_pcap_multiple_records_validate_final_payload(endian, magic, last_packet_truncated):
+    """A valid first record must not mask a truncated second packet."""
+    import struct
+
+    header = magic + struct.pack(endian + "HHIIII", 2, 4, 0, 0, 65535, 1)
+    first = struct.pack(endian + "IIII", 1, 0, 4, 4) + b"abcd"
+    second = struct.pack(endian + "IIII", 2, 0, 4, 4) + (b"xyz" if last_packet_truncated else b"wxyz")
+    payload = header + first + second
+    if last_packet_truncated:
+        with pytest.raises(ValueError, match="Truncated PCAP packet data"):
+            server._validate_pcap_records(payload)
+    else:
+        server._validate_pcap_records(payload)
