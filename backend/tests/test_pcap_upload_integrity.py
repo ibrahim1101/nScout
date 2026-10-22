@@ -1325,3 +1325,23 @@ def test_pcapng_interface_options_allow_nonzero_padding(endian, value_length):
     option += struct.pack(endian + "HH", 0, 0)
     interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535) + option)
     server._validate_pcapng_blocks(section + interface)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("value_length", [1, 2, 3])
+def test_pcapng_section_options_allow_nonzero_padding(endian, value_length):
+    """Section header option padding may contain nonzero bytes."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    option = struct.pack(endian + "HH", 2, value_length)
+    option += b"a" * value_length + bytes([255]) * (4 - value_length)
+    option += struct.pack(endian + "HH", 0, 0)
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1) + option)
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    server._validate_pcapng_blocks(section + interface)
