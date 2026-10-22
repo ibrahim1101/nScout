@@ -1369,3 +1369,32 @@ def test_pcapng_accepts_options_without_end_marker(endian, block_kind):
     elif block_kind == "obsolete":
         capture += block(2, struct.pack(endian + "HHIIII", 0, 0, 0, 0, 4, 4) + b"data" + options)
     server._validate_pcapng_blocks(capture)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("block_kind", ["section", "interface", "enhanced", "obsolete"])
+@pytest.mark.parametrize("end_marker", [False, True])
+def test_pcapng_accepts_consecutive_options_with_mixed_padding(endian, block_kind, end_marker):
+    """Consecutive options must advance by each padded value length."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    options = struct.pack(endian + "HH", 2, 1) + b"a" + bytes.fromhex("fefdfc")
+    options += struct.pack(endian + "HH", 3, 4) + b"bcde"
+    options += struct.pack(endian + "HH", 4, 2) + b"fg" + bytes.fromhex("aabb")
+    if end_marker:
+        options += struct.pack(endian + "HH", 0, 0)
+    section_body = bom + struct.pack(endian + "HHq", 1, 0, -1)
+    section = block(0x0A0D0D0A, section_body + (options if block_kind == "section" else b""))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535) + (options if block_kind == "interface" else b""))
+    capture = section + interface
+    if block_kind == "enhanced":
+        capture += block(6, struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"data" + options)
+    elif block_kind == "obsolete":
+        capture += block(2, struct.pack(endian + "HHIIII", 0, 0, 0, 0, 4, 4) + b"data" + options)
+    server._validate_pcapng_blocks(capture)
