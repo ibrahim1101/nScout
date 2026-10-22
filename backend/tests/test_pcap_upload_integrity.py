@@ -1124,3 +1124,42 @@ def test_pcapng_simple_packet_rejects_payload_using_second_interface_snaplen(end
     packet = block(3, struct.pack(endian + "I", 8) + b"abcdefgh")
     with pytest.raises(ValueError, match="Invalid PCAP-NG simple packet length"):
         server._validate_pcapng_blocks(section + first_interface + second_interface + packet)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_pcapng_unlimited_snaplen_resets_across_sections(endian):
+    """An unlimited interface in a new section must not inherit the prior limit."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    limited = block(1, struct.pack(endian + "HHI", 1, 0, 4))
+    unlimited = block(1, struct.pack(endian + "HHI", 1, 0, 0))
+    packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, 8, 8) + b"abcdefgh")
+    with pytest.raises(ValueError, match="Invalid PCAP-NG enhanced packet length"):
+        server._validate_pcapng_blocks(section + limited + packet)
+    server._validate_pcapng_blocks(section + limited + section + unlimited + packet)
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_pcapng_limited_snaplen_resets_after_unlimited_section(endian):
+    """A later limited interface must enforce its own snapshot limit."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    limited = block(1, struct.pack(endian + "HHI", 1, 0, 4))
+    unlimited = block(1, struct.pack(endian + "HHI", 1, 0, 0))
+    packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, 8, 8) + b"abcdefgh")
+    server._validate_pcapng_blocks(section + unlimited + packet)
+    with pytest.raises(ValueError, match="Invalid PCAP-NG enhanced packet length"):
+        server._validate_pcapng_blocks(section + unlimited + packet + section + limited + packet)
