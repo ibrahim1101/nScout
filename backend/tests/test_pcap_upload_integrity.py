@@ -1260,3 +1260,48 @@ def test_pcapng_mixed_endian_section_accepts_local_second_interface(first_endian
     else:
         packet = block(second_endian, 6, struct.pack(second_endian + "IIIII", 1, 0, 0, 8, 8) + b"abcdefgh")
     server._validate_pcapng_blocks(first + second + packet)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("packet_type", [2, 6])
+def test_pcapng_packet_options_allow_nonzero_padding_bytes(endian, packet_type):
+    """Option padding is framing, not payload, and need not be zeroed."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    options = struct.pack(endian + "HH", 1, 1) + bytes.fromhex("61aabbcc")
+    options += struct.pack(endian + "HH", 0, 0)
+    if packet_type == 2:
+        packet = block(2, struct.pack(endian + "HHIIII", 0, 0, 0, 0, 4, 4) + b"data" + options)
+    else:
+        packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"data" + options)
+    server._validate_pcapng_blocks(section + interface + packet)
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("packet_type", [2, 6])
+def test_pcapng_packet_options_reject_truncated_padded_value(endian, packet_type):
+    """Declared option value lengths must fit before the block trailer."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    options = struct.pack(endian + "HH", 1, 5) + b"abcd"
+    if packet_type == 2:
+        packet = block(2, struct.pack(endian + "HHIIII", 0, 0, 0, 0, 4, 4) + b"data" + options)
+    else:
+        packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"data" + options)
+    with pytest.raises(ValueError, match="Truncated PCAP-NG option value"):
+        server._validate_pcapng_blocks(section + interface + packet)
