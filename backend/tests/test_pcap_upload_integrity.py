@@ -1305,3 +1305,23 @@ def test_pcapng_packet_options_reject_truncated_padded_value(endian, packet_type
         packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"data" + options)
     with pytest.raises(ValueError, match="Truncated PCAP-NG option value"):
         server._validate_pcapng_blocks(section + interface + packet)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("value_length", [1, 2, 3])
+def test_pcapng_interface_options_allow_nonzero_padding(endian, value_length):
+    """Interface option padding may contain arbitrary bytes without affecting framing."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    option = struct.pack(endian + "HH", 2, value_length)
+    option += b"a" * value_length + b"\xff" * (4 - value_length)
+    option += struct.pack(endian + "HH", 0, 0)
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535) + option)
+    server._validate_pcapng_blocks(section + interface)
