@@ -1594,3 +1594,21 @@ def test_classic_pcap_rejects_invalid_global_header(endian, magic, major, minor,
     header = magic + struct.pack(endian + "HHIIII", major, minor, 0, 0, snaplen, 1)
     with pytest.raises(ValueError, match="Invalid PCAP global header"):
         server._validate_pcap_records(header)
+
+
+
+@pytest.mark.parametrize("endian,magic", [
+    ("<", bytes.fromhex("d4c3b2a1")),
+    (">", bytes.fromhex("a1b2c3d4")),
+    ("<", bytes.fromhex("4d3cb2a1")),
+    (">", bytes.fromhex("a1b23c4d")),
+])
+@pytest.mark.parametrize("captured,original", [(2, 1), (4, 3)])
+def test_classic_pcap_rejects_captured_length_above_original(endian, magic, captured, original):
+    """Captured packet bytes cannot exceed the reported original packet size."""
+    import struct
+
+    header = magic + struct.pack(endian + "HHIIII", 2, 4, 0, 0, 65535, 1)
+    record = struct.pack(endian + "IIII", 1, 0, captured, original)
+    with pytest.raises(ValueError, match="Invalid PCAP packet length"):
+        server._validate_pcap_records(header + record + b"x" * captured)
