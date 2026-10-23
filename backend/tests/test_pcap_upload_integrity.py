@@ -1629,3 +1629,25 @@ def test_classic_pcap_accepts_snaplen_truncated_packets(endian, magic, captured,
     header = magic + struct.pack(endian + "HHIIII", 2, 4, 0, 0, 4, 1)
     record = struct.pack(endian + "IIII", 1, 0, captured, original)
     server._validate_pcap_records(header + record + b"x" * captured)
+
+
+
+@pytest.mark.parametrize("endian,magic", [
+    ("<", bytes.fromhex("d4c3b2a1")),
+    (">", bytes.fromhex("a1b2c3d4")),
+    ("<", bytes.fromhex("4d3cb2a1")),
+    (">", bytes.fromhex("a1b23c4d")),
+])
+@pytest.mark.parametrize("bad_captured,bad_original", [(0, 0), (5, 4), (9, 9)])
+def test_classic_pcap_rejects_malformed_third_record_after_valid_records(
+    endian, magic, bad_captured, bad_original
+):
+    """Two valid records must not conceal a malformed third record."""
+    import struct
+
+    header = magic + struct.pack(endian + "HHIIII", 2, 4, 0, 0, 8, 1)
+    first = struct.pack(endian + "IIII", 1, 0, 4, 4) + b"abcd"
+    second = struct.pack(endian + "IIII", 2, 0, 2, 4) + b"xy"
+    third = struct.pack(endian + "IIII", 3, 0, bad_captured, bad_original)
+    with pytest.raises(ValueError, match="Invalid PCAP packet length"):
+        server._validate_pcap_records(header + first + second + third + b"z" * bad_captured)
