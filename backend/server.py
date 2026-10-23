@@ -408,10 +408,14 @@ def _validate_pcapng_blocks(data:bytes)->None:
    interface_snaplens=[]
   elif not seen_section:
    raise ValueError("PCAP-NG missing section header")
+  elif declared_section_length>=0 and offset-section_data_start>=declared_section_length:
+   raise ValueError("PCAP-NG block extends beyond declared section length")
   block_type,block_length=struct.unpack_from(endian+"II",data,offset)
   minimum=28 if is_section else 12
   if block_length<minimum or block_length%4 or block_length>len(data)-offset:
    raise ValueError("Invalid or truncated PCAP-NG block length")
+  if not is_section and declared_section_length>=0 and offset+block_length-section_data_start>declared_section_length:
+   raise ValueError("PCAP-NG block extends beyond declared section length")
   if struct.unpack_from(endian+"I",data,offset+block_length-4)[0]!=block_length:
    raise ValueError("PCAP-NG block length trailer mismatch")
   if is_section:
