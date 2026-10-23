@@ -42,7 +42,19 @@ jobs:
           DISABLE_EMERGENT_OVERLAY: "true"
         shell: bash
         run: |
-          if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else yarn install; fi
+          for attempt in 1 2 3; do
+            if [ -f yarn.lock ]; then
+              yarn install --frozen-lockfile --network-timeout 120000 && break
+            else
+              yarn install --network-timeout 120000 && break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Yarn dependency installation failed after 3 attempts" >&2
+              exit 1
+            fi
+            echo "Transient Yarn install failure; retrying in $((attempt * 10)) seconds"
+            sleep $((attempt * 10))
+          done
           CI=true yarn test --watch=false --runInBand --passWithNoTests=false
           yarn build
           test -f build/index.html
@@ -120,7 +132,19 @@ jobs:
           REACT_APP_BACKEND_URL: ""
           DISABLE_EMERGENT_OVERLAY: "true"
         run: |
-          if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else yarn install; fi
+          for attempt in 1 2 3; do
+            if [ -f yarn.lock ]; then
+              yarn install --frozen-lockfile --network-timeout 120000 && break
+            else
+              yarn install --network-timeout 120000 && break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Yarn dependency installation failed after 3 attempts" >&2
+              exit 1
+            fi
+            echo "Transient Yarn install failure; retrying in $((attempt * 10)) seconds"
+            sleep $((attempt * 10))
+          done
           CI=true yarn test --watch=false --runInBand --passWithNoTests=false
           yarn build
           test -f build/index.html
@@ -176,7 +200,19 @@ jobs:
           REACT_APP_BACKEND_URL: ""
           DISABLE_EMERGENT_OVERLAY: "true"
         run: |
-          if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else yarn install; fi
+          for attempt in 1 2 3; do
+            if [ -f yarn.lock ]; then
+              yarn install --frozen-lockfile --network-timeout 120000 && break
+            else
+              yarn install --network-timeout 120000 && break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Yarn dependency installation failed after 3 attempts" >&2
+              exit 1
+            fi
+            echo "Transient Yarn install failure; retrying in $((attempt * 10)) seconds"
+            sleep $((attempt * 10))
+          done
           CI=true yarn test --watch=false --runInBand --passWithNoTests=false
           yarn build
           test -f build/index.html
