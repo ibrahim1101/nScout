@@ -387,11 +387,15 @@ def _validate_pcapng_blocks(data:bytes)->None:
  seen_section=False
  interface_count=0
  interface_snaplens=[]
+ section_data_start=None
+ declared_section_length=-1
  while offset<len(data):
   if len(data)-offset<12:
    raise ValueError("Truncated PCAP-NG block header")
   is_section=data[offset:offset+4]==bytes.fromhex("0a0d0d0a")
   if is_section:
+   if section_data_start is not None and declared_section_length>=0 and offset-section_data_start!=declared_section_length:
+    raise ValueError("PCAP-NG section length mismatch")
    bom=data[offset+8:offset+12]
    if bom==bytes.fromhex("4d3c2b1a"):
     endian="<"
@@ -417,6 +421,8 @@ def _validate_pcapng_blocks(data:bytes)->None:
    section_length=struct.unpack_from(endian+"q",data,offset+16)[0]
    if section_length < -1:
     raise ValueError("Invalid PCAP-NG section length")
+   declared_section_length=section_length
+   section_data_start=offset+block_length
    _validate_pcapng_options(data,offset+24,offset+block_length-4,endian)
   elif block_type==1:
    if block_length<20:
@@ -468,6 +474,8 @@ def _validate_pcapng_blocks(data:bytes)->None:
    if block_length!=16+padded:
     raise ValueError("Invalid PCAP-NG simple packet length")
   offset+=block_length
+ if section_data_start is not None and declared_section_length>=0 and len(data)-section_data_start!=declared_section_length:
+  raise ValueError("PCAP-NG section length mismatch")
 
 
 def _pcapng_has_packet_blocks(data:bytes)->bool:
