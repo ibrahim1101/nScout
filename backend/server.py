@@ -414,6 +414,9 @@ def _validate_pcapng_blocks(data:bytes)->None:
    major,minor=struct.unpack_from(endian+"HH",data,offset+12)
    if (major,minor)!=(1,0):
     raise ValueError("Unsupported PCAP-NG version")
+   section_length=struct.unpack_from(endian+"q",data,offset+16)[0]
+   if section_length < -1:
+    raise ValueError("Invalid PCAP-NG section length")
    _validate_pcapng_options(data,offset+24,offset+block_length-4,endian)
   elif block_type==1:
    if block_length<20:
