@@ -1573,3 +1573,24 @@ def test_classic_pcap_rejects_partial_final_header_after_valid_packet(endian, ma
     fragment = struct.pack(endian + "IIII", 2, 0, 4, 4)[:trailing_header_bytes]
     with pytest.raises(ValueError, match="Truncated PCAP packet header"):
         server._validate_pcap_records(header + first + fragment)
+
+
+
+@pytest.mark.parametrize("endian,magic", [
+    ("<", bytes.fromhex("d4c3b2a1")),
+    (">", bytes.fromhex("a1b2c3d4")),
+    ("<", bytes.fromhex("4d3cb2a1")),
+    (">", bytes.fromhex("a1b23c4d")),
+])
+@pytest.mark.parametrize("major,minor,snaplen", [
+    (2, 4, 0),
+    (2, 3, 65535),
+    (3, 4, 65535),
+])
+def test_classic_pcap_rejects_invalid_global_header(endian, magic, major, minor, snaplen):
+    """Reject invalid version and zero snapshot length before reading records."""
+    import struct
+
+    header = magic + struct.pack(endian + "HHIIII", major, minor, 0, 0, snaplen, 1)
+    with pytest.raises(ValueError, match="Invalid PCAP global header"):
+        server._validate_pcap_records(header)
