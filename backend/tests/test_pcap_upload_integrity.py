@@ -1720,3 +1720,36 @@ def test_pcapng_section_length_checked_before_next_section(endian):
     second = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
     with pytest.raises(ValueError, match="PCAP-NG section length mismatch"):
         server._validate_pcapng_blocks(first + second)
+
+
+
+@pytest.mark.parametrize("first_endian,second_endian", [("<", ">"), (">", "<")])
+@pytest.mark.parametrize("first_declared,second_declared,valid", [
+    (20, 20, True),
+    (-1, 20, True),
+    (20, -1, True),
+    (16, 20, False),
+    (20, 16, False),
+])
+def test_pcapng_mixed_endian_sections_enforce_independent_lengths(
+    first_endian, second_endian, first_declared, second_declared, valid
+):
+    """Each section's declared length is checked using its own byte order."""
+    import struct
+
+    def block(endian, kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    def section(endian, declared):
+        bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+        header = block(endian, 0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, declared))
+        interface = block(endian, 1, struct.pack(endian + "HHI", 1, 0, 65535))
+        return header + interface
+
+    payload = section(first_endian, first_declared) + section(second_endian, second_declared)
+    if valid:
+        server._validate_pcapng_blocks(payload)
+    else:
+        with pytest.raises(ValueError, match="PCAP-NG section length mismatch"):
+            server._validate_pcapng_blocks(payload)
