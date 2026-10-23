@@ -1612,3 +1612,20 @@ def test_classic_pcap_rejects_captured_length_above_original(endian, magic, capt
     record = struct.pack(endian + "IIII", 1, 0, captured, original)
     with pytest.raises(ValueError, match="Invalid PCAP packet length"):
         server._validate_pcap_records(header + record + b"x" * captured)
+
+
+
+@pytest.mark.parametrize("endian,magic", [
+    ("<", bytes.fromhex("d4c3b2a1")),
+    (">", bytes.fromhex("a1b2c3d4")),
+    ("<", bytes.fromhex("4d3cb2a1")),
+    (">", bytes.fromhex("a1b23c4d")),
+])
+@pytest.mark.parametrize("captured,original", [(2, 4), (4, 65535)])
+def test_classic_pcap_accepts_snaplen_truncated_packets(endian, magic, captured, original):
+    """Original packet size may exceed captured bytes without invalidating PCAP."""
+    import struct
+
+    header = magic + struct.pack(endian + "HHIIII", 2, 4, 0, 0, 4, 1)
+    record = struct.pack(endian + "IIII", 1, 0, captured, original)
+    server._validate_pcap_records(header + record + b"x" * captured)
