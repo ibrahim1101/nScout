@@ -1651,3 +1651,34 @@ def test_classic_pcap_rejects_malformed_third_record_after_valid_records(
     third = struct.pack(endian + "IIII", 3, 0, bad_captured, bad_original)
     with pytest.raises(ValueError, match="Invalid PCAP packet length"):
         server._validate_pcap_records(header + first + second + third + b"z" * bad_captured)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("section_length", [-2, -3, -(2**63)])
+def test_pcapng_rejects_invalid_negative_section_length(endian, section_length):
+    """Only -1 is permitted as an unspecified PCAP-NG section length."""
+    import struct
+
+    def block(kind, body):
+        length = 12 + len(body)
+        return struct.pack(endian + "II", kind, length) + body + struct.pack(endian + "I", length)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, section_length))
+    with pytest.raises(ValueError, match="Invalid PCAP-NG section length"):
+        server._validate_pcapng_blocks(section)
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("section_length", [-1, 0])
+def test_pcapng_accepts_supported_section_length_values(endian, section_length):
+    """Unspecified and zero-length sections have valid signed encodings."""
+    import struct
+
+    length = 28
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = struct.pack(endian + "II", 0x0A0D0D0A, length)
+    section += bom + struct.pack(endian + "HHq", 1, 0, section_length)
+    section += struct.pack(endian + "I", length)
+    server._validate_pcapng_blocks(section)
