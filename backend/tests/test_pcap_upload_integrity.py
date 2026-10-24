@@ -1957,3 +1957,28 @@ def test_classic_pcap_rejects_invalid_timestamp_in_later_record(endian, magic, l
     invalid = struct.pack(endian + "IIII", 2, bad_fraction, 4, 4) + b"wxyz"
     with pytest.raises(ValueError, match="Invalid PCAP packet timestamp fraction"):
         server._validate_pcap_records(header + valid + invalid)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("packet_type", [2, 3, 6])
+@pytest.mark.parametrize("captured", [1, 2, 3])
+def test_pcapng_packet_padding_is_not_mistaken_for_payload(endian, packet_type, captured):
+    """Nonzero alignment padding is permitted; framing uses captured byte count."""
+    import struct
+
+    def block(kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    padded = b"A" * captured + b"\xff" * ((-captured) % 4)
+    if packet_type == 3:
+        packet_body = struct.pack(endian + "I", captured) + padded
+    elif packet_type == 2:
+        packet_body = struct.pack(endian + "HHIIII", 0, 0, 0, 0, captured, captured) + padded
+    else:
+        packet_body = struct.pack(endian + "IIIII", 0, 0, 0, captured, captured) + padded
+    server._validate_pcapng_blocks(section + interface + block(packet_type, packet_body))
