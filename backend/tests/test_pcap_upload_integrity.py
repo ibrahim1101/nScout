@@ -1937,3 +1937,23 @@ def test_classic_pcap_timestamp_fraction_precision_boundaries(endian, magic, lim
     else:
         with pytest.raises(ValueError, match="Invalid PCAP packet timestamp fraction"):
             server._validate_pcap_records(payload)
+
+
+
+@pytest.mark.parametrize("endian,magic,limit", [
+    ("<", bytes.fromhex("d4c3b2a1"), 1000000),
+    (">", bytes.fromhex("a1b2c3d4"), 1000000),
+    ("<", bytes.fromhex("4d3cb2a1"), 1000000000),
+    (">", bytes.fromhex("a1b23c4d"), 1000000000),
+])
+@pytest.mark.parametrize("invalid_fraction", ["first_invalid", "maximum"])
+def test_classic_pcap_rejects_invalid_timestamp_in_later_record(endian, magic, limit, invalid_fraction):
+    """Every packet timestamp is validated, including after valid records."""
+    import struct
+
+    header = magic + struct.pack(endian + "HHIIII", 2, 4, 0, 0, 65535, 1)
+    valid = struct.pack(endian + "IIII", 1, limit - 1, 4, 4) + b"abcd"
+    bad_fraction = limit if invalid_fraction == "first_invalid" else 0xFFFFFFFF
+    invalid = struct.pack(endian + "IIII", 2, bad_fraction, 4, 4) + b"wxyz"
+    with pytest.raises(ValueError, match="Invalid PCAP packet timestamp fraction"):
+        server._validate_pcap_records(header + valid + invalid)
