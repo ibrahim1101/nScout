@@ -1834,3 +1834,44 @@ def test_pcapng_zero_length_section_rejects_following_nonsection_block(endian):
     interface = struct.pack(endian + "IIHHII", 1, 20, 1, 0, 65535, 20)
     with pytest.raises(ValueError, match="PCAP-NG block extends beyond declared section length"):
         server._validate_pcapng_blocks(section + interface)
+
+
+
+@pytest.mark.parametrize("first_endian,second_endian", [("<", "<"), (">", ">"), ("<", ">"), (">", "<")])
+def test_pcapng_empty_section_does_not_inherit_previous_interfaces(first_endian, second_endian):
+    """Interface IDs from a populated section must not leak into an empty section."""
+    import struct
+
+    def block(endian, kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    def section(endian, declared):
+        bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+        return block(endian, 0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, declared))
+
+    first = section(first_endian, 20) + block(first_endian, 1, struct.pack(first_endian + "HHI", 1, 0, 65535))
+    second = section(second_endian, -1)
+    packet = block(second_endian, 6, struct.pack(second_endian + "IIIII", 0, 0, 0, 4, 4) + b"data")
+    with pytest.raises(ValueError, match="Invalid PCAP-NG enhanced packet interface ID"):
+        server._validate_pcapng_blocks(first + second + packet)
+
+
+@pytest.mark.parametrize("first_endian,second_endian", [("<", "<"), (">", ">"), ("<", ">"), (">", "<")])
+def test_pcapng_populated_section_after_empty_section_has_fresh_interface(first_endian, second_endian):
+    """A new section may declare its own interface after an empty section."""
+    import struct
+
+    def block(endian, kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    def section(endian, declared):
+        bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+        return block(endian, 0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, declared))
+
+    first = section(first_endian, 0)
+    interface = block(second_endian, 1, struct.pack(second_endian + "HHI", 1, 0, 65535))
+    packet = block(second_endian, 6, struct.pack(second_endian + "IIIII", 0, 0, 0, 4, 4) + b"data")
+    second = section(second_endian, len(interface) + len(packet)) + interface + packet
+    server._validate_pcapng_blocks(first + second)
