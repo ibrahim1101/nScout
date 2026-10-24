@@ -2006,3 +2006,29 @@ def test_pcapng_unknown_blocks_do_not_consume_interface_ids(endian, packet_type)
     else:
         packet_body = struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"data"
     server._validate_pcapng_blocks(section + unknown + interface + block(packet_type, packet_body))
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("corruption", ["short_length", "unaligned_length", "truncated_body", "bad_trailer"])
+def test_pcapng_unknown_extension_block_requires_valid_framing(endian, corruption):
+    """Unknown blocks remain subject to the common block length and trailer checks."""
+    import struct
+
+    def block(kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    extension = bytearray(block(0x80000001, b"abcd"))
+    if corruption == "short_length":
+        extension[4:8] = struct.pack(endian + "I", 8)
+    elif corruption == "unaligned_length":
+        extension[4:8] = struct.pack(endian + "I", 15)
+    elif corruption == "truncated_body":
+        extension[4:8] = struct.pack(endian + "I", len(extension) + 4)
+    else:
+        extension[-4:] = struct.pack(endian + "I", len(extension) + 4)
+    with pytest.raises(ValueError, match="PCAP-NG block length"):
+        server._validate_pcapng_blocks(section + extension)
