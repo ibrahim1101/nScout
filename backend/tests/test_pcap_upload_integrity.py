@@ -1875,3 +1875,23 @@ def test_pcapng_populated_section_after_empty_section_has_fresh_interface(first_
     packet = block(second_endian, 6, struct.pack(second_endian + "IIIII", 0, 0, 0, 4, 4) + b"data")
     second = section(second_endian, len(interface) + len(packet)) + interface + packet
     server._validate_pcapng_blocks(first + second)
+
+
+
+@pytest.mark.parametrize("first_endian,second_endian", [("<", "<"), (">", ">"), ("<", ">"), (">", "<")])
+def test_pcapng_two_populated_sections_with_exact_declared_lengths(first_endian, second_endian):
+    """Packets in both sections must fit their own explicit section boundaries."""
+    import struct
+
+    def block(endian, kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    def populated(endian, packet_bytes):
+        interface = block(endian, 1, struct.pack(endian + "HHI", 1, 0, 65535))
+        packet = block(endian, 6, struct.pack(endian + "IIIII", 0, 0, 0, len(packet_bytes), len(packet_bytes)) + packet_bytes)
+        bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+        section = block(endian, 0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, len(interface) + len(packet)))
+        return section + interface + packet
+
+    server._validate_pcapng_blocks(populated(first_endian, b"abcd") + populated(second_endian, b"wxyz"))
