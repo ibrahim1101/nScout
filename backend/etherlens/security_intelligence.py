@@ -6,6 +6,34 @@ from statistics import median
 from typing import Any, Dict, List
 
 
+DETECTION_PRESETS = {
+    "conservative": {
+        "excessive_failures": 20, "scan_ports": 20, "scan_window": 30,
+        "beacon_observations": 8, "beacon_deviation_ratio": 0.08,
+        "dns_name_length": 160, "dns_label_length": 63,
+        "dns_queries": 100, "dns_unique_names": 80,
+        "spike_minimum": 100, "spike_multiplier": 8,
+        "large_transfer_bytes": 250 * 1024 * 1024,
+    },
+    "balanced": {
+        "excessive_failures": 10, "scan_ports": 12, "scan_window": 60,
+        "beacon_observations": 6, "beacon_deviation_ratio": 0.12,
+        "dns_name_length": 120, "dns_label_length": 55,
+        "dns_queries": 50, "dns_unique_names": 40,
+        "spike_minimum": 50, "spike_multiplier": 5,
+        "large_transfer_bytes": 100 * 1024 * 1024,
+    },
+    "sensitive": {
+        "excessive_failures": 5, "scan_ports": 8, "scan_window": 120,
+        "beacon_observations": 5, "beacon_deviation_ratio": 0.20,
+        "dns_name_length": 90, "dns_label_length": 45,
+        "dns_queries": 25, "dns_unique_names": 20,
+        "spike_minimum": 25, "spike_multiplier": 3,
+        "large_transfer_bytes": 50 * 1024 * 1024,
+    },
+}
+
+
 def _layer(packet: Dict[str, Any], prefix: str) -> Dict[str, Any]:
     for layer in packet.get("layers", []):
         if str(layer.get("name", "")).lower().startswith(prefix.lower()):
@@ -31,8 +59,11 @@ def _dns_name(packet: Dict[str, Any]) -> str:
     return ""
 
 
-def security_intelligence(packets: List[Dict[str, Any]], existing_threats=None) -> Dict[str, Any]:
+def security_intelligence(packets: List[Dict[str, Any]], existing_threats=None, preset="balanced") -> Dict[str, Any]:
     """Return explainable passive findings. Heuristics are leads, not proof of compromise."""
+    if preset not in DETECTION_PRESETS:
+        raise ValueError("Unknown detection preset")
+    thresholds = DETECTION_PRESETS[preset]
     findings = []
     existing_threats = existing_threats or []
     ordered = sorted(packets, key=lambda p: float(p.get("timestamp") or 0))
@@ -72,7 +103,7 @@ def security_intelligence(packets: List[Dict[str, Any]], existing_threats=None) 
                 "A connection attempt was reset before a SYN/ACK was observed.", p,
                 evidence=[{"destination": p.get("dst_ip"), "port": p.get("dst_port")}]))
     for src, count in failed_by_source.items():
-        if count >= 10:
+        if count >= thresholds["excessive_failures"]:
             sample = next((p for p in reversed(ordered) if str(p.get("src_ip")) == src), None)
             findings.append(_finding("tcp.excessive_failures", "high", "Excessive failed connections",
                 f"{src} generated {count} failed TCP connection attempts.", sample,
@@ -88,10 +119,10 @@ def security_intelligence(packets: List[Dict[str, Any]], existing_threats=None) 
             scan_targets[key]["rows"].append(p)
     for (src, dst), data in scan_targets.items():
         ports = sorted(p for p in data["ports"] if p)
-        if len(ports) >= 12:
+        if len(ports) >= thresholds["scan_ports"]:
             rows = data["rows"]
             span = float(rows[-1].get("timestamp") or 0) - float(rows[0].get("timestamp") or 0)
-            if span <= 60:
+            if span <= thresholds["scan_window"]:
                 findings.append(_finding("network.port_scan", "high", "Possible TCP port scan",
                     f"{src} probed {len(ports)} TCP ports on {dst} within {max(span, 0):.1f}s.", rows[-1],
                     confidence="high", evidence=[{"target": dst, "ports": ports[:50], "window_seconds": round(max(span, 0), 3)}],
@@ -104,14 +135,14 @@ def security_intelligence(packets: List[Dict[str, Any]], existing_threats=None) 
         if "SYN" in flags and "ACK" not in flags and p.get("src_ip") and p.get("dst_ip"):
             contacts[(str(p["src_ip"]), str(p["dst_ip"]), int(p.get("dst_port") or 0))].append(p)
     for (src, dst, port), rows in contacts.items():
-        if len(rows) < 6: continue
+        if len(rows) < thresholds["beacon_observations"]: continue
         times = [float(p.get("timestamp") or 0) for p in rows]
         gaps = [b-a for a,b in zip(times, times[1:]) if b > a]
-        if len(gaps) < 5: continue
+        if len(gaps) < thresholds["beacon_observations"] - 1: continue
         med = median(gaps)
         if med < 2 or med > 3600: continue
         deviation = median(abs(g-med) for g in gaps)
-        if deviation <= max(0.25, med * 0.12):
+        if deviation <= max(0.25, med * thresholds["beacon_deviation_ratio"]):
             findings.append(_finding("traffic.beaconing", "medium", "Regular outbound connection pattern",
                 f"{len(rows)} connection attempts to {dst}:{port} had a median interval of {med:.1f}s.", rows[-1],
                 evidence=[{"destination": dst, "port": port, "median_interval_seconds": round(med, 3), "observations": len(rows)}],
@@ -125,14 +156,14 @@ def security_intelligence(packets: List[Dict[str, Any]], existing_threats=None) 
         dns_by_source[str(p.get("src_ip") or "unknown")].append((name, p))
         labels = name.split(".")
         longest = max((len(x) for x in labels), default=0)
-        if len(name) >= 120 or longest >= 55:
+        if len(name) >= thresholds["dns_name_length"] or longest >= thresholds["dns_label_length"]:
             findings.append(_finding("dns.long_query", "medium", "Unusually long DNS query",
                 f"DNS query for {name[:80]}{'...' if len(name) > 80 else ''} is unusually long.", p,
                 evidence=[{"query_length": len(name), "longest_label": longest}],
                 query=name, query_length=len(name)))
     for src, rows in dns_by_source.items():
         unique = {name for name, _ in rows}
-        if len(rows) >= 50 and len(unique) >= 40:
+        if len(rows) >= thresholds["dns_queries"] and len(unique) >= thresholds["dns_unique_names"]:
             sample = rows[-1][1]
             findings.append(_finding("dns.high_fanout", "medium", "High DNS query fan-out",
                 f"{src} issued {len(rows)} DNS queries covering {len(unique)} unique names.", sample,
@@ -142,7 +173,7 @@ def security_intelligence(packets: List[Dict[str, Any]], existing_threats=None) 
     buckets = Counter(int(float(p.get("timestamp") or 0)) for p in ordered)
     if len(buckets) >= 5:
         baseline = median(buckets.values())
-        threshold = max(50, baseline * 5)
+        threshold = max(thresholds["spike_minimum"], baseline * thresholds["spike_multiplier"])
         for second, count in buckets.items():
             if count >= threshold:
                 p = next((x for x in ordered if int(float(x.get("timestamp") or 0)) == second), None)
@@ -160,7 +191,7 @@ def security_intelligence(packets: List[Dict[str, Any]], existing_threats=None) 
             pair_bytes[key] += max(0, int(p.get("length") or 0))
             pair_sample[key] = p
     for (src, dst), total in pair_bytes.items():
-        if total >= 100 * 1024 * 1024:
+        if total >= thresholds["large_transfer_bytes"]:
             findings.append(_finding("traffic.large_transfer", "medium", "Large directional data transfer",
                 f"Observed at least {total / (1024*1024):.1f} MiB from {src} to {dst} in this capture.", pair_sample[(src, dst)],
                 evidence=[{"bytes": total}], bytes=total))
@@ -182,5 +213,6 @@ def security_intelligence(packets: List[Dict[str, Any]], existing_threats=None) 
     return {
         "findings": findings[:250], "counts": dict(counts), "severities": dict(severities),
         "confidences": dict(confidences), "existing_threat_count": len(existing_threats),
+        "detection_preset": preset, "thresholds": dict(thresholds),
         "note": "Passive heuristics identify investigation leads and are not proof of malicious activity.",
     }

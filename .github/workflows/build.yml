@@ -1,11 +1,9 @@
-name: build-nscout-windows
+name: legacy-browser-windows (not v0.4 desktop)
 
 on:
   push:
     branches: ["main", "v0.3-security-intelligence"]
-    tags: ["v*"]
-  pull_request:
-    branches: ["main"]
+    tags: ["v0.1.*", "v0.2.*", "v0.3.*"]
   workflow_dispatch:
 
 permissions:
@@ -114,14 +112,14 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: nScout-windows-x64
+          name: nScout-LEGACY-browser-launcher-NOT-v0.4-desktop
           path: |
             nScout-windows-x64.zip
             installer-output/*.exe
           if-no-files-found: error
 
       - name: Attach portable ZIP and installer to release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v0.1.') || startsWith(github.ref, 'refs/tags/v0.2.') || startsWith(github.ref, 'refs/tags/v0.3.')
         uses: softprops/action-gh-release@v3
         with:
           files: |

@@ -32,3 +32,7 @@
         transform: rotate(360deg);
     }
 }
+
+/* Analytics charts grow with taller windows while remaining usable in compact views. */
+section[data-testid="chart-traffic"] > div:nth-child(2) { height: clamp(260px, 36dvh, 580px) !important; min-width: 0; }
+section[data-testid="chart-proto"] > div:nth-child(2) { height: clamp(220px, 30dvh, 420px) !important; min-width: 0; }

@@ -178,3 +178,29 @@ body {
 /* Topology edges */
 .topo-node { transition: transform 0.2s ease; cursor: pointer; }
 .topo-node:hover { transform: scale(1.08); }
+
+/* Desktop form controls: enforce readable text across native WebView themes.
+   Explicit colors prevent Windows native input/select defaults from overriding
+   the application's dark foreground with white backgrounds. */
+@layer components {
+  .filter-control {
+    @apply min-h-[38px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400;
+    color-scheme: light;
+  }
+  .dark .filter-control {
+    color-scheme: dark;
+  }
+  .filter-control:disabled {
+    @apply cursor-not-allowed opacity-60;
+  }
+}
+
+/* Keep native dropdown menus legible on Windows WebView2. */
+select.filter-control option {
+  color: #0f172a;
+  background-color: #fff;
+}
+.dark select.filter-control option {
+  color: #f1f5f9;
+  background-color: #0f172a;
+}
