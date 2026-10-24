@@ -1772,3 +1772,38 @@ def test_pcapng_rejects_block_crossing_declared_section_boundary(endian, declare
     extra_interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
     with pytest.raises(ValueError, match="PCAP-NG block extends beyond declared section length"):
         server._validate_pcapng_blocks(section + interface + extra_interface)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("declared", [40, -1])
+def test_pcapng_accepts_multiple_blocks_with_correct_section_length(endian, declared):
+    """Two interface blocks must fit exactly in a declared section."""
+    import struct
+
+    def block(kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, declared))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    server._validate_pcapng_blocks(section + interface + interface)
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("declared", [20, 40])
+def test_pcapng_rejects_extra_block_after_exact_section_length(endian, declared):
+    """Additional blocks after the declared section end must be rejected."""
+    import struct
+
+    def block(kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, declared))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    payload = section + interface * (declared // 20 + 1)
+    with pytest.raises(ValueError, match="PCAP-NG block extends beyond declared section length"):
+        server._validate_pcapng_blocks(payload)
