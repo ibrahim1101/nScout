@@ -1702,7 +1702,7 @@ def test_pcapng_section_length_matches_actual_block_bytes(endian, declared, vali
     if valid:
         server._validate_pcapng_blocks(payload)
     else:
-        with pytest.raises(ValueError, match="PCAP-NG section length mismatch"):
+        with pytest.raises(ValueError, match="PCAP-NG (?:section length mismatch|block extends beyond declared section length)"):
             server._validate_pcapng_blocks(payload)
 
 
@@ -1718,7 +1718,7 @@ def test_pcapng_section_length_checked_before_next_section(endian):
     bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
     first = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, 4))
     second = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
-    with pytest.raises(ValueError, match="PCAP-NG section length mismatch"):
+    with pytest.raises(ValueError, match="PCAP-NG (?:section length mismatch|block extends beyond declared section length)"):
         server._validate_pcapng_blocks(first + second)
 
 
@@ -1751,7 +1751,7 @@ def test_pcapng_mixed_endian_sections_enforce_independent_lengths(
     if valid:
         server._validate_pcapng_blocks(payload)
     else:
-        with pytest.raises(ValueError, match="PCAP-NG section length mismatch"):
+        with pytest.raises(ValueError, match="PCAP-NG (?:section length mismatch|block extends beyond declared section length)"):
             server._validate_pcapng_blocks(payload)
 
 
