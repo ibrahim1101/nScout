@@ -1895,3 +1895,22 @@ def test_pcapng_two_populated_sections_with_exact_declared_lengths(first_endian,
         return section + interface + packet
 
     server._validate_pcapng_blocks(populated(first_endian, b"abcd") + populated(second_endian, b"wxyz"))
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("payload_size", [1, 2, 3, 4, 5, 7, 8])
+def test_pcapng_section_length_counts_padded_packet_bytes(endian, payload_size):
+    """Explicit section lengths include packet padding, not just captured bytes."""
+    import struct
+
+    def block(kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    padded_payload = b"x" * payload_size + b"\x00" * ((-payload_size) % 4)
+    packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, payload_size, payload_size) + padded_payload)
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, len(interface) + len(packet)))
+    server._validate_pcapng_blocks(section + interface + packet)
