@@ -1982,3 +1982,27 @@ def test_pcapng_packet_padding_is_not_mistaken_for_payload(endian, packet_type, 
     else:
         packet_body = struct.pack(endian + "IIIII", 0, 0, 0, captured, captured) + padded
     server._validate_pcapng_blocks(section + interface + block(packet_type, packet_body))
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("packet_type", [2, 3, 6])
+def test_pcapng_unknown_blocks_do_not_consume_interface_ids(endian, packet_type):
+    """Unknown extension blocks must not alter the local interface namespace."""
+    import struct
+
+    def block(kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    unknown = block(0x80000001, b"abcd")
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    if packet_type == 3:
+        packet_body = struct.pack(endian + "I", 4) + b"data"
+    elif packet_type == 2:
+        packet_body = struct.pack(endian + "HHIIII", 0, 0, 0, 0, 4, 4) + b"data"
+    else:
+        packet_body = struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"data"
+    server._validate_pcapng_blocks(section + unknown + interface + block(packet_type, packet_body))
