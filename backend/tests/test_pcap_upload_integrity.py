@@ -1914,3 +1914,26 @@ def test_pcapng_section_length_counts_padded_packet_bytes(endian, payload_size):
     packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, payload_size, payload_size) + padded_payload)
     section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, len(interface) + len(packet)))
     server._validate_pcapng_blocks(section + interface + packet)
+
+
+
+@pytest.mark.parametrize("endian,magic,limit", [
+    ("<", bytes.fromhex("d4c3b2a1"), 1000000),
+    (">", bytes.fromhex("a1b2c3d4"), 1000000),
+    ("<", bytes.fromhex("4d3cb2a1"), 1000000000),
+    (">", bytes.fromhex("a1b23c4d"), 1000000000),
+])
+@pytest.mark.parametrize("boundary", ["zero", "last_valid", "first_invalid", "maximum"])
+def test_classic_pcap_timestamp_fraction_precision_boundaries(endian, magic, limit, boundary):
+    """Microsecond and nanosecond packet timestamps must use their own ranges."""
+    import struct
+
+    fraction = {"zero": 0, "last_valid": limit - 1, "first_invalid": limit, "maximum": 0xFFFFFFFF}[boundary]
+    header = magic + struct.pack(endian + "HHIIII", 2, 4, 0, 0, 65535, 1)
+    record = struct.pack(endian + "IIII", 1, fraction, 4, 4)
+    payload = header + record + b"data"
+    if fraction < limit:
+        server._validate_pcap_records(payload)
+    else:
+        with pytest.raises(ValueError, match="Invalid PCAP packet timestamp fraction"):
+            server._validate_pcap_records(payload)
