@@ -1807,3 +1807,30 @@ def test_pcapng_rejects_extra_block_after_exact_section_length(endian, declared)
     payload = section + interface * (declared // 20 + 1)
     with pytest.raises(ValueError, match="PCAP-NG block extends beyond declared section length"):
         server._validate_pcapng_blocks(payload)
+
+
+
+@pytest.mark.parametrize("first_endian,second_endian", [("<", "<"), (">", ">"), ("<", ">"), (">", "<")])
+def test_pcapng_zero_length_section_can_precede_another_section(first_endian, second_endian):
+    """An empty, explicitly bounded section may be followed by a new section."""
+    import struct
+
+    def section(endian, declared):
+        bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+        body = bom + struct.pack(endian + "HHq", 1, 0, declared)
+        return struct.pack(endian + "II", 0x0A0D0D0A, 28) + body + struct.pack(endian + "I", 28)
+
+    server._validate_pcapng_blocks(section(first_endian, 0) + section(second_endian, 0))
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+def test_pcapng_zero_length_section_rejects_following_nonsection_block(endian):
+    """A zero-length section cannot contain even a complete interface block."""
+    import struct
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = struct.pack(endian + "II", 0x0A0D0D0A, 28)
+    section += bom + struct.pack(endian + "HHq", 1, 0, 0) + struct.pack(endian + "I", 28)
+    interface = struct.pack(endian + "IIHHII", 1, 20, 1, 0, 65535, 20)
+    with pytest.raises(ValueError, match="PCAP-NG block extends beyond declared section length"):
+        server._validate_pcapng_blocks(section + interface)
