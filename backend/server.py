@@ -510,12 +510,12 @@ def _validate_pcap_records(data:bytes)->None:
  major,minor,_,_,snaplen,_=struct.unpack_from(endian+"HHIIII",data,4)
  if (major,minor)!=(2,4) or not snaplen:
   raise ValueError("Invalid PCAP global header")
+ precision_limit=1000000000 if magic in (bytes.fromhex("4d3cb2a1"),bytes.fromhex("a1b23c4d")) else 1000000
  offset=24
  while offset<len(data):
   if len(data)-offset<16:
    raise ValueError("Truncated PCAP packet header")
   _,fraction,captured,original=struct.unpack_from(endian+"IIII",data,offset)
-  precision_limit=1000000000 if magic in (bytes.fromhex("4d3cb2a1"),bytes.fromhex("a1b23c4d")) else 1000000
   if fraction>=precision_limit:
    raise ValueError("Invalid PCAP packet timestamp fraction")
   offset+=16
