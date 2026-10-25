@@ -2099,3 +2099,31 @@ def test_invalid_classic_pcap_timestamp_upload_preserves_evidence(monkeypatch, e
     assert active.get_packet(previous["id"]) is previous
     assert len(active.packets) == 1
     assert subscriber in active._subscribers
+
+
+
+@pytest.mark.parametrize("endian,magic,limit", [
+    ("<", bytes.fromhex("d4c3b2a1"), 1000000),
+    (">", bytes.fromhex("a1b2c3d4"), 1000000),
+    ("<", bytes.fromhex("4d3cb2a1"), 1000000000),
+    (">", bytes.fromhex("a1b23c4d"), 1000000000),
+])
+@pytest.mark.parametrize("invalid_side", ["baseline", "current"])
+def test_pcap_compare_rejects_invalid_timestamp_before_processing(monkeypatch, endian, magic, limit, invalid_side):
+    """Reject malformed timestamps on either comparison side before analysis."""
+    import struct
+
+    header = magic + struct.pack(endian + "HHIIII", 2, 4, 0, 0, 65535, 1)
+    valid = header + struct.pack(endian + "IIII", 1, limit - 1, 4, 4) + b"abcd"
+    invalid = header + struct.pack(endian + "IIII", 1, limit, 4, 4) + b"abcd"
+
+    def unexpected_compare(*args, **kwargs):
+        pytest.fail("comparison must not run on malformed input")
+
+    monkeypatch.setattr(server, "compare_pcap_bytes", unexpected_compare)
+    baseline = invalid if invalid_side == "baseline" else valid
+    current = invalid if invalid_side == "current" else valid
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.compare_pcaps(_upload(baseline), _upload(current)))
+    assert error.value.status_code == 400
+    assert "timestamp fraction" in str(error.value.detail)
