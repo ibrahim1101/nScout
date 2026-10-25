@@ -2227,3 +2227,41 @@ def test_malformed_unknown_interface_options_preserve_upload_evidence(monkeypatc
     assert active.get_packet(previous["id"]) is previous
     assert len(active.packets) == 1
     assert subscriber in active._subscribers
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("invalid_side", ["baseline", "current"])
+@pytest.mark.parametrize("corruption", ["truncated_value", "invalid_end_marker"])
+def test_pcap_compare_rejects_malformed_unknown_interface_options(
+    monkeypatch, endian, invalid_side, corruption
+):
+    """Malformed interface metadata on either side must stop comparison before analysis."""
+    import struct
+
+    def block(kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"data")
+    valid_interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    if corruption == "truncated_value":
+        options = struct.pack(endian + "HH", 0x7FFF, 100) + b"abcd"
+    else:
+        options = struct.pack(endian + "HH", 0x7FFF, 4) + b"abcd" + struct.pack(endian + "HH", 0, 4) + b"xxxx"
+    invalid_interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535) + options)
+    valid = section + valid_interface + packet
+    invalid = section + invalid_interface + packet
+
+    def unexpected_compare(*args, **kwargs):
+        pytest.fail("comparison must not run on malformed interface metadata")
+
+    monkeypatch.setattr(server, "compare_pcap_bytes", unexpected_compare)
+    baseline = invalid if invalid_side == "baseline" else valid
+    current = invalid if invalid_side == "current" else valid
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.compare_pcaps(_upload(baseline), _upload(current)))
+    assert error.value.status_code == 400
+    assert "PCAP-NG option" in str(error.value.detail) or "end-of-options" in str(error.value.detail)
