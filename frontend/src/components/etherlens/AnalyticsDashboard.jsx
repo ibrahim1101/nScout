@@ -1,6 +1,7 @@
 import { AreaChart, Area, PieChart, Pie, Cell, Tooltip, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
 import { fmtBytes, fmtBps, PROTO_COLOR } from "./lib";
 import { Activity, AlertTriangle, ArrowRight, Clock3, Radar, Server, Shield, Zap } from "lucide-react";
+import NetworkBaselinePanel from "./NetworkBaselinePanel";
 
 const SEVERITIES = ["critical", "high", "medium", "low", "info"];
 const SEVERITY_STYLES = {
@@ -35,7 +36,9 @@ export default function AnalyticsDashboard({ status, timeline = [], topTalkers =
     <div className="space-y-4">
       <PostureBanner posture={posture} prioritized={prioritized} total={totalFindings} running={status.running} mode={status.mode} onOpenThreats={onOpenThreats} />
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+      <NetworkBaselinePanel capturePacketCount={Number(status.total_packets || 0)} />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <KPI testId="kpi-total-packets" icon={<Activity size={16} />} label="Total Packets" value={(status.total_packets || 0).toLocaleString()} tone="blue" />
         <KPI testId="kpi-throughput" icon={<Zap size={16} />} label="Throughput" value={fmtBps((status.mbps || 0) * 1_000_000)} tone="emerald" />
         <KPI testId="kpi-hosts" icon={<Server size={16} />} label="Observed Hosts" value={hosts.length || status.unique_hosts || 0} helper={`${riskyHosts.length} with risk evidence`} tone="indigo" />
@@ -82,7 +85,7 @@ export default function AnalyticsDashboard({ status, timeline = [], topTalkers =
         </Card>
 
         <Card title="Highest-risk hosts" subtitle="Prioritized using finding severity and confidence" testId="risk-hosts" className="xl:col-span-2">
-          {riskyHosts.length ? <div className="divide-y divide-slate-100 dark:divide-slate-800">{riskyHosts.slice(0, 5).map((host) => <button key={host.ip} onClick={() => onInvestigate?.({ source: host.ip })} className="w-full grid grid-cols-[minmax(0,1fr)_90px_88px] gap-3 items-center py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 rounded-lg px-2 transition-colors"><span className="min-w-0"><span className="block font-mono-code text-xs font-semibold truncate">{host.ip}</span><span className="block text-[11px] text-slate-500 truncate mt-1">{host.hostname || (host.is_local ? "Local host" : "External host")} · {(host.protocols || []).slice(0, 4).join(", ") || "No protocol label"}</span></span><span className="text-right text-xs text-slate-500">{host.finding_count || 0} findings</span><RiskScore risk={host.risk} /></button>)}</div> : <EmptyState icon={<Shield size={22} />} text="No host risk evidence has been observed." compact />}
+          {riskyHosts.length ? <div className="divide-y divide-slate-100 dark:divide-slate-800">{riskyHosts.slice(0, 5).map((host) => <button key={host.ip} onClick={() => onInvestigate?.({ source: host.ip })} className="w-full grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_90px_88px] gap-3 items-center py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 rounded-lg px-2 transition-colors"><span className="min-w-0"><span className="block font-mono-code text-xs font-semibold truncate">{host.ip}</span><span className="block text-[11px] text-slate-500 truncate mt-1">{host.hostname || (host.is_local ? "Local host" : "External host")} · {(host.protocols || []).slice(0, 4).join(", ") || "No protocol label"}</span></span><span className="hidden sm:block text-right text-xs text-slate-500">{host.finding_count || 0} findings</span><RiskScore risk={host.risk} /></button>)}</div> : <EmptyState icon={<Shield size={22} />} text="No host risk evidence has been observed." compact />}
         </Card>
       </div>
 

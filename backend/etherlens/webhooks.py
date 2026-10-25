@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
+import ipaddress
+import socket
+from urllib.parse import urlsplit
 from typing import Dict, List
 
 import requests
@@ -46,18 +48,37 @@ def _discord_payload(threat: Dict) -> Dict:
     }
 
 
+def _public_webhook_target(url: str) -> bool:
+    """Reject non-HTTPS, credential-bearing, local and private webhook targets."""
+    try:
+        parsed = urlsplit(url)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+            return False
+        if parsed.port not in (None, 443):
+            return False
+        hostname = parsed.hostname.rstrip(".").lower()
+        if hostname in {"localhost"} or hostname.endswith((".localhost", ".local", ".internal")):
+            return False
+        addresses = socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM)
+        return bool(addresses) and all(ipaddress.ip_address(item[4][0]).is_global for item in addresses)
+    except (ValueError, OSError, TypeError):
+        return False
+
+
 async def send(url: str, threat: Dict) -> Dict:
-    if not url:
-        return {"ok": False, "error": "empty url"}
-    is_discord = "discord.com/api/webhooks" in url or "discordapp.com/api/webhooks" in url
+    if not _public_webhook_target(url):
+        return {"ok": False, "error": "webhook destination must be a public HTTPS endpoint"}
+    hostname = (urlsplit(url).hostname or "").lower().rstrip(".")
+    is_discord = hostname in {"discord.com", "discordapp.com"} and urlsplit(url).path.startswith("/api/webhooks/")
     payload = _discord_payload(threat) if is_discord else _slack_payload(threat)
     try:
         resp = await asyncio.to_thread(
-            requests.post, url, json=payload, timeout=5.0,
+            requests.post, url, json=payload, timeout=5.0, allow_redirects=False,
         )
         return {"ok": resp.status_code < 400, "status": resp.status_code}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    except requests.RequestException:
+        # Requests exceptions can embed webhook URLs containing secret tokens.
+        return {"ok": False, "error": "Webhook delivery failed; check destination and network connectivity"}
 
 
 async def fan_out(urls: List[str], threat: Dict) -> None:

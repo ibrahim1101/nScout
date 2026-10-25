@@ -7,7 +7,20 @@ WORKDIR /src/frontend
 # over the existing /usr/local/bin/yarnpkg binary.
 COPY frontend/package.json ./
 COPY frontend/yarn.lock* ./
-RUN if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else yarn install; fi
+# Retry transient registry errors without weakening lockfile reproducibility.
+RUN set -eu; \
+    attempt=1; \
+    until { \
+      if [ -f yarn.lock ]; then \
+        yarn install --frozen-lockfile --non-interactive --network-timeout 120000; \
+      else \
+        yarn install --non-interactive --network-timeout 120000; \
+      fi; \
+    }; do \
+      if [ "$attempt" -ge 3 ]; then exit 1; fi; \
+      sleep $((attempt * 10)); \
+      attempt=$((attempt + 1)); \
+    done
 COPY frontend/ ./
 ENV REACT_APP_BACKEND_URL=""
 RUN yarn build
