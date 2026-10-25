@@ -2165,3 +2165,31 @@ def test_pcap_compare_rejects_malformed_unknown_extension_before_processing(
         asyncio.run(server.compare_pcaps(_upload(baseline), _upload(current)))
     assert error.value.status_code == 400
     assert "PCAP-NG block length" in str(error.value.detail)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("packet_type", [2, 3, 6])
+@pytest.mark.parametrize("unknown_option_length", [1, 2, 3, 4])
+def test_pcapng_unknown_interface_options_preserve_packet_compatibility(
+    endian, packet_type, unknown_option_length
+):
+    """Well-framed unknown interface options must not invalidate subsequent packets."""
+    import struct
+
+    def block(kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    unknown = struct.pack(endian + "HH", 0x7FFF, unknown_option_length)
+    unknown += b"z" * unknown_option_length + b"\x00" * ((-unknown_option_length) % 4)
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535) + unknown + struct.pack(endian + "HH", 0, 0))
+    if packet_type == 3:
+        packet_body = struct.pack(endian + "I", 4) + b"data"
+    elif packet_type == 2:
+        packet_body = struct.pack(endian + "HHIIII", 0, 0, 0, 0, 4, 4) + b"data"
+    else:
+        packet_body = struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"data"
+    server._validate_pcapng_blocks(section + interface + block(packet_type, packet_body))
