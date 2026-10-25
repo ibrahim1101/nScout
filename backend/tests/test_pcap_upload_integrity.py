@@ -2032,3 +2032,41 @@ def test_pcapng_unknown_extension_block_requires_valid_framing(endian, corruptio
         extension[-4:] = struct.pack(endian + "I", len(extension) + 4)
     with pytest.raises(ValueError, match="PCAP-NG block length"):
         server._validate_pcapng_blocks(section + extension)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("corruption", ["short_length", "unaligned_length", "truncated_body", "bad_trailer"])
+def test_malformed_unknown_extension_upload_preserves_evidence(monkeypatch, endian, corruption):
+    """Reject malformed extension blocks without replacing the active investigation."""
+    import struct
+
+    active = CaptureSession()
+    previous = active.ingest(Ether()/IP(src="10.0.0.10", dst="10.0.0.11")/TCP(), ts=100.0)
+    capture_id = active.capture_id
+    subscriber = active.subscribe()
+    monkeypatch.setattr(server, "session", active)
+
+    def block(kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    extension = bytearray(block(0x80000001, b"abcd"))
+    if corruption == "short_length":
+        extension[4:8] = struct.pack(endian + "I", 8)
+    elif corruption == "unaligned_length":
+        extension[4:8] = struct.pack(endian + "I", 15)
+    elif corruption == "truncated_body":
+        extension[4:8] = struct.pack(endian + "I", len(extension) + 4)
+    else:
+        extension[-4:] = struct.pack(endian + "I", len(extension) + 4)
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.upload_pcap(_upload(section + extension)))
+    assert error.value.status_code == 400
+    assert active.capture_id == capture_id
+    assert active.get_packet(previous["id"]) is previous
+    assert len(active.packets) == 1
+    assert subscriber in active._subscribers
