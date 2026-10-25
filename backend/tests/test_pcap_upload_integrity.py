@@ -2265,3 +2265,45 @@ def test_pcap_compare_rejects_malformed_unknown_interface_options(
         asyncio.run(server.compare_pcaps(_upload(baseline), _upload(current)))
     assert error.value.status_code == 400
     assert "PCAP-NG option" in str(error.value.detail) or "end-of-options" in str(error.value.detail)
+
+
+
+@pytest.mark.parametrize("first_endian,second_endian", [("<", ">"), (">", "<")])
+@pytest.mark.parametrize("invalid_side", ["baseline", "current"])
+@pytest.mark.parametrize("corruption", ["stale_interface", "section_length"])
+def test_pcap_compare_rejects_malformed_second_mixed_endian_section(
+    monkeypatch, first_endian, second_endian, invalid_side, corruption
+):
+    """Validate every section independently before starting comparison analysis."""
+    import struct
+
+    def block(endian, kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    def section(endian, interface_id=0, declared_length=None):
+        bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+        interface = block(endian, 1, struct.pack(endian + "HHI", 1, 0, 65535))
+        packet = block(endian, 6, struct.pack(endian + "IIIII", interface_id, 0, 0, 4, 4) + b"data")
+        body = interface + packet
+        declared = len(body) if declared_length is None else declared_length
+        header = block(endian, 0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, declared))
+        return header + body
+
+    first = section(first_endian)
+    valid = first + section(second_endian)
+    if corruption == "stale_interface":
+        invalid = first + section(second_endian, interface_id=1)
+    else:
+        invalid = first + section(second_endian, declared_length=1)
+
+    def unexpected_compare(*args, **kwargs):
+        pytest.fail("comparison must not run on invalid second PCAP-NG section")
+
+    monkeypatch.setattr(server, "compare_pcap_bytes", unexpected_compare)
+    baseline = invalid if invalid_side == "baseline" else valid
+    current = invalid if invalid_side == "current" else valid
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.compare_pcaps(_upload(baseline), _upload(current)))
+    assert error.value.status_code == 400
+    assert "PCAP-NG" in str(error.value.detail)
