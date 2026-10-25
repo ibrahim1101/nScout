@@ -2193,3 +2193,37 @@ def test_pcapng_unknown_interface_options_preserve_packet_compatibility(
     else:
         packet_body = struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"data"
     server._validate_pcapng_blocks(section + interface + block(packet_type, packet_body))
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("corruption", ["truncated_value", "invalid_end_marker"])
+def test_malformed_unknown_interface_options_preserve_upload_evidence(monkeypatch, endian, corruption):
+    """Malformed unknown metadata must be rejected before replacing an investigation."""
+    import struct
+
+    active = CaptureSession()
+    previous = active.ingest(Ether()/IP(src="10.0.0.10", dst="10.0.0.11")/TCP(), ts=100.0)
+    capture_id = active.capture_id
+    subscriber = active.subscribe()
+    monkeypatch.setattr(server, "session", active)
+
+    def block(kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    if corruption == "truncated_value":
+        options = struct.pack(endian + "HH", 0x7FFF, 100) + b"abcd"
+    else:
+        options = struct.pack(endian + "HH", 0x7FFF, 4) + b"abcd" + struct.pack(endian + "HH", 0, 4) + b"xxxx"
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535) + options)
+    packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"data")
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.upload_pcap(_upload(section + interface + packet)))
+    assert error.value.status_code == 400
+    assert active.capture_id == capture_id
+    assert active.get_packet(previous["id"]) is previous
+    assert len(active.packets) == 1
+    assert subscriber in active._subscribers
