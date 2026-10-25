@@ -2070,3 +2070,32 @@ def test_malformed_unknown_extension_upload_preserves_evidence(monkeypatch, endi
     assert active.get_packet(previous["id"]) is previous
     assert len(active.packets) == 1
     assert subscriber in active._subscribers
+
+
+
+@pytest.mark.parametrize("endian,magic,limit", [
+    ("<", bytes.fromhex("d4c3b2a1"), 1000000),
+    (">", bytes.fromhex("a1b2c3d4"), 1000000),
+    ("<", bytes.fromhex("4d3cb2a1"), 1000000000),
+    (">", bytes.fromhex("a1b23c4d"), 1000000000),
+])
+def test_invalid_classic_pcap_timestamp_upload_preserves_evidence(monkeypatch, endian, magic, limit):
+    """An invalid later-record timestamp must not mutate an existing investigation."""
+    import struct
+
+    active = CaptureSession()
+    previous = active.ingest(Ether()/IP(src="10.0.0.10", dst="10.0.0.11")/TCP(), ts=100.0)
+    capture_id = active.capture_id
+    subscriber = active.subscribe()
+    monkeypatch.setattr(server, "session", active)
+
+    header = magic + struct.pack(endian + "HHIIII", 2, 4, 0, 0, 65535, 1)
+    first = struct.pack(endian + "IIII", 1, limit - 1, 4, 4) + b"abcd"
+    invalid = struct.pack(endian + "IIII", 2, limit, 4, 4) + b"wxyz"
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.upload_pcap(_upload(header + first + invalid)))
+    assert error.value.status_code == 400
+    assert active.capture_id == capture_id
+    assert active.get_packet(previous["id"]) is previous
+    assert len(active.packets) == 1
+    assert subscriber in active._subscribers
