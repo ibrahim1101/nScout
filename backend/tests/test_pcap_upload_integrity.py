@@ -2127,3 +2127,41 @@ def test_pcap_compare_rejects_invalid_timestamp_before_processing(monkeypatch, e
         asyncio.run(server.compare_pcaps(_upload(baseline), _upload(current)))
     assert error.value.status_code == 400
     assert "timestamp fraction" in str(error.value.detail)
+
+
+
+@pytest.mark.parametrize("endian", ["<", ">"])
+@pytest.mark.parametrize("invalid_side", ["baseline", "current"])
+@pytest.mark.parametrize("corruption", ["short_length", "bad_trailer"])
+def test_pcap_compare_rejects_malformed_unknown_extension_before_processing(
+    monkeypatch, endian, invalid_side, corruption
+):
+    """Neither comparison input may bypass unknown-block structural validation."""
+    import struct
+
+    def block(kind, body):
+        size = 12 + len(body)
+        return struct.pack(endian + "II", kind, size) + body + struct.pack(endian + "I", size)
+
+    bom = bytes.fromhex("4d3c2b1a") if endian == "<" else bytes.fromhex("1a2b3c4d")
+    section = block(0x0A0D0D0A, bom + struct.pack(endian + "HHq", 1, 0, -1))
+    interface = block(1, struct.pack(endian + "HHI", 1, 0, 65535))
+    packet = block(6, struct.pack(endian + "IIIII", 0, 0, 0, 4, 4) + b"data")
+    valid = section + interface + packet
+    extension = bytearray(block(0x80000001, b"abcd"))
+    if corruption == "short_length":
+        extension[4:8] = struct.pack(endian + "I", 8)
+    else:
+        extension[-4:] = struct.pack(endian + "I", len(extension) + 4)
+    invalid = section + bytes(extension) + interface + packet
+
+    def unexpected_compare(*args, **kwargs):
+        pytest.fail("comparison must not run on malformed PCAP-NG input")
+
+    monkeypatch.setattr(server, "compare_pcap_bytes", unexpected_compare)
+    baseline = invalid if invalid_side == "baseline" else valid
+    current = invalid if invalid_side == "current" else valid
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(server.compare_pcaps(_upload(baseline), _upload(current)))
+    assert error.value.status_code == 400
+    assert "PCAP-NG block length" in str(error.value.detail)
