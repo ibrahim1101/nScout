@@ -133,7 +133,7 @@ The standalone application works without a custom configuration for its core ana
 MONGO_URL=mongodb://localhost:27017
 DB_NAME=nscout
 EMERGENT_LLM_KEY=your-key-here
-CORS_ORIGINS=*
+CORS_ORIGINS=http://localhost:8001,http://127.0.0.1:8001,http://localhost:3000,http://127.0.0.1:3000
 ```
 
 MongoDB remains optional for legacy saved sessions and webhook settings. On the v0.4 development branch, new Capture Sessions are stored locally and remain available without MongoDB.
@@ -302,3 +302,6 @@ nScout is free and open-source software licensed under the **GNU General Public 
 Copyright © 2026 Shaik Ibrahim.
 
 See [`LICENSE`](LICENSE) for the full license terms.
+
+
+The backend has no user authentication. Keep it bound to localhost and do not expose it to untrusted networks. Browser origin checks reduce cross-site access but do not stop local programs or non-browser clients. Only list trusted origins in CORS_ORIGINS; wildcard and null origins are rejected.

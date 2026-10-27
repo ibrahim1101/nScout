@@ -19,6 +19,7 @@ from etherlens.ai_context import connection_context,connection_prompt
 from etherlens.engine import CaptureSession,CaptureUnavailableError
 from etherlens.capture_backends import provider_inventory
 from etherlens.sessions import CaptureSessionNotFound,LocalCaptureSessionStore,delete_session,list_sessions,load_session,restore_capture_session
+from browser_security import allowed_origins, browser_origin_allowed
 from etherlens.investigation_workspace import EvidenceItem
 from etherlens.investigation_store import InvestigationNotFound,InvestigationStore
 from etherlens.host_profiles import HostProfileStore
@@ -30,6 +31,12 @@ from etherlens.preference_profiles import PreferenceProfileStore
 from etherlens.detection_settings import DetectionSettingsStore
 ROOT_DIR=Path(__file__).parent; load_dotenv(ROOT_DIR/".env"); logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s - %(message)s"); logger=logging.getLogger("nscout")
 mongo_url=os.environ.get("MONGO_URL","mongodb://127.0.0.1:27017"); db_name=os.environ.get("DB_NAME","nscout"); client=AsyncIOMotorClient(mongo_url,serverSelectionTimeoutMS=1500,connectTimeoutMS=1500); db=client[db_name]; settings_col=db.etherlens_settings; mongo_available=False; session=CaptureSession(); app=FastAPI(title="nScout"); api=APIRouter(prefix="/api")
+ALLOWED_ORIGINS = allowed_origins()
+@app.middleware("http")
+async def reject_untrusted_browser_origin(request, call_next):
+ if request.url.path.startswith("/api") and not browser_origin_allowed(request.headers.get("origin"), ALLOWED_ORIGINS):
+  return Response(status_code=403, content="Untrusted browser origin")
+ return await call_next(request)
 DATA_DIR=Path(os.environ.get("NSCOUT_DATA_DIR", str(Path.home()/".nscout")))
 AI_SETTINGS_PATH=DATA_DIR/"ai-settings.json"
 _investigation_store=InvestigationStore(DATA_DIR/"investigations")
@@ -678,6 +685,8 @@ async def ai_explain(req:ExplainRequest):
  return StreamingResponse(gen(),media_type="text/event-stream",headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})
 @app.websocket("/api/ws")
 async def ws_endpoint(ws:WebSocket):
+ if not browser_origin_allowed(ws.headers.get("origin"), ALLOWED_ORIGINS):
+  await ws.close(code=1008);return
  await ws.accept();q=session.subscribe();stats_task=None
  try:
   await ws.send_json({"type":"stats","data":session.stats()});stats_task=asyncio.create_task(_stats_pulse(ws))
@@ -693,7 +702,7 @@ async def _stats_pulse(ws):
  try:
   while True:await asyncio.sleep(1.0);await ws.send_json({"type":"stats","data":session.stats()})
  except Exception:return
-app.include_router(api);app.add_middleware(CORSMiddleware,allow_credentials=True,allow_origins=os.environ.get("CORS_ORIGINS","*").split(","),allow_methods=["*"],allow_headers=["*"])
+app.include_router(api);app.add_middleware(CORSMiddleware,allow_credentials=True,allow_origins=ALLOWED_ORIGINS,allow_methods=["*"],allow_headers=["*"])
 _UI_DIR=ROOT_DIR/"frontend_build"
 if _UI_DIR.exists():
  from fastapi.staticfiles import StaticFiles
