@@ -98,6 +98,7 @@ def main(argv: list[str] | None = None) -> None:
     _ensure_env()
     port = _pick_port(args.port)
     url = f"http://127.0.0.1:{port}"
+    os.environ["NSCOUT_LOCAL_ORIGIN"] = url
     desktop_mode = _truthy(os.environ.get("NSCOUT_DESKTOP_MODE"))
     open_browser = not (args.no_browser or desktop_mode)
 
