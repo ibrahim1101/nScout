@@ -15,10 +15,9 @@ services:
     environment:
       MONGO_URL: mongodb://mongo:27017
       DB_NAME: nscout
-      CORS_ORIGINS: "*"
       EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY:-}
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     # Packet capture requires raw/network-admin capabilities on Linux.
     cap_add:
       - NET_RAW
