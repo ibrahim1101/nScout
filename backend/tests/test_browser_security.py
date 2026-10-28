@@ -13,6 +13,14 @@ class BrowserSecurityTests(unittest.TestCase):
         self.assertFalse(browser_origin_allowed("null", origins))
         self.assertTrue(browser_origin_allowed(None, origins))
 
+    def test_launcher_fallback_port_is_trusted_without_trusting_other_ports(self):
+        with patch.dict(os.environ, {"NSCOUT_LOCAL_ORIGIN": "http://127.0.0.1:8002"}, clear=True):
+            origins = allowed_origins()
+        self.assertIn("http://127.0.0.1:8002", origins)
+        self.assertNotIn("http://127.0.0.1:8003", origins)
+        with patch.dict(os.environ, {"NSCOUT_LOCAL_ORIGIN": "https://evil.example"}, clear=True):
+            with self.assertRaises(RuntimeError): allowed_origins()
+
     def test_explicit_configuration_and_wildcard_rejection(self):
         with patch.dict(os.environ, {"CORS_ORIGINS": "https://trusted.example"}):
             self.assertEqual(allowed_origins(), ["https://trusted.example"])
