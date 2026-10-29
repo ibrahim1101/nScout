@@ -4,7 +4,7 @@
 
 nScout is a defensive network monitoring, packet-analysis and investigation platform built to turn raw network traffic into understandable security context. It can inspect live traffic or imported PCAP captures, reconstruct conversations between hosts, analyze protocol behavior, surface network-health problems and defensive security findings, and provide an investigation workspace for drilling from a device or connection all the way down to individual packets.
 
-The current stable release is **nScout v0.2.0 — Intelligence Update**. The `main` branch now contains the completed **v0.3 Security Intelligence** milestone pending its tagged release. A native Windows installer and portable Windows build for the stable release are available from the repository's Releases page.
+The latest published stable tag is [**nScout v0.3.0 — Security Intelligence**](https://github.com/ibrahim1101/nScout/releases/tag/v0.3.0). The default branch and release assets are separate snapshots. Newer **v0.4 Investigation Platform** work is on [`v0.4-investigation-platform`](https://github.com/ibrahim1101/nScout/tree/v0.4-investigation-platform); its Tauri shell, local cases and experimental capture-provider work must not be assumed present in the stable installer. Release assets were not installed during the 30 October 2026 documentation review.
 
 ## What nScout does
 
@@ -79,8 +79,8 @@ Export investigation information as **JSON, standalone HTML or PDF** for sharing
 
 ### Recommended: Windows installer
 
-1. Open the **Releases** section of this repository and select **nScout v0.2.0** (or the newest stable release).
-2. Download `nScout-Setup-0.2.0-windows-x64.exe`.
+1. Open the **Releases** section of this repository and select **nScout v0.3.0** (or the newest stable release).
+2. Download `nScout-Setup-0.3.0-windows-x64.exe`.
 3. Run the installer and complete the setup wizard.
 4. Launch **nScout** from the Start Menu or desktop shortcut created by the installer.
 5. nScout starts its local backend and opens the application in your default browser.
